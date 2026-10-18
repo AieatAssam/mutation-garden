@@ -28,3 +28,7 @@ npm run check     # every gate: palette, types, lint, unit, build, e2e
 ```
 
 Needs Node 20.19 or newer.
+
+## Licence
+
+[MIT](LICENSE)

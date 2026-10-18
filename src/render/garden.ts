@@ -20,6 +20,8 @@ export interface Garden extends Group {
   dispose(): void;
 }
 
+export const GROUND_SURFACE = Object.freeze({ radiusX: 2.625, radiusZ: 3.5, y: 0.48 });
+
 function own<T extends BufferGeometry>(geometry: T, owned: Set<BufferGeometry>): T {
   owned.add(geometry);
   return geometry;
@@ -85,10 +87,10 @@ export function createGarden(materials: MaterialLibrary): Garden {
   const grassGeometry = own(new CylinderGeometry(3.52, 3.65, 0.34, 32, 1), owned);
   addShape(grassGeometry, palette.environment.grass[2]!, 0, 0.24, 0,
     DEFAULT_OUTLINE_THICKNESS, 0.75);
-  const lip = new Mesh(own(new CylinderGeometry(3.5, 3.52, 0.08, 32, 1), owned),
+  const lip = new Mesh(own(new CylinderGeometry(GROUND_SURFACE.radiusZ, 3.52, 0.08, 32, 1), owned),
     materials.toon(palette.environment.grass[0]!));
-  lip.scale.x = 0.75;
-  lip.position.y = 0.44;
+  lip.scale.x = GROUND_SURFACE.radiusX / GROUND_SURFACE.radiusZ;
+  lip.position.y = GROUND_SURFACE.y - 0.04;
   lip.renderOrder = 2;
   root.add(lip);
 

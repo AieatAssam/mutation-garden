@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('renders responsive garden framing without browser errors', async ({ page }, testInfo) => {
+test('renders the production garden without browser errors', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));
   page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
@@ -14,8 +14,8 @@ test('renders responsive garden framing without browser errors', async ({ page }
   expect(box?.width).toBe(viewport?.width);
   expect(box?.height).toBe(viewport?.height);
   const screenshot = testInfo.project.name === 'desktop'
-    ? 'docs/art/evidence/m1-07b1a-desktop-1280x800.png'
-    : 'docs/art/evidence/m1-07b1a-phone-390x844.png';
+    ? 'docs/art/evidence/m1-07b1b-desktop-1280x800.png'
+    : 'docs/art/evidence/m1-07b1b-phone-390x844.png';
   await page.screenshot({ path: screenshot, fullPage: true });
   expect(errors).toEqual([]);
 });

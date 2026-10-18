@@ -1,4 +1,5 @@
 import type { Command, GardenState, StepResult } from './types';
+import { plant } from '../plants/plant';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -6,17 +7,26 @@ function assertTimestamp(nowMs: number): void {
   }
 }
 
-/** Advance the canonical simulation clock and apply no gameplay until handlers are added. */
+/** Advance the canonical simulation clock, then apply supported commands in order. */
 export function step(
   state: GardenState,
-  _commands: readonly Command[],
+  commands: readonly Command[],
   nowMs: number,
 ): StepResult {
   assertTimestamp(nowMs);
   const effectiveNowMs = Math.max(state.lastNowMs, nowMs);
-  const nextState = effectiveNowMs === state.lastNowMs
+  let nextState = effectiveNowMs === state.lastNowMs
     ? state
     : { ...state, lastNowMs: effectiveNowMs };
+  const events: StepResult['events'][number][] = [];
 
-  return { state: nextState, events: [] };
+  for (const command of commands) {
+    if (command.type !== 'Plant') continue;
+
+    const result = plant(nextState, command, effectiveNowMs);
+    nextState = result.state;
+    events.push(...result.events);
+  }
+
+  return { state: nextState, events };
 }

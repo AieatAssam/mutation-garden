@@ -1,6 +1,6 @@
 # Architecture
 
-Status: v0.2, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). Changes to this document need an ADR.
+Status: v0.3, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADR 0004. Changes to this document need an ADR.
 
 ## Stack (brief section 13)
 
@@ -68,6 +68,61 @@ ESLint enforces this table (`eslint.config.js`, `no-restricted-imports` per fold
 - **Visuals interpolate, never decide.** Render reads the latest snapshot and the previous one and interpolates for smooth motion. Animations triggered by events, such as squash, fly-to-crate and coin counters, are purely cosmetic. The coin total in the UI always comes from state; it may tick up for show, but it lands on the state value.
 - **Integer economy.** Coins and prices are integers. Timestamps and durations are integer milliseconds. No floating-point money.
 - **Deterministic elements (brief section 9):** plant placement, growth stages, growth timers, harvest eligibility, mutation rules, inventory, currency and progression all live in `src/sim`. Plant growth never depends on physics or animation. Gameplay stays correct if rendering or physics is interrupted.
+
+## M1 public contract
+
+Defined by [ADR 0004](decisions/0004-m1-simulation-and-adapter-contracts.md). These are contracts for implementation, not additional M1 features. Public exports live in `src/sim/index.ts`; adapters import sim types only, and app calls sim functions.
+
+```ts
+type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot';
+type PlotId = string; // Stable plot-0 through plot-5 in M1.
+type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestable';
+interface PlantState { readonly speciesId: SpeciesId; readonly plantedAt: number }
+interface PlotState { readonly id: PlotId; readonly plant: PlantState | null }
+interface GardenState {
+  readonly schema: 1;
+  readonly coins: number;
+  readonly lastNowMs: number;
+  readonly rngState: number; // unsigned 32-bit, JSON-safe
+  readonly plots: readonly PlotState[];
+}
+type Command =
+  | { readonly type: 'Plant'; readonly plotId: PlotId; readonly seedId: SpeciesId }
+  | { readonly type: 'Harvest'; readonly plotIds: readonly PlotId[] };
+type RejectionReason = 'unknown-plot' | 'unknown-seed' | 'occupied'
+  | 'insufficient-coins' | 'empty' | 'not-harvestable';
+type SimEvent =
+  | { readonly type: 'Planted'; readonly plotId: PlotId; readonly speciesId: SpeciesId }
+  | { readonly type: 'StageReached'; readonly plotId: PlotId;
+      readonly stage: 'Sprout' | 'Growing' | 'Mature' }
+  | { readonly type: 'Harvestable'; readonly plotId: PlotId }
+  | { readonly type: 'Harvested'; readonly plotId: PlotId;
+      readonly speciesId: SpeciesId; readonly coins: number }
+  | { readonly type: 'HarvestCompleted'; readonly count: number; readonly coins: number }
+  | { readonly type: 'CommandRejected'; readonly command: Command['type'];
+      readonly plotId: PlotId; readonly reason: RejectionReason };
+interface StepResult { readonly state: GardenState; readonly events: readonly SimEvent[] }
+interface GrowthView { readonly stage: GrowthStage; readonly progress: number }
+interface PlantSnapshot extends PlantState, GrowthView {}
+interface PlotSnapshot { readonly id: PlotId; readonly plant: PlantSnapshot | null }
+interface GardenSnapshot { readonly coins: number; readonly nowMs: number;
+  readonly plots: readonly PlotSnapshot[] }
+// createInitialState(seed: number, nowMs: number): GardenState
+// step(state: GardenState, commands: readonly Command[], nowMs: number): StepResult
+// getSnapshot(state: GardenState): GardenSnapshot
+```
+
+- `SIM_SCHEMA_VERSION = 1` once the canonical M1 state ships. The old placeholder version 0 has no save data to migrate. `createInitialState` creates six empty plots and the starting coin balance from content. It accepts an explicit integer seed and nonnegative safe-integer timestamp. Invalid timestamps fail explicitly; `step` clamps valid backwards times to `lastNowMs`. No caller-supplied RNG argument or mutable RNG closure.
+- A pure mulberry32 RNG helper in `state/rng.ts` returns a new uint32 state and a value in [0, 1). M1 has no random gameplay, so ordinary planting/growth/harvest do not consume draws. Golden-vector tests lock the algorithm for future save compatibility.
+- `SpeciesDefinition` in `content/species.ts` contains `id`, `name`, integer `seedCost`, integer `baseValue`, `growthDurationMs` and five ordered `{ stage, startsAtMs }` entries. The final entry begins at the duration. `SPECIES` and `INITIAL_COINS` are exported for app; no renderer or UI imports their runtime values from sim.
+- Growth uses `clamp((lastNowMs - plantedAt) / growthDurationMs, 0, 1)` and the latest reached stage offset. No derived stage/progress is saved. `step` compares old and effective new times and emits every crossed stage in plot order, then stage order; `Planted` represents entry to Seed. Harvestable has its own event instead of a second StageReached event. A repeated time emits no repeated growth events.
+- After growth events, apply commands in supplied order against the preceding command's result. This permits a harvest exactly at maturity and prevents two plants occupying one plot. Validate runtime seed IDs as well as plot IDs. A rejection changes no coins or plants itself; time and other valid commands may still change the returned state. Never mutate the input state or command arrays.
+- A Harvest processes unique plot IDs in their first occurrence order. Invalid targets get rejection events while valid targets harvest once. Emit one Harvested per successful target, then one HarvestCompleted if any succeeded. Combo count is feedback only; M1 adds no combo payout multiplier. Separate rapid Harvest commands still cannot pay twice. M1 has no automatic replanting or harvest.
+- All saved numbers are finite integers; progress is a transient fraction. M1 starts with 12 coins. In species order Sunny/Bubble/Twistroot, seed costs are 1/3/5 and base rewards are 2/6/10; these are provisional data-table values for playtesting, not the M3 economy balance. Stage starts in milliseconds are respectively [0, 1000, 3000, 7000, 8000], [0, 2000, 6000, 13000, 15000] and [0, 3000, 10000, 22000, 25000]. The Sunny cycle cannot strand the player. Mutations, inventory purchases, tools, upgrades and offline caps are later-milestone work.
+
+App owns selection and the command queue. UI emits a selected species ID; input emits `{ type: 'ActivatePlot', plotId }` or `{ type: 'HarvestPlots', plotIds }`. App uses its latest snapshot to turn activation into Plant for an empty plot or Harvest for an occupied plot; eligibility is always revalidated by sim. Swipe emits one batch at gesture end, deduplicated; a plot that was occupied when the gesture began never becomes an automatic replant target.
+
+For picking, app injects `pick(clientX, clientY): { kind: 'plot'; plotId: PlotId } | { kind: 'ground' } | null` into input, delegating to render's proxy raycast. Input captures ownership on pointerdown: plot gestures can tap/harvest, ground gestures can pan, misses do neither. Drag cancellation and pointercancel never activate a plot. A deliberate two-pointer pinch cancels pending taps/swipes; lifted pointers cannot generate a trailing tap. Input emits plain camera deltas; app forwards them to render. All CSS palette values are supplied by app. No Three.js object, mutable state reference or adapter import crosses these callbacks.
 
 ## Time
 

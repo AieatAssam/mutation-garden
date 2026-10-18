@@ -29,15 +29,11 @@ Codex works as a small team. Role files live in `.codex/agents/`; models are set
 | Reviewer | `reviewer` | Sol 6.1 (`gpt-6.1-sol`) | Reviews every diff before it is done. Read-only. |
 | Art advisor | `art_advisor` | Sol 6.1 (`gpt-6.1-sol`) | Reviews every visual change against the style guide. Read-only. |
 
-The loop for every task:
+Use one architect pass per milestone and revisit architecture only when a task changes an interface. The default is one PR per M1 task; split only when the task is expected to exceed about 400 changed lines or crosses two modules. Use an implementer for code and a test writer when the test work is substantial. Keep only one implementer per module active at a time.
 
-1. **Plan.** Spawn `architect` to confirm the next task from the current milestone doc, its files, tests and acceptance check. Big or cross-module changes get an ADR first.
-2. **Build.** Spawn `implementer` (Luna 6) for that one task. Spawn `test_writer` in parallel when the tests are substantial. Only one implementer per module at a time, to avoid conflicting edits.
-3. **Gate.** The implementer runs every gate below locally. All green, or it isn't done.
-4. **Review.** Spawn `reviewer` (Sol 6.1) on the diff. For anything visual, also spawn `art_advisor` with screenshots at 390×844 and 1280×800. Fix every finding, then review again.
-5. **Ship.** Open a PR, wait for CI to be green, squash-merge, tick the task in the milestone doc.
+Run `npm run check` locally before opening or updating a PR. The reviewer reviews every PR: medium effort for render-only or test-only changes, high effort for sim, save or input changes. The art advisor reviews only changes that alter what players see. Put required screenshots in the PR body; commit only the final art-approved shot for each visual milestone. Fix review findings, wait for first-run green CI with zero retries, then squash-merge and update M1.md.
 
-When you start subagents, use a fresh context (not a full-history fork), so the role's model and instructions apply.
+Use fresh subagent contexts so each role's model and instructions apply. Before ending a work session, add a short stopping-point note at the top of the active milestone file with what is done, what is in flight and the next task.
 
 ## One milestone at a time
 
@@ -102,7 +98,7 @@ Player-facing text, docs and PR descriptions are plain, short and clear.
 
 - Branch per task: `m1/01-sim-foundations`, `fix/swipe-harvest-edge`.
 - Conventional commit subjects: `feat(sim): plant command validation`, `fix(input): …`, `test(e2e): …`, `docs: …`, `art(render): …`, `chore: …`. Imperative, under 72 characters.
-- One task per PR. Title: `M1-03: Plant command with validation`. Link the milestone doc and the task's issue.
+- Default to one task per PR; split only if the task exceeds about 400 changed lines or crosses two modules. Title: `M1-03: Plant command with validation`. Link the milestone doc and the task's issue.
 - The PR description says what changed, how it was tested (the gate commands and results), and includes screenshots for anything visual.
-- Squash-merge only after the reviewer approves (and the art advisor, for visual changes) and CI is green.
+- Squash-merge only after the reviewer approves (and the art advisor, when the change is visual) and CI is green with no retries.
 - Labels: `M1`–`M5`, `feat`, `bug`, `art`, `perf`, `needs-review`.

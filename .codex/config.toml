@@ -1,0 +1,16 @@
+# Project-scoped Codex config for Mutation Garden.
+# Format: https://developers.openai.com/codex/subagents (custom agents and [agents] settings)
+# and https://developers.openai.com/codex/models (model ids).
+# Codex may ask you to trust this project before it loads project config.
+
+# The main session is the orchestrator: it plans with the architect, hands small
+# tasks to implementers and routes every diff through the reviewer.
+model = "gpt-6.1-sol"          # Sol 6.1
+model_reasoning_effort = "medium"
+
+[agents]
+# Spawned agents default to Luna 6 unless their role file says otherwise.
+default_subagent_model = "gpt-6-luna"
+default_subagent_reasoning_effort = "high"
+# Small cap: parallel writers conflict. Keep at most one implementer per area of code.
+max_concurrent_threads_per_session = 4

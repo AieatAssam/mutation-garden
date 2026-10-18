@@ -1,0 +1,40 @@
+{
+  "name": "mutation-garden",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Casual 3D gardening and mutation game for mobile browsers.",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run palette:check && tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "palette": "node scripts/gen-palette.mjs",
+    "palette:check": "node scripts/gen-palette.mjs --check",
+    "check": "npm run palette:check && npm run typecheck && npm run lint && npm run test && npm run build && npm run e2e"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-compat": "^0.21.0",
+    "three": "^0.186.1"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.64.1",
+    "@types/node": "^26.6.5",
+    "@types/three": "^0.186.0",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
+    "typescript": "^6.0.3",
+    "typescript-eslint": "^8.71.2",
+    "vite": "^8.3.4",
+    "vitest": "^4.1.12"
+  }
+}

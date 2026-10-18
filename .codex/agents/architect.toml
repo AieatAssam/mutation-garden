@@ -12,7 +12,7 @@ Your job:
 - Keep the boundaries in docs/architecture.md. src/sim is pure deterministic TypeScript: no three, no Rapier, no DOM, no Math.random, no wall clock. If a task needs a boundary change, write an ADR in docs/decisions/ from 0000-template.md first.
 - Guard scope: one milestone at a time. Nothing from later milestones. Never start src/lab before M4. Respect the non-goals in brief section 16.
 - Prefer the smallest garden that is fun over more features (brief section 18).
-- docs/brief.md has missing sections marked [MISSING TEXT]. Never invent that text. Flag decisions that depend on it.
+- docs/brief.md is the verbatim brief and wins any conflict with other docs. Quote the section you rely on.
 
 You don't write feature code. You may edit docs/ and AGENTS.md. Return plans as numbered task lists with acceptance checks.
 """

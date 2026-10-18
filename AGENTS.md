@@ -8,7 +8,7 @@ Mutation Garden is a mobile-first 3D gardening game in the browser: plant, grow,
 
 | File | What it is |
 |---|---|
-| `docs/brief.md` | The game design brief. Some sections are missing and marked **[MISSING TEXT]**. Never invent them. |
+| `docs/brief.md` | The game design brief, verbatim. The source of truth for what the game is. |
 | `docs/architecture.md` | Module boundaries, deterministic sim, fixed timestep, saves, offline growth |
 | `docs/milestones/` | M1–M5 scope and acceptance criteria. M1 has ordered tasks. |
 | `docs/art/style-guide.md` | **Binding** art source of truth (Seed Packet direction) |
@@ -47,11 +47,12 @@ When you start subagents, use a fresh context (not a full-history fork), so the 
 
 ## Architecture rules (enforced)
 
-- `src/sim` is pure, deterministic TypeScript. No `three`, no Rapier, no DOM, no `Math.random`, no `Date.now`/`new Date`/`performance.now`. Time and the seeded RNG come in as arguments. State changes only through `step()`.
+- `src/sim` is pure, deterministic TypeScript. No `three`, no Rapier, no DOM, no `Math.random`, no `Date.now`/`new Date`/`performance.now`. Wall-clock time comes in as `nowMs`; the seeded RNG lives in state. State changes only through `step()`. Gameplay systems never depend on Three.js scene objects (brief section 13).
 - Rendering, physics, UI and audio react to sim snapshots and events. They never decide rewards or change state.
 - Rapier is loaded lazily, only where it adds feel, and the game must work without it.
-- Fixed 10 Hz sim tick; rendering interpolates.
-- Saves: IndexedDB, versioned envelope, migrations with fixture tests, never silently reset.
+- Growth is computed from real timestamps (`plantedAt`, `nowMs`), so it never depends on frame rate, physics or animation. Fixed 10 Hz sim tick for commands; rendering interpolates; physics has its own fixed step.
+- Rigid bodies only where the brief allows (section 9): falling and bouncing fruit, dropped objects, small environmental touches, and the M4 lab. Pool them and cap them.
+- Saves: IndexedDB, versioned envelope, migrations with fixture tests, save on visibility change, recover from interrupted writes, never silently reset.
 - Module boundaries are in `eslint.config.js`. Don't add `eslint-disable` to cross them; write an ADR.
 
 ## Art rules (enforced)
@@ -62,9 +63,12 @@ When you start subagents, use a fresh context (not a full-history fork), so the 
 
 ## Mobile-first rules
 
-- Everything is playable with one finger. No pinch, long-press or precision gestures required for core play.
+- Every essential action works with one finger. Pinch zoom exists, but nothing essential needs it. No long-press or precision placement.
 - Touch targets are at least 48×48 px. Main actions sit in the bottom third of a portrait screen.
-- Design and test portrait phone first (390×844), then desktop.
+- Design and test portrait phone first (390×844), then landscape and desktop (mouse and keyboard where it makes sense).
+- Respect safe areas. Prevent page scrolling and browser gestures during play.
+- A gesture that starts on a plot or plant never moves the camera. Drag on empty ground pans.
+- Screen layout (brief section 8): coins, garden level and objective at the top; the garden in the middle; seeds and tools at the bottom; shop, upgrades, journal and settings as expandable panels. Keep overlays minimal while gardening.
 - No hover-only behaviour. Respect `prefers-reduced-motion`.
 - Stay inside the performance targets in `docs/architecture.md`.
 

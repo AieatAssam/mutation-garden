@@ -12,7 +12,7 @@ Plant a seed, watch something strange grow, harvest it, and find out what it can
 
 | Path | What |
 |---|---|
-| `docs/brief.md` | The design brief (partial copy; missing sections are marked) |
+| `docs/brief.md` | The design brief |
 | `docs/art/style-guide.md` | The Seed Packet art direction, palette and rules |
 | `docs/architecture.md` | How the code is split, and why |
 | `docs/milestones/` | M1–M5, with M1 broken into tasks |

@@ -190,10 +190,10 @@ Each plant must be identifiable as a solid black shape at 48 px tall.
 ## 8. Motion principles
 
 1. **Everything lands.** A seed drops, overshoots into the soil (squash to 0.7 height, 1.25 width), and springs back over 220 ms. Use spring easing with light damping, not ease-in-out.
-2. **Growth is a stepped pop, not a slow scale.** Each growth stage pops in 160 ms (scale 0.85 → 1.08 → 1.0) with a puff of soil particles. Between stages, the plant breathes: ±2% vertical scale on a 2.4 s loop, with offsets per plant so the garden doesn't move in sync.
+2. **Growth is smooth, with a pop at each stage.** The brief requires smooth growth, not model swaps. Each species is one rig whose parts (stem length, leaf unfurl, fruit size, Twistroot's twist) are driven continuously by growth progress, eased so it never looks linear. Crossing a stage (Seed, Sprout, Growing, Mature, Harvestable) adds a 160 ms accent (scale ×1.08 → 1.0), a puff of soil and the growth-pop sound. The plant also breathes: ±2% vertical scale on a 2.4 s loop, offset per plant so the garden doesn't move in sync. Leaves flick when touched.
 3. **Ripe means wobble.** A ripe fruit wiggles every 3 s and shows a soft halo in its fruit step 1 colour. That is the harvest signal, with no exclamation icons.
 4. **Harvest is the reward.** The fruit stretches upward (1.3 tall), detaches, arcs to the crate in 450 ms with a slight spin, and squashes on landing. Coins flip out and fly to the counter, which ticks up one coin at a time with a quick bump.
-5. **Mutations get a moment.** On a first-time mutation, time slows to 30% for 600 ms, the camera moves 10% closer, the material change wipes across the fruit from bottom to top, and a label stamps in: "New mutation: Golden". That is the only exclamation-mark moment in the game. Repeat mutations skip the slow-down.
+5. **Mutations get a moment.** On a first-time mutation, growth pauses briefly (brief section 5), the camera moves 10% closer, the material change wipes across the fruit from bottom to top with a particle burst, and a label stamps in: "New mutation: Golden". A tap anywhere skips it. That is the only exclamation-mark moment in the game. Repeat mutations skip the pause.
 6. **Small things ease, big things spring.** UI uses short ease-outs (120–180 ms). World objects use springs.
 7. **Reduced motion.** With `prefers-reduced-motion` or the in-game setting: no slow-down, no camera move, no breathing, and squash amplitude halved. Pops become 120 ms fades. Rewards stay just as clear.
 

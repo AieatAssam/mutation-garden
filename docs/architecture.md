@@ -1,6 +1,20 @@
 # Architecture
 
-Status: v0.1, written before any game code. Brief section 13 (technical architecture) is missing from our copy of the brief (see docs/brief.md). This document follows the rest of the brief and the owner's instructions. When section 13 arrives, the architect reconciles the two and records any change as an ADR.
+Status: v0.2, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). Changes to this document need an ADR.
+
+## Stack (brief section 13)
+
+| Component | Technology | Here |
+|---|---|---|
+| Language | TypeScript | strict mode |
+| Build tooling | Vite | |
+| Rendering | Three.js | `src/render` |
+| Physics | Rapier | `@dimforge/rapier3d-compat`, `src/physics` |
+| UI | HTML/CSS overlay | `src/ui` |
+| State management | Lightweight, framework-independent game state | plain data plus pure functions in `src/sim` |
+| Persistence | IndexedDB | `src/save` |
+| Audio | Web Audio API | `src/audio` |
+| Testing | Vitest and Playwright | `tests/`, `src/**/*.test.ts` |
 
 ## Goals
 
@@ -41,28 +55,41 @@ Status: v0.1, written before any game code. Brief section 13 (technical architec
 | `src/app` | Bootstrap and wiring | everything except `src/lab` | `src/lab` before M4 |
 | `src/lab` | Mutation Laboratory | — | Not started before M4 |
 
+Inside `src/sim`, the brief's gameplay systems (section 13) each get a folder: `state/` (authoritative game state, commands, events, RNG), `garden/` (plots, placement, expansion), `plants/` (species, growth, harvesting), `mutations/` (rules, traits, discovery), `economy/` (coins, prices, upgrades) and `content/` (data tables). Brief "Persistence: save, load and offline progression" maps to `src/save` plus the closed-form growth in `src/sim/plants`. "Gameplay systems must not depend directly on Three.js scene objects" is the core rule of this table.
+
 ESLint enforces this table (`eslint.config.js`, `no-restricted-imports` per folder). `tests/unit/lint-rules.test.ts` proves the rules fire. Breaking a boundary needs an ADR, not an eslint-disable comment.
 
 ## Deterministic simulation versus visuals
 
 - **State is a plain data object.** It is JSON-serialisable: no classes with hidden state, no Maps in the saved shape, no functions.
-- **One way to change state:** `step(state, commands, dtMs, rng) → { state, events }`. Commands are player intents, such as `Plant { plotId, seedId }` or `Harvest { plotIds }`. Events describe what happened, such as `Harvested { plotId, coins, mutation }`, for render, ui and audio to react to.
-- **Pure.** `step` never reads the clock, `Math.random`, the DOM or storage. Time comes in as `dtMs`, and randomness comes from a seeded RNG (for example a small PCG or mulberry32) whose state lives inside the saved state. The same save plus the same commands always gives the same result. ESLint blocks `Math.random`, `Date.now`, `new Date` and `performance.now` inside `src/sim`.
+- **One way to change state:** `step(state, commands, nowMs) → { state, events }`, where `nowMs` is the wall-clock time supplied by `src/app` (see Time, below) and the RNG state lives inside `state`. Commands are player intents, such as `Plant { plotId, seedId }` or `Harvest { plotIds }`. Events describe what happened, such as `Harvested { plotId, coins, mutation }`, for render, ui and audio to react to.
+- **Pure.** `step` never reads the clock, `Math.random`, the DOM or storage. Time comes in as `nowMs`, and randomness comes from a seeded RNG (for example a small PCG or mulberry32) whose state lives inside the saved state. The same save plus the same commands always gives the same result. ESLint blocks `Math.random`, `Date.now`, `new Date` and `performance.now` inside `src/sim`.
 - **Data-driven content.** Species, growth stages, mutation traits and prices live in typed data tables in `src/sim/content/`. New content is a table row plus tests.
 - **Visuals interpolate, never decide.** Render reads the latest snapshot and the previous one and interpolates for smooth motion. Animations triggered by events, such as squash, fly-to-crate and coin counters, are purely cosmetic. The coin total in the UI always comes from state; it may tick up for show, but it lands on the state value.
-- **Integer economy.** Coins and prices are integers. Growth progress is integer milliseconds. No floating-point money.
+- **Integer economy.** Coins and prices are integers. Timestamps and durations are integer milliseconds. No floating-point money.
+- **Deterministic elements (brief section 9):** plant placement, growth stages, growth timers, harvest eligibility, mutation rules, inventory, currency and progression all live in `src/sim`. Plant growth never depends on physics or animation. Gameplay stays correct if rendering or physics is interrupted.
+
+## Time
+
+The brief says growth timers use real elapsed time, with reasonable offline progression, and offline growth uses real timestamps (sections 4 and 13).
+
+- Each plant stores `plantedAt` (wall-clock ms) plus any boosts. Its stage and progress are a **closed-form function** of `nowMs − plantedAt`. Nothing counts up tick by tick, so a closed tab, a hidden page or a dropped frame never loses growth, and growth doesn't depend on how often `step` runs.
+- `src/app` reads `Date.now()` once per tick and passes it in. The sim never reads the clock itself.
+- Guard against clocks going backwards: the sim keeps `lastNowMs` and treats any earlier `nowMs` as equal to it, so progress never reverses.
+- M1 needs only this. M3 adds the offline-growth rules on top: a cap on credited time away, a "while you were away" summary, and checks against clock changes that would create rewards.
 
 ## Fixed timestep
 
 - The sim runs at a fixed **10 Hz** (`SIM_DT_MS = 100`), using an accumulator in `src/app`. Gardening doesn't need more, and a low rate makes catch-up cheap. The architect may change the rate with an ADR.
 - Each frame: `accumulator += min(frameDt, 250 ms)`. While `accumulator >= SIM_DT_MS`, run `step` and subtract. Render with `alpha = accumulator / SIM_DT_MS`.
 - Rendering runs at display rate (requestAnimationFrame). On low-end devices, render may drop to 30 fps; the sim doesn't care.
-- When the tab is hidden, the loop stops. On return, the elapsed wall time goes through offline catch-up (below), not through thousands of 100 ms steps.
+- When the page is hidden, rendering and simulation pause (brief section 13). On return, one `step` with the new `nowMs` brings every plant up to date, because growth is closed-form.
 
 ## Physics (Rapier)
 
 - `@dimforge/rapier3d-compat` is loaded with a dynamic `import()` the first time it's needed, so it never blocks first paint or the first planting.
-- Until M4 it is used only for cosmetic motion: harvested fruit bouncing into the crate, seeds dropping, coins spilling. Each body is spawned from an event and removed when it settles or after 3 s.
+- Brief section 9 limits rigid bodies to: harvested fruit falling and bouncing, dropped objects, small environmental interactions, and (M4) laboratory merging. Each body is spawned from an event and removed when it settles or after 3 s. Pool frequent effects, and cap live bodies (start at 24) so they never pile up.
+- Keep object scale and collision shapes consistent: 1 world unit = one plot width / 2. Use simple colliders (spheres, capsules, boxes), never mesh colliders on plants.
 - **Physics never changes state.** A fruit that bounces off the island still counts, because the harvest was already applied by `step` before the body existed.
 - If Rapier fails to load or the device is slow, use tweened fallbacks with the same timing. The game must be fully playable with physics off; e2e tests cover this.
 - Physics steps at its own fixed 60 Hz in `src/physics`, separate from the sim's tick.
@@ -84,16 +111,18 @@ ESLint enforces this table (`eslint.config.js`, `no-restricted-imports` per fold
 - **Migrations:** `migrations[n]` converts schema n to n+1. Loading runs every migration from the save's schema to the current one. Each migration has a fixture test: an old save JSON committed under `tests/fixtures/saves/` must load to the expected state. Never delete a migration.
 - **When to write:** after any command that changes coins, inventory or discoveries; every 10 s while playing; and on `visibilitychange` to hidden and `pagehide`. Writes are debounced and atomic (write the new envelope, then flip the pointer), so a crash never leaves a half-written save.
 - **Corruption:** on a checksum mismatch or failed parse, keep the bad blob under `slot-0.corrupt-<time>`, load the last good backup (`slot-0.bak`), and tell the player plainly. Never silently reset progress.
-- **No accounts, no server** (brief non-goals).
+- **No accounts, no server** (brief non-goals). Local browser storage is the default.
+- **Export and import** of saves comes in a later milestone (brief section 13). The envelope format above is the export format, so keep it stable and documented.
 
 ## Offline growth
 
-- On load or tab return, `elapsed = now − savedAt`, computed in `src/app` and passed to `sim.catchUp(state, elapsedMs, rng)`.
-- Clamp: negative elapsed (the clock moved back) counts as 0. Cap elapsed at 8 hours to start; the economy work in M3 tunes it.
-- `catchUp` is **closed-form**: it advances each plant's growth by `elapsedMs` directly, rather than looping over ticks. A day away costs the same as a second.
-- Plants that finish growing while away wait as ripe. They don't auto-harvest or rot, in line with "Fair progression": breaks aren't punished.
-- **No duplication:** catch-up only advances growth timers. Coins only come from harvest commands. A property test checks that `catchUp(catchUp(s, a), b)` equals `catchUp(s, a + b)`, and that reloading the same save twice gives no extra rewards.
-- Mutation rolls that happen while away use the saved RNG state, so reloading can't re-roll them.
+Growth is already timestamp-based (see Time), so offline growth falls out of the same rules. What M3 adds:
+
+- On load or page return, `src/app` passes the current `nowMs`; the sim credits at most `OFFLINE_CAP_MS` of time away (start at 8 hours, tune in M3 with the economy simulations). Plants planted before the cap window still finish growing; the cap only limits time-based bonuses that M3 may add.
+- Clock moved backwards: treated as zero time away (the `lastNowMs` guard). Clock moved far forwards: credited up to the cap only.
+- Plants that finish while away wait as harvestable. They don't auto-harvest or wither (brief: mature plants remain available until harvested; players never lose a plant because they closed the browser).
+- **No duplication:** time away only advances growth. Coins only come from harvest commands. Property tests check that splitting time away into pieces gives the same result as one piece, and that loading the same save twice adds nothing.
+- Any random outcomes due while away (M2 mutations) are drawn from the RNG state stored in the save, in a fixed order, so reloading can't re-roll them.
 
 ## Rendering
 
@@ -104,15 +133,23 @@ ESLint enforces this table (`eslint.config.js`, `no-restricted-imports` per fold
 - Picking: raycast against cheap invisible proxy meshes (one per plot), not the detailed plant meshes.
 - The DOM UI sits over the canvas. Its CSS custom properties are set from the palette at boot.
 
-## Performance targets (initial, refined in M1)
+## Performance targets
 
-| Metric | Target |
+From brief section 13, with our numbers where the brief leaves them open:
+
+| Target | Measure |
 |---|---|
-| First planting possible | under 10 s on a mid-range phone over 4G (brief pillar 1) |
-| JS on first load (gzip) | under 350 kB before Rapier; Rapier is loaded later |
-| Frame rate | 60 fps on a mid-range 2023 Android phone, never under 30 |
-| Draw calls, main view | under 150 |
-| Sim step | under 1 ms |
+| 60 FPS on capable modern mobile devices (brief) | Check on a mid-range 2023 Android phone and a recent iPhone |
+| Playable at 30 FPS on lower-powered devices (brief) | Check on a 2020-era budget Android phone |
+| Adaptive rendering resolution and effects (brief) | Drop pixel ratio from 2 towards 1, then turn off extras (crystal transmission, halos), when frame time stays over budget |
+| Minimise draw calls with instancing (brief) | Under 150 draw calls in the main view |
+| Lightweight geometry and textures (brief) | Procedural geometry, a handful of small textures |
+| No expensive real-time shadows (brief) | Blob shadows and baked AO (style guide section 4) |
+| Pause rendering and simulation when hidden (brief) | `visibilitychange` handling in `src/app` |
+| Load quickly on ordinary mobile connections (brief) | Under 350 kB gzipped JS before Rapier; first planting possible within 10 s on 4G |
+| Sim step | Under 1 ms |
+
+Performance targets must be verified on real devices (brief). CI can't do that, so performance PRs record real-device results.
 
 ## Testing
 

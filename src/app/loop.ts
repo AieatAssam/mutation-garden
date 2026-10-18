@@ -21,6 +21,7 @@ export interface FixedStepLoopOptions {
 
 export interface FixedStepLoop {
   enqueue(command: Command): void;
+  catchUp(): void;
   start(): void;
   stop(): void;
 }
@@ -42,6 +43,15 @@ export function createFixedStepLoop(options: FixedStepLoopOptions): FixedStepLoo
   let frameHandle: number | null = null;
   const commandQueue: Command[] = [];
 
+  const tick = (nowMs: number) => {
+    const commands = commandQueue.splice(0, commandQueue.length);
+    const result = step(state, commands, nowMs);
+    state = result.state;
+    current = getSnapshot(state);
+    if (result.events.length > 0) options.onEvents?.(result.events);
+    return result;
+  };
+
   const scheduleFrame = () => {
     if (running && frameHandle === null) {
       frameHandle = options.requestFrame(onFrame);
@@ -62,12 +72,8 @@ export function createFixedStepLoop(options: FixedStepLoopOptions): FixedStepLoo
 
       while (accumulatorMs >= SIM_DT_MS) {
         previous = current;
-        const commands = commandQueue.splice(0, commandQueue.length);
-        const result = step(state, commands, options.nowMs());
-        state = result.state;
-        current = getSnapshot(state);
+        tick(options.nowMs());
         accumulatorMs -= SIM_DT_MS;
-        if (result.events.length > 0) options.onEvents?.(result.events);
       }
     }
 
@@ -82,6 +88,13 @@ export function createFixedStepLoop(options: FixedStepLoopOptions): FixedStepLoo
   return {
     enqueue(command) {
       commandQueue.push(copyCommand(command));
+    },
+    catchUp() {
+      tick(options.nowMs());
+      previous = current;
+      accumulatorMs = 0;
+      lastFrameTimestampMs = null;
+      options.onRender({ previous, current, alpha: 0 });
     },
     start() {
       if (running) return;

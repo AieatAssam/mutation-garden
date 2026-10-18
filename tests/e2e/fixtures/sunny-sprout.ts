@@ -1,11 +1,46 @@
 import { AmbientLight, Box3, Color, DirectionalLight, Group, Mesh, MeshBasicMaterial, OrthographicCamera, PlaneGeometry, Scene, Vector3, WebGLRenderer } from 'three';
 import { createMaterialLibrary, type MaterialLibrary } from '../../../src/render/materials';
 import { createSunnySprout } from '../../../src/render/plants/sunny-sprout';
+import { createRenderer } from '../../../src/render/renderer';
 import { palette } from '../../../src/render/palette';
-import type { PlantSnapshot } from '../../../src/sim/state/types';
+import type { GardenSnapshot, PlantSnapshot } from '../../../src/sim';
 
-const stages = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'] as const;
 document.documentElement.style.setProperty('--sky', palette.environment['sky-day'].mid); document.documentElement.style.setProperty('--ink', palette.ink['press-ink']); document.documentElement.style.setProperty('--paper', palette.ink['paper-white']); document.documentElement.style.setProperty('--tomato', palette.ink['misprint-tomato']);
+if (new URLSearchParams(location.search).has('reconcile')) {
+  document.body.dataset.mode = 'reconcile';
+  const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
+  const status = document.querySelector<HTMLElement>('#status')!;
+  const motion = document.querySelector<HTMLInputElement>('#reduced-motion')!;
+  const renderer = createRenderer(canvas);
+  let reducedMotion = false;
+  let currentCase = 'empty';
+  const snapshot = (nowMs: number, plants: readonly (PlantSnapshot | null)[]): GardenSnapshot => ({ coins: 100, nowMs,
+    plots: Array.from({ length: 6 }, (_, index) => ({ id: `plot-${index}`, plant: plants[index] ?? null })) });
+  const plant = (plantedAt: number, stage: PlantSnapshot['stage'], progress: number): PlantSnapshot => ({ speciesId: 'sunny-sprout', plantedAt, stage, progress });
+  const setCase = (name: string) => {
+    currentCase = name;
+    const none = Array<PlantSnapshot | null>(6).fill(null);
+    let previous = snapshot(1000, none); let current = previous;
+    if (name === 'growing') { previous = snapshot(1000, [plant(0, 'Growing', 0.4)]); current = snapshot(1100, [plant(0, 'Growing', 0.5)]); }
+    if (name === 'harvested') { previous = snapshot(1000, [plant(0, 'Harvestable', 1)]); current = snapshot(1100, none); }
+    if (name === 'replanted') { previous = snapshot(1000, [plant(0, 'Growing', 0.8)]); current = snapshot(1100, [plant(1000, 'Seed', 0.08)]); }
+    if (name === 'six-plots') {
+      const plants = Array.from({ length: 6 }, (_, index) => plant(index * 100, index === 5 ? 'Harvestable' : 'Growing', (index + 1) / 7));
+      previous = snapshot(1000, plants); current = snapshot(1100, plants);
+    }
+    renderer.render(previous, current, 0.5, reducedMotion);
+  };
+  function resize() { renderer.resize(innerWidth, innerHeight); }
+  window.addEventListener('resize', resize); resize(); setCase('empty');
+  status.dataset.render = 'complete'; status.textContent = 'Ready';
+  (window as Window & { sunnySproutFixture?: { setCase(name: string): void; setMotion(value: boolean): void; resize(): void; dispose(): void } }).sunnySproutFixture = {
+    setCase,
+    setMotion(value) { reducedMotion = value; motion.checked = value; setCase(currentCase); },
+    resize,
+    dispose() { window.removeEventListener('resize', resize); renderer.dispose(); },
+  };
+} else {
+const stages = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'] as const;
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!; const status = document.querySelector<HTMLElement>('#status')!; const reduced = document.querySelector<HTMLInputElement>('#reduced-motion')!;
 const silhouetteCanvas = document.querySelector<HTMLCanvasElement>('#silhouette')!;
 const renderer = new WebGLRenderer({ canvas, antialias: true });
@@ -55,3 +90,4 @@ status.dataset.render = 'complete'; status.textContent = 'Ready'; requestAnimati
     dead = true; window.removeEventListener('resize', resize); rigs.forEach(({ rig }) => rig.dispose()); silhouetteRig.dispose(); silhouetteMaterial.dispose(); floorGeometry.dispose(); materials.dispose(); renderer.dispose(); silhouetteRenderer.dispose();
   },
 };
+}

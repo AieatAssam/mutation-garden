@@ -9,6 +9,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   document.body.style.background = palette.environment['sky-day'].horizon;
   try {
     const r = createRenderer(canvas);
+    const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const onResize = () => r.resize(window.innerWidth, window.innerHeight);
     window.addEventListener('resize', onResize);
     onResize();
@@ -18,8 +19,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       nowMs: () => Date.now(),
       requestFrame: (callback) => window.requestAnimationFrame(callback),
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
-      // Snapshot rendering is connected when the garden renderer is introduced.
-      onRender: () => undefined,
+      onRender: (frame) => r.render(frame.previous, frame.current, frame.alpha, motion.matches),
     });
     const lifecycle = createPageLifecycle({
       loop,

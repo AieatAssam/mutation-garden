@@ -1,3 +1,16 @@
-// Gameplay simulation: pure, deterministic TypeScript. No three, no Rapier, no DOM, no wall clock.
-// Empty until M1. See docs/architecture.md and docs/milestones/M1.md.
-export const SIM_SCHEMA_VERSION = 0;
+// Public simulation API. Keep this module free of browser and renderer imports.
+export { SIM_SCHEMA_VERSION, createInitialState, INITIAL_COINS } from './state/initial';
+export { nextRandom } from './state/rng';
+export { step } from './state/step';
+export type {
+  Command,
+  GardenState,
+  GrowthStage,
+  PlantState,
+  PlotId,
+  PlotState,
+  RejectionReason,
+  SimEvent,
+  SpeciesId,
+  StepResult,
+} from './state/types';

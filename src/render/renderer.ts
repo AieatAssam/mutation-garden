@@ -13,9 +13,11 @@ import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
 import { createGardenCamera, resizeGardenCamera } from './camera';
+import { createGardenPicker, type PickResult } from './picking';
 
 export interface Renderer {
   resize(width: number, height: number): void;
+  pick(clientX: number, clientY: number): PickResult;
   dispose(): void;
 }
 
@@ -41,6 +43,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   const materials = createMaterialLibrary();
   const garden = createGarden(materials);
   scene.add(garden);
+  const picker = createGardenPicker(canvas, camera, garden);
 
   function layout(width: number, height: number): void {
     resizeGardenCamera(camera, width, height);
@@ -53,9 +56,13 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
     resize(width, height) {
       if (!disposed) layout(width, height);
     },
+    pick(clientX, clientY) {
+      return disposed ? null : picker.pick(clientX, clientY);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
+      picker.dispose();
       garden.dispose();
       materials.dispose();
       gl.dispose();

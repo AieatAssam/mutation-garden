@@ -1,0 +1,172 @@
+.garden-ui {
+  --garden-safe-top: max(12px, env(safe-area-inset-top));
+  --garden-safe-right: max(12px, env(safe-area-inset-right));
+  --garden-safe-bottom: max(12px, env(safe-area-inset-bottom));
+  --garden-safe-left: max(12px, env(safe-area-inset-left));
+  position: fixed;
+  z-index: 2;
+  inset: 0;
+  pointer-events: none;
+  color: var(--mg-ui-text);
+  font-family: 'Atkinson Hyperlegible', system-ui, sans-serif;
+  touch-action: none;
+  user-select: none;
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/atkinson-hyperlegible-regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Atkinson Hyperlegible';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/atkinson-hyperlegible-bold.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Fraunces';
+  font-style: normal;
+  font-weight: 650 800;
+  font-display: swap;
+  src: url('./fonts/fraunces-variable.woff2') format('woff2');
+}
+
+.garden-ui__coins {
+  position: absolute;
+  top: var(--garden-safe-top);
+  left: var(--garden-safe-left);
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 9px;
+  padding: 5px 14px 5px 8px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 18px;
+  background: var(--mg-ui-panel);
+  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+
+.garden-ui__coin-token {
+  position: relative;
+  display: grid;
+  width: 36px;
+  height: 36px;
+  flex: 0 0 36px;
+  place-items: center;
+  border: 2px solid var(--mg-ui-coin-outline);
+  border-radius: 50%;
+  background: var(--mg-ui-coin-face);
+}
+
+.garden-ui__coin-mark {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.garden-ui__coin-ridges {
+  fill: none;
+  stroke: var(--mg-ui-coin-rim);
+  stroke-linecap: round;
+  stroke-width: 2;
+}
+
+.garden-ui__coin-inner-ring {
+  fill: none;
+  stroke: var(--mg-ui-coin-rim);
+  stroke-dasharray: 1 2;
+  stroke-width: 1.2;
+}
+
+.garden-ui__coin-seed {
+  fill: none;
+  stroke: var(--mg-ui-coin-emboss);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.2;
+}
+
+.garden-ui__coin-amount::before {
+  color: var(--mg-ui-coin-text);
+  content: 'Coins ';
+  font-weight: 600;
+}
+
+.garden-ui__tray {
+  position: absolute;
+  right: var(--garden-safe-right);
+  bottom: var(--garden-safe-bottom);
+  left: var(--garden-safe-left);
+  display: flex;
+  justify-content: center;
+  align-items: end;
+  gap: 10px;
+  min-height: 76px;
+  pointer-events: none;
+}
+
+.garden-ui__tray-label {
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  padding: 4px 11px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 14px;
+  background: var(--mg-ui-panel);
+  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 20px;
+  transform: translateX(-50%);
+}
+
+.garden-ui__seed {
+  min-width: min(100%, 160px);
+  min-height: 56px;
+  padding: 0 22px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 32px;
+  background: var(--mg-ui-accent);
+  box-shadow: 0 5px 0 var(--mg-ui-border);
+  color: var(--mg-ui-on-accent);
+  cursor: pointer;
+  font: 700 20px/1.15 'Fraunces', Georgia, serif;
+  font-optical-sizing: auto;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+  transition: transform 140ms ease-out, box-shadow 140ms ease-out, background-color 140ms ease-out;
+}
+
+.garden-ui__seed:hover {
+  background: var(--mg-ui-accent-pressed);
+}
+
+.garden-ui__seed:active {
+  box-shadow: 0 0 0 var(--mg-ui-border);
+  transform: translateY(5px);
+}
+
+.garden-ui__seed:focus-visible {
+  outline: 4px solid var(--mg-ui-focus);
+  outline-offset: 4px;
+}
+
+.garden-ui__seed.is-selected {
+  background: var(--mg-ui-accent-pressed);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .garden-ui__seed {
+    transition: none;
+  }
+}

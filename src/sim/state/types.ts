@@ -7,9 +7,27 @@ export interface PlantState {
   readonly plantedAt: number;
 }
 
+export interface GrowthView {
+  readonly stage: GrowthStage;
+  readonly progress: number;
+}
+
+export interface PlantSnapshot extends PlantState, GrowthView {}
+
 export interface PlotState {
   readonly id: PlotId;
   readonly plant: PlantState | null;
+}
+
+export interface PlotSnapshot {
+  readonly id: PlotId;
+  readonly plant: PlantSnapshot | null;
+}
+
+export interface GardenSnapshot {
+  readonly coins: number;
+  readonly nowMs: number;
+  readonly plots: readonly PlotSnapshot[];
 }
 
 export interface GardenState {

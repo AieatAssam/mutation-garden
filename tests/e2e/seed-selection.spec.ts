@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 
-test('Sunny is the only visible seed and remains selectable by touch, pointer and keyboard', async ({ page }, testInfo) => {
+test('offers Sunny Sprout and Bubble Berry, with Sunny selected in a fixed viewport', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -8,27 +8,35 @@ test('Sunny is the only visible seed and remains selectable by touch, pointer an
   await page.goto('./');
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
   const sunny = seeds.getByRole('button', { name: 'Sunny Sprout' });
+  const bubble = seeds.getByRole('button', { name: 'Bubble Berry' });
   const coins = page.getByRole('status', { name: 'Coins' });
 
   await expect(seeds).toBeVisible();
   await expect(sunny).toBeVisible();
+  await expect(bubble).toBeVisible();
+  await expect(seeds.getByRole('button')).toHaveCount(2);
+  await expect(seeds.getByText('Twistroot')).toHaveCount(0);
   await expect(sunny).toHaveAttribute('aria-pressed', 'true');
-  await expect(coins).toContainText('12');
-  await expect(seeds.getByRole('button')).toHaveCount(1);
-  await expect(seeds.getByText(/Bubble Berry|Twistroot/)).toHaveCount(0);
+  await expect(bubble).toHaveAttribute('aria-pressed', 'false');
+  await expect(coins).toHaveText('12');
 
-  const target = await sunny.boundingBox();
-  expect(target).not.toBeNull();
-  expect(target!.width).toBeGreaterThanOrEqual(48);
-  expect(target!.height).toBeGreaterThanOrEqual(48);
+  for (const seed of [sunny, bubble]) {
+    const target = await seed.boundingBox();
+    expect(target).not.toBeNull();
+    expect(target!.width).toBeGreaterThanOrEqual(48);
+    expect(target!.height).toBeGreaterThanOrEqual(48);
+  }
 
-  if (testInfo.project.name === 'mobile-portrait') await sunny.tap();
-  else await sunny.click();
-  await expect(sunny).toHaveAttribute('aria-pressed', 'true');
+  if (testInfo.project.name === 'mobile-portrait') await bubble.tap();
+  else await bubble.click();
+  await expect(bubble).toHaveAttribute('aria-pressed', 'true');
+  await expect(sunny).toHaveAttribute('aria-pressed', 'false');
+
   await sunny.focus();
   await sunny.press('Enter');
   await expect(sunny).toHaveAttribute('aria-pressed', 'true');
-  await expect(coins).toContainText('12');
+  await expect(bubble).toHaveAttribute('aria-pressed', 'false');
+  await expect(coins).toHaveText('12');
 
   const pageSize = await page.evaluate(() => ({
     width: document.documentElement.scrollWidth,
@@ -49,7 +57,7 @@ test('Sunny is the only visible seed and remains selectable by touch, pointer an
   expect(errors).toEqual([]);
 });
 
-test('seed activation sends selection events for touch or pointer and keyboard input', async ({ page }, testInfo) => {
+test('seed activation emits selection events for touch or pointer and keyboard input', async ({ page }, testInfo) => {
   await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/garden-ui.html');
   const sunny = page.getByRole('navigation', { name: 'Seeds' }).getByRole('button', { name: 'Sunny Sprout' });
   const events = page.getByRole('list', { name: 'Selection events' });

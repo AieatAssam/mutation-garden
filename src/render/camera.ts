@@ -13,11 +13,16 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   const aspect = safeWidth / safeHeight;
   const portrait = aspect < 1;
   const viewHeight = portrait
-    ? Math.min(13.5, safeHeight / 61.5)
-    : Math.min(7, safeHeight / 50);
+    ? Math.min(16.7, safeHeight / 48)
+    : Math.min(9, safeHeight / 50);
 
-  camera.position.set(portrait ? 0 : 8, 6, 14);
-  camera.lookAt(0, 0, 0);
+  if (portrait) {
+    camera.position.set(10.5, 10, 17);
+    camera.lookAt(0, -1.6, 0);
+  } else {
+    camera.position.set(10.5, 6.8, 14);
+    camera.lookAt(-2.6, -1.3, 0);
+  }
   camera.left = -viewHeight * aspect * 0.5;
   camera.right = viewHeight * aspect * 0.5;
   camera.top = viewHeight * 0.5;

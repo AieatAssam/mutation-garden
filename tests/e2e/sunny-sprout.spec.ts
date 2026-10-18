@@ -22,8 +22,12 @@ test('sunny sprout renders all stages and reduced motion', async ({ page }, info
   const ink = await silhouette.evaluate((element) => { const gl = (element as HTMLCanvasElement).getContext('webgl2')!; gl.finish(); const data = new Uint8Array(48 * 48 * 4); gl.readPixels(0, 0, 48, 48, gl.RGBA, gl.UNSIGNED_BYTE, data); const rows: number[] = []; let count = 0; for (let i = 0; i < data.length; i += 4) if (data[i + 3]! > 0 && Math.abs(data[i]! - 43) < 12 && Math.abs(data[i + 1]! - 30) < 12 && Math.abs(data[i + 2]! - 46) < 12) { count += 1; rows.push(47 - Math.floor(i / 4 / 48)); } return { count, min: Math.min(...rows), max: Math.max(...rows) }; });
   expect(ink.count).toBeGreaterThan(0); expect(ink.min).toBeLessThanOrEqual(1); expect(ink.max).toBeGreaterThanOrEqual(46);
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
+  await page.evaluate(() => (window as unknown as Window & { sunnySproutFixture: { pause(): void } }).sunnySproutFixture.pause());
+  await expect(page.locator('#status')).toHaveAttribute('data-frame', 'paused');
   await page.screenshot({ path: `docs/art/evidence/m1-08a1-sunny-sprout-${view}-default.png` });
   await page.locator('#reduced-motion').check(); await expect(page.locator('#reduced-motion')).toBeChecked();
+  await page.evaluate(() => (window as unknown as Window & { sunnySproutFixture: { setMotion(value: boolean): void } }).sunnySproutFixture.setMotion(true));
+  await expect(page.locator('#status')).toHaveAttribute('data-motion', 'reduced');
   await page.screenshot({ path: `docs/art/evidence/m1-08a1-sunny-sprout-${view}-reduced.png` }); expect(errors).toEqual([]);
 });
 

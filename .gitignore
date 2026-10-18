@@ -1,0 +1,5 @@
+node_modules/
+dist/
+docs/art/prototype/vendor/
+docs/art/prototype/node_modules
+.DS_Store

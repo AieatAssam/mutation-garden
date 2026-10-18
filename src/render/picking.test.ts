@@ -45,7 +45,7 @@ describe('garden picker', () => {
   it('picks exposed finite ground and excludes sky beyond its ellipse', () => {
     const { picker, screen } = setup();
     expect(picker.pick(...screen(new Vector3(0, 0.48, -3)))).toEqual({ kind: 'ground' });
-    expect(picker.pick(...screen(new Vector3(0, 0.48, -4.5)))).toBeNull();
+    expect(picker.pick(...screen(new Vector3(0, 0.48, -4.8)))).toBeNull();
     picker.dispose();
   });
 

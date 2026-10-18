@@ -73,21 +73,46 @@ silhouetteCamera.left = -height / 2; silhouetteCamera.right = height / 2; silhou
 silhouetteScene.add(silhouetteRig.root);
 const projected = [bounds.min.y - height / 2, bounds.max.y - height / 2].map((y) => new Vector3(0, y, 0).project(silhouetteCamera).y); silhouetteCanvas.dataset.projectedHeight = String(Math.abs(projected[1]! - projected[0]!) * 24);
 let dead = false;
+let paused = false;
+let lastFrameNow = 0;
+let frameHandle = 0;
 function resize() {
   renderer.setSize(innerWidth, innerHeight, false); const aspect = innerWidth / innerHeight;
   camera.left = -4 * aspect; camera.right = 4 * aspect; camera.updateProjectionMatrix();
 }
+function renderFrame(now: number, reducedMotion: boolean) {
+  rigs.forEach(({ rig, plant }) => rig.update(plant, now, reducedMotion));
+  renderer.render(scene, camera);
+  silhouetteRenderer.render(silhouetteScene, silhouetteCamera);
+}
 function frame(now: number) {
-  if (dead) return;
-  rigs.forEach(({ rig, plant }) => rig.update(plant, now, reduced.checked)); renderer.render(scene, camera); silhouetteRenderer.render(silhouetteScene, silhouetteCamera); requestAnimationFrame(frame);
+  if (dead || paused) return;
+  lastFrameNow = now;
+  renderFrame(now, reduced.checked);
+  frameHandle = requestAnimationFrame(frame);
 }
 resize();
 window.addEventListener('resize', resize); rigs.forEach(({ rig, plant }) => rig.update(plant, 0, false)); renderer.compile(scene, camera); renderer.render(scene, camera); silhouetteRenderer.compile(silhouetteScene, silhouetteCamera); silhouetteRenderer.render(silhouetteScene, silhouetteCamera);
-status.dataset.render = 'complete'; status.textContent = 'Ready'; requestAnimationFrame(frame);
-(window as Window & { sunnySproutFixture?: { setMotion(value: boolean): void; dispose(): void } }).sunnySproutFixture = {
-  setMotion(value) { reduced.checked = value; },
+status.dataset.render = 'complete'; status.textContent = 'Ready'; frameHandle = requestAnimationFrame(frame);
+(window as Window & { sunnySproutFixture?: { setMotion(value: boolean): void; pause(): void; dispose(): void } }).sunnySproutFixture = {
+  setMotion(value) {
+    reduced.checked = value;
+    if (paused) {
+      renderFrame(lastFrameNow, value);
+      status.dataset.motion = value ? 'reduced' : 'default';
+    }
+  },
+  pause() {
+    if (!paused) {
+      paused = true;
+      cancelAnimationFrame(frameHandle);
+    }
+    renderFrame(lastFrameNow, reduced.checked);
+    status.dataset.frame = 'paused';
+    status.dataset.motion = reduced.checked ? 'reduced' : 'default';
+  },
   dispose() {
-    dead = true; window.removeEventListener('resize', resize); rigs.forEach(({ rig }) => rig.dispose()); silhouetteRig.dispose(); silhouetteMaterial.dispose(); floorGeometry.dispose(); materials.dispose(); renderer.dispose(); silhouetteRenderer.dispose();
+    dead = true; paused = true; cancelAnimationFrame(frameHandle); window.removeEventListener('resize', resize); rigs.forEach(({ rig }) => rig.dispose()); silhouetteRig.dispose(); silhouetteMaterial.dispose(); floorGeometry.dispose(); materials.dispose(); renderer.dispose(); silhouetteRenderer.dispose();
   },
 };
 }

@@ -20,7 +20,7 @@ const offsets: [number, number][] = [[0, 0], [-24, 0], [24, 0], [0, -24], [0, 24
 
 async function inspect(page: Page) { return page.evaluate(() => window.gardenProbe.inspect()); }
 
-test('production picker covers plot targets across resize, inset and disposal', async ({ page }, testInfo) => {
+test('production garden renders cleanly and picker covers plot targets across sizes', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -29,8 +29,14 @@ test('production picker covers plot targets across resize, inset and disposal', 
   await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/garden-render.html');
   await expect(page.locator('body')).toHaveAttribute('data-render', 'complete');
   await expect(page.locator('#stage')).toBeVisible();
+  const canvasSize = await page.locator('#stage').evaluate((element: HTMLCanvasElement) => ({
+    width: element.width,
+    height: element.height,
+  }));
+  expect(canvasSize.width).toBeGreaterThan(0);
+  expect(canvasSize.height).toBeGreaterThan(0);
   await page.screenshot({
-    path: desktop ? 'docs/art/evidence/m1-07b2b-desktop-1280x800.png' : 'docs/art/evidence/m1-07b2b-phone-390x844.png',
+    path: desktop ? 'docs/art/evidence/m1-07c-desktop-1280x800.png' : 'docs/art/evidence/m1-07c-phone-390x844.png',
     fullPage: true,
   });
 

@@ -1,7 +1,8 @@
 import type { GardenState, PlotState } from './types';
+import { INITIAL_COINS } from '../content/species';
 
 export const SIM_SCHEMA_VERSION = 1;
-export const INITIAL_COINS = 12;
+export { INITIAL_COINS };
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {

@@ -1,5 +1,6 @@
 import type { Command, GardenState, StepResult } from './types';
 import { plant } from '../plants/plant';
+import { collectGrowthEvents } from '../plants/growth';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -15,10 +16,12 @@ export function step(
 ): StepResult {
   assertTimestamp(nowMs);
   const effectiveNowMs = Math.max(state.lastNowMs, nowMs);
+  const events: StepResult['events'][number][] = [
+    ...collectGrowthEvents(state, state.lastNowMs, effectiveNowMs),
+  ];
   let nextState = effectiveNowMs === state.lastNowMs
     ? state
     : { ...state, lastNowMs: effectiveNowMs };
-  const events: StepResult['events'][number][] = [];
 
   for (const command of commands) {
     if (command.type !== 'Plant') continue;

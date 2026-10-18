@@ -4,11 +4,17 @@ export { SPECIES } from './content/species';
 export type { GrowthStageDefinition, SpeciesDefinition } from './content/species';
 export { nextRandom } from './state/rng';
 export { step } from './state/step';
+export { getSnapshot } from './state/snapshot';
+export { getGrowthView } from './plants/growth';
 export type {
   Command,
   GardenState,
+  GardenSnapshot,
+  GrowthView,
   GrowthStage,
   PlantState,
+  PlantSnapshot,
+  PlotSnapshot,
   PlotId,
   PlotState,
   RejectionReason,

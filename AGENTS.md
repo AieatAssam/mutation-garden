@@ -35,6 +35,15 @@ Run `npm run check` locally before opening or updating a PR. The reviewer review
 
 Use fresh subagent contexts so each role's model and instructions apply. Before ending a work session, add a short stopping-point note at the top of the active milestone file with what is done, what is in flight and the next task.
 
+### Milestone critique gate
+
+Before starting the next milestone, finish the current milestone's acceptance checks and capture the accepted build at 390×844 portrait and 1280×800 desktop. Send both screenshots, the brief, the art guide and palette, and the milestone acceptance criteria to two fresh critique subagents:
+
+- One checks visual fidelity against the game design and art documents.
+- One checks the screens and interaction evidence for inconsistencies, missing states, copy or layout mistakes, and other visible defects.
+
+Ask both agents to report actionable findings with severity, screenshot evidence and the related criterion. Create a GitHub issue that links the screenshots and records the critique and its findings. Address every actionable finding and verify the fixes before starting the next milestone; close the issue when resolved. If both critiques find no defects, record that result in the issue and close it after confirming the milestone acceptance checks. Keep critique captures attached to the issue or PR; only commit the final approved shot for each visual milestone.
+
 ## One milestone at a time
 
 - Work only on the current milestone (see `docs/milestones/README.md`). Finish and accept it before starting the next.

@@ -7,6 +7,7 @@ import {
   PlaneGeometry,
   ShaderMaterial,
   SphereGeometry,
+  Vector3,
   type BufferGeometry,
 } from 'three';
 import type { PlantSnapshot } from '../../sim/state/types';
@@ -22,6 +23,7 @@ export interface PlantRig {
 const FRUIT_RADIUS = 0.31;
 const STEM_LENGTH = 0.78;
 const LEAF_RADIUS = 0.19;
+const HALO_NORMAL = new Vector3(0.55, 0.45, 0.71).normalize();
 
 function ribbedFruit(): SphereGeometry {
   const geometry = new SphereGeometry(1, 32, 24);
@@ -45,10 +47,13 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
   const stemGeometry = new CylinderGeometry(0.065, 0.08, 1, 10, 1);
   const leafGeometry = new SphereGeometry(LEAF_RADIUS, 16, 12);
   const fruitGeometry = ribbedFruit();
-  const haloGeometry = new PlaneGeometry(FRUIT_RADIUS * 3, FRUIT_RADIUS * 3);
-  const haloMaterial = new ShaderMaterial({ uniforms: { tint: { value: new Color(palette.plants['sunny-sprout'].fruit[0]) } },
+  const haloGeometry = new PlaneGeometry(FRUIT_RADIUS * 4.8, FRUIT_RADIUS * 4.8);
+  const haloMaterial = new ShaderMaterial({ uniforms: {
+    tint: { value: new Color(palette.plants['sunny-sprout'].fruit[0]) },
+    strength: { value: 0.5 },
+  },
     vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-    fragmentShader: 'uniform vec3 tint; varying vec2 vUv; void main(){float d=length(vUv-0.5)*2.0;float a=(1.0-smoothstep(0.4,1.0,d))*0.22;gl_FragColor=vec4(tint,a);\n#include <colorspace_fragment>\n}',
+    fragmentShader: 'uniform vec3 tint; uniform float strength; varying vec2 vUv; void main(){float d=length(vUv-0.5)*2.0;float a=smoothstep(0.32,0.48,d)*(1.0-smoothstep(0.85,1.0,d))*strength;gl_FragColor=vec4(tint,a);\n#include <colorspace_fragment>\n}',
     transparent: true, depthWrite: false, side: DoubleSide });
   const ownedGeometries: BufferGeometry[] = [stemGeometry, leafGeometry, fruitGeometry, haloGeometry];
 
@@ -75,7 +80,8 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
   halo.name = 'halo';
   halo.userData.part = 'halo';
   halo.renderOrder = 1;
-  halo.position.z = -0.04;
+  halo.quaternion.setFromUnitVectors(new Vector3(0, 0, 1), HALO_NORMAL);
+  halo.position.copy(HALO_NORMAL).multiplyScalar(-0.05);
   fruitRig.add(halo);
   const blob = materials.blob();
   blob.name = 'blob';

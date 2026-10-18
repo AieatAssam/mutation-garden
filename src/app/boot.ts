@@ -41,9 +41,13 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     });
     lifecycle.start();
     document.body.dataset.boot = 'webgl';
+    let disposed = false;
     return () => {
+      if (disposed) return;
+      disposed = true;
       lifecycle.dispose();
       window.removeEventListener('resize', onResize);
+      r.dispose();
     };
   } catch {
     // WebGL unavailable: the page still loads; M1 adds a proper fallback message.

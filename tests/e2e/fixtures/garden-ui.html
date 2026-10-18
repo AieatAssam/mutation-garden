@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Garden UI interaction harness</title>
+    <style>
+      :root {
+        --mg-ui-panel: white;
+        --mg-ui-border: black;
+        --mg-ui-text: black;
+        --mg-ui-accent: green;
+        --mg-ui-accent-pressed: darkgreen;
+        --mg-ui-on-accent: white;
+        --mg-ui-misprint: gray;
+        --mg-ui-focus: blue;
+        --mg-ui-coin-face: gold;
+        --mg-ui-coin-rim: goldenrod;
+        --mg-ui-coin-emboss: saddlebrown;
+        --mg-ui-coin-outline: black;
+        --mg-ui-coin-text: black;
+      }
+      html, body { margin: 0; min-height: 100%; }
+      #garden { min-height: 100vh; }
+      #selections { padding: 100px 16px; }
+    </style>
+  </head>
+  <body>
+    <main id="garden"></main>
+    <ol id="selections" aria-label="Selection events"></ol>
+    <script type="module" src="./garden-ui.ts"></script>
+  </body>
+</html>

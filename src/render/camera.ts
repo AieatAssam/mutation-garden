@@ -12,7 +12,9 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   const safeHeight = Math.max(1, height);
   const aspect = safeWidth / safeHeight;
   const portrait = aspect < 1;
-  const viewHeight = portrait ? 13.5 : 7;
+  const viewHeight = portrait
+    ? Math.min(13.5, safeHeight / 61.5)
+    : Math.min(7, safeHeight / 50);
 
   camera.position.set(portrait ? 0 : 8, 6, 14);
   camera.lookAt(0, 0, 0);

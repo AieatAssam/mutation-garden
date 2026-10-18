@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Mesh, type Material } from 'three';
+import { Color, Mesh, PlaneGeometry, ShaderMaterial, Vector3, type Material } from 'three';
 import type { PlantSnapshot } from '../../sim';
 import { createMaterialLibrary } from '../materials';
+import { palette } from '../palette';
 import { createSunnySprout } from './sunny-sprout';
 
 const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
@@ -44,12 +45,49 @@ describe('createSunnySprout', () => {
     rig.update(plant('Harvestable', 1), 600, false); expect(fruit.parent!.rotation.z).not.toBe(atRest); rig.dispose();
   });
 
+  it('uses the fruit step 1 colour with enough strength to read as a ripe signal', () => {
+    const { rig } = setup(); const halo = meshes(rig).find((mesh) => mesh.userData.part === 'halo')!;
+    expect(halo.material).toBeInstanceOf(ShaderMaterial);
+    const material = halo.material as ShaderMaterial;
+    expect(material.uniforms.tint!.value).toEqual(new Color(palette.plants['sunny-sprout'].fruit[0]));
+    expect(material.uniforms.strength!.value).toBeGreaterThanOrEqual(0.45);
+    rig.dispose();
+  });
+
+  it('faces the halo toward the camera and gives it a broad fruit silhouette footprint', () => {
+    const { rig } = setup(); rig.update(plant('Harvestable', 1), 0, true);
+    const parts = meshes(rig);
+    const halo = parts.find((mesh) => mesh.userData.part === 'halo')!;
+    const fruit = parts.find((mesh) => mesh.userData.part === 'fruit')!;
+    rig.root.updateMatrixWorld(true);
+
+    const cameraDirection = new Vector3(0.55, 0.45, 0.71).normalize();
+    expect(halo.getWorldDirection(new Vector3()).dot(cameraDirection)).toBeGreaterThan(0.99);
+
+    fruit.geometry.computeBoundingBox();
+    const bounds = fruit.geometry.boundingBox!;
+    const fruitWidth = bounds.max.x - bounds.min.x;
+    expect(halo.geometry).toBeInstanceOf(PlaneGeometry);
+    const haloWidth = (halo.geometry as PlaneGeometry).parameters.width;
+    expect(haloWidth).toBeGreaterThan(fruitWidth * 2);
+    rig.dispose();
+  });
+
   it('freezes presentation motion but keeps growth when reduced motion is enabled', () => {
     const { rig } = setup(); rig.update(plant('Sprout', 0.2), 0, true); const still = pose(rig);
     rig.update(plant('Sprout', 0.2), 60_000, true); expect(pose(rig)).toEqual(still);
     rig.update(plant('Growing', 0.6), 60_000, true); expect(pose(rig)).not.toEqual(still);
     rig.update(plant('Harvestable', 1), 60_000, true);
     expect(meshes(rig).find((mesh) => mesh.userData.part === 'halo')!.visible).toBe(true); rig.dispose();
+  });
+
+  it('keeps the ripe halo visible with reduced motion across presentation times', () => {
+    const { rig } = setup(); const halo = meshes(rig).find((mesh) => mesh.userData.part === 'halo')!;
+    [0, 600, 60_000].forEach((nowMs) => {
+      rig.update(plant('Harvestable', 1), nowMs, true);
+      expect(halo.visible).toBe(true);
+    });
+    rig.dispose();
   });
 
   it('disposes owned resources once without disposing borrowed materials', () => {

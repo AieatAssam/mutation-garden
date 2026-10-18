@@ -53,9 +53,33 @@ describe('plant reconciliation', () => {
     expect(halo).toHaveBeenCalledTimes(1); borrowed.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     reconciler.update(snap(2, [null]), snap(3, [plant(3, 0.2, 'Sprout')]), 0, true);
     const replanted = anchors[0]!.children[0]!; expect(replanted).not.toBe(root);
-    reconciler.update(snap(3, [plant(3, 0.2)]), snap(4, [plant(4, 0.3, 'Sprout', 'bubble-berry')]), 0, true);
+    reconciler.update(snap(3, [plant(3, 0.2)]), snap(4, [plant(4, 0.3, 'Sprout', 'twistroot')]), 0, true);
     expect(anchors[0]!.children).toHaveLength(0); reconciler.dispose(); reconciler.dispose();
     expect(borrowed.every((dispose) => dispose.mock.calls.length === 0)).toBe(true);
     expect(materials.toon).toBeDefined();
+  });
+
+  it('replaces Sunny with Bubble, clears harvested rigs and creates a new rig when Bubble is replanted', () => {
+    const { anchors, reconciler } = setup();
+    const sunny = plant(10, 0.8, 'Mature', 'sunny-sprout');
+    reconciler.update(snap(100, [sunny]), snap(101, [sunny]), 1, true);
+    const sunnyRig = anchors[0]!.children[0]!;
+    expect(part(sunnyRig, 'fruit')).toBeDefined();
+
+    const bubble: PlantSnapshot = { speciesId: 'bubble-berry', plantedAt: 10, progress: 0.55, stage: 'Growing' };
+    reconciler.update(snap(101, [sunny]), snap(102, [bubble]), 1, true);
+    const bubbleRig = anchors[0]!.children[0]!;
+    expect(bubbleRig).not.toBe(sunnyRig); expect(anchors[0]!.children).toHaveLength(1);
+    expect(part(bubbleRig, 'berries')).toBeDefined(); expect(part(bubbleRig, 'halo').visible).toBe(false);
+
+    const ripe: PlantSnapshot = { ...bubble, progress: 1, stage: 'Harvestable' };
+    reconciler.update(snap(102, [bubble]), snap(103, [ripe]), 1, true);
+    expect(part(bubbleRig, 'halo').visible).toBe(true);
+    reconciler.update(snap(103, [ripe]), snap(104, [null]), 1, true);
+    expect(anchors[0]!.children).toHaveLength(0);
+    reconciler.update(snap(104, [null]), snap(105, [{ ...bubble, plantedAt: 105, progress: 0.12, stage: 'Sprout' }]), 1, true);
+    const replanted = anchors[0]!.children[0]!;
+    expect(replanted).not.toBe(bubbleRig); expect(part(replanted, 'berries')).toBeDefined();
+    reconciler.dispose();
   });
 });

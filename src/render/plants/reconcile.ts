@@ -1,6 +1,7 @@
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
 import type { Group } from 'three';
 import type { MaterialLibrary } from '../materials';
+import { createBubbleBerry } from './bubble-berry';
 import { createSunnySprout, type PlantRig } from './sunny-sprout';
 
 interface Entry { readonly speciesId: PlantSnapshot['speciesId']; readonly plantedAt: number; readonly rig: PlantRig }
@@ -36,11 +37,14 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
       for (const plot of current.plots) {
         seen.add(plot.id);
         const plant = plot.plant;
-        if (!plant || plant.speciesId !== 'sunny-sprout' || !anchors.has(plot.id)) { remove(plot.id); continue; }
+        if (!plant || (plant.speciesId !== 'sunny-sprout' && plant.speciesId !== 'bubble-berry') || !anchors.has(plot.id)) { remove(plot.id); continue; }
         let entry = entries.get(plot.id);
         if (entry && (entry.speciesId !== plant.speciesId || entry.plantedAt !== plant.plantedAt)) { remove(plot.id); entry = undefined; }
         if (!entry) {
-          entry = { speciesId: plant.speciesId, plantedAt: plant.plantedAt, rig: createSunnySprout(materials, phase(plot.id)) };
+          const rig = plant.speciesId === 'sunny-sprout'
+            ? createSunnySprout(materials, phase(plot.id))
+            : createBubbleBerry(materials, phase(plot.id));
+          entry = { speciesId: plant.speciesId, plantedAt: plant.plantedAt, rig };
           entries.set(plot.id, entry);
           anchors.get(plot.id)!.add(entry.rig.root);
         }

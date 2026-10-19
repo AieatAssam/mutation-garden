@@ -75,12 +75,23 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       },
     });
     const input = createPointerInput(canvas, r.pick, (intent) => {
-      if (intent.type === 'PanCamera') {
-        r.pan(intent.deltaXCss, intent.deltaYCss);
-        return;
+      switch (intent.type) {
+        case 'ZoomCamera':
+          r.zoom(intent.scale);
+          return;
+        case 'PanCamera':
+          r.pan(intent.deltaXCss, intent.deltaYCss);
+          return;
+        case 'ActivatePlot': {
+          const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
+          if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
+          return;
+        }
+        default: {
+          const exhaustive: never = intent;
+          return exhaustive;
+        }
       }
-      const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
-      if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
     });
     const lifecycle = createPageLifecycle({
       loop,

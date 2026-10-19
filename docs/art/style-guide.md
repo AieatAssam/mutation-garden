@@ -59,6 +59,8 @@ All values are sRGB hex. Ramps run light to dark. In three.js, pass hex strings 
 
 Rule: shadows go towards mulberry and indigo, never grey or black. That is the printed-ink feel.
 
+Rule: decor (fences, flowers, mushrooms, signs, creatures) uses only the ink, paper, wood, rock, grass, water and cloud colours plus Seed Red `#C93A24`. Species fruit hues stay off decor, so ripe fruit is the only species colour on the island.
+
 ### 3.3 Starter plants
 
 | Plant | Leaf | Stem | Fruit |
@@ -154,7 +156,7 @@ The look depends on authored colour, so lighting is simple and fixed.
 - **Proportions.** Fruit is oversized: 35–50% of the plant's height. Stems are short and thick: at least 0.07 units wide, so the outline never breaks up.
 - **Outline.** Inverted hull. Back faces pushed out along the normal by 0.035 units (0.06 on the island rock), in Press Ink. Mutations with real materials drop the outline. Glowing uses a Viridian Shade outline.
 - **Paper grain.** Screen-space noise multiplied at 15–22% opacity. One fixed texture that never animates.
-- **Island.** A thick grass disc with a lighter rounded lip, sitting on a chunky, faceted rock cone that bands from Sandstone to Deep Mulberry. Never smooth-shade the rock.
+- **Island.** A grass cap with an irregular, lobed rim and a rounded lip that overhangs a soil band, sitting on faceted rock strata that band from Ochre Clay to Deep Mulberry and end in an off-centre tip. Roots hang from under the lip; rocks and grass tufts break the rim. Never smooth-shade the rock. Numbers: [m1-liveliness.md](m1-liveliness.md) section 3.
 
 ### Silhouette rules per plant
 
@@ -191,13 +193,15 @@ Each plant must be identifiable as a solid black shape at 48 px tall.
 
 1. **Everything lands.** A seed drops, overshoots into the soil (squash to 0.7 height, 1.25 width), and springs back over 220 ms. Use spring easing with light damping, not ease-in-out.
 2. **Growth is smooth, with a pop at each stage.** The brief requires smooth growth, not model swaps. Each species is one rig whose parts (stem length, leaf unfurl, fruit size, Twistroot's twist) are driven continuously by growth progress, eased so it never looks linear. Crossing a stage (Seed, Sprout, Growing, Mature, Harvestable) adds a 160 ms accent (scale ×1.08 → 1.0), a puff of soil and the growth-pop sound. The plant also breathes: ±2% vertical scale on a 2.4 s loop, offset per plant so the garden doesn't move in sync. Leaves flick when touched.
-3. **Ripe means wobble.** A ripe fruit wiggles every 3 s and shows a soft halo in its fruit step 1 colour. That is the harvest signal, with no exclamation icons.
+3. **Ripe means hop and stamp.** Every species uses the same four signals: a growth dial on the bed rim, fruit that warms from step 4 to step 2, one silhouette change plus a small hop every 3 s at Harvestable, and a round seed-packet stamp above the plant. Sparkles are for the Golden mutation only. No arrows or exclamation icons. Numbers: [m1-liveliness.md](m1-liveliness.md) section 2.
 4. **Harvest is the reward.** The fruit stretches upward (1.3 tall), detaches, arcs to the crate in 450 ms with a slight spin, and squashes on landing. Coins flip out and fly to the counter, which ticks up one coin at a time with a quick bump.
 5. **Mutations get a moment.** On a first-time mutation, growth pauses briefly (brief section 5), the camera moves 10% closer, the material change wipes across the fruit from bottom to top with a particle burst, and a label stamps in: "New mutation: Golden". A tap anywhere skips it. That is the only exclamation-mark moment in the game. Repeat mutations skip the pause.
 6. **Small things ease, big things spring.** UI uses short ease-outs (120–180 ms). World objects use springs.
 7. **Reduced motion.** With `prefers-reduced-motion` or the in-game setting: no slow-down, no camera move, no breathing, and squash amplitude halved. Pops become 120 ms fades. Rewards stay just as clear.
 
 ## 9. Performance budget for the look
+
+- Ambient life (wind, clouds, birds, bees, butterflies, leaves) and props have per-item caps and draw-call budgets in [m1-liveliness.md](m1-liveliness.md) sections 4 and 5. All of it pauses on a hidden page; reduced motion stops creatures and wind.
 
 - Toon materials everywhere except mutations: one material per palette colour, shared.
 - Outline hulls share one material. Skip them on objects smaller than 12 px on screen.

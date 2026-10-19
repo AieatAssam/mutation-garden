@@ -44,7 +44,7 @@ function ribbedFruit(): SphereGeometry {
 
 export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0): PlantRig {
   const root = new Group();
-  const stemGeometry = new CylinderGeometry(0.065, 0.08, 1, 10, 1);
+  const stemGeometry = new CylinderGeometry(0.10, 0.11, 1, 10, 1);
   const leafGeometry = new SphereGeometry(LEAF_RADIUS, 16, 12);
   const fruitGeometry = ribbedFruit();
   const haloGeometry = new PlaneGeometry(FRUIT_RADIUS * 4.8, FRUIT_RADIUS * 4.8);
@@ -103,8 +103,8 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
       stem.position.y = length / 2;
 
       const unfurl = 0.18 + eased * 0.82;
-      leftLeaf.position.set(-0.12 * unfurl, Math.min(length * 0.38, 0.28), 0);
-      rightLeaf.position.set(0.12 * unfurl, Math.min(length * 0.38, 0.28), 0);
+      leftLeaf.position.set(-0.21 * unfurl, Math.min(length * 0.38, 0.28), 0);
+      rightLeaf.position.set(0.21 * unfurl, Math.min(length * 0.38, 0.28), 0);
       leftLeaf.scale.set(0.78 * unfurl, 0.62 * unfurl, 0.86 * unfurl);
       rightLeaf.scale.copy(leftLeaf.scale);
       leftLeaf.rotation.z = 0.42;

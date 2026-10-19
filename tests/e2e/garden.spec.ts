@@ -1,4 +1,8 @@
 import { expect, test, type Page } from '@playwright/test';
+import { InstancedMesh, Mesh, Vector3 } from 'three';
+import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
+import { createGarden } from '../../src/render/garden';
+import { createMaterialLibrary } from '../../src/render/materials';
 
 type Probe = {
   inspect(): { canvasRect: { left: number; top: number; width: number; height: number }; plots: { plotId: string; x: number; y: number }[]; ground: { x: number; y: number }; sky: { x: number; y: number } };
@@ -19,6 +23,28 @@ const viewports = [
 const offsets: [number, number][] = [[0, 0], [-24, 0], [24, 0], [0, -24], [0, 24], [-24, -24], [-24, 24], [24, -24], [24, 24]];
 
 async function inspect(page: Page) { return page.evaluate(() => window.gardenProbe.inspect()); }
+
+function projectedGardenBottomNdc(width: number, height: number): number {
+  const materials = createMaterialLibrary();
+  const garden = createGarden(materials);
+  const camera = createGardenCamera();
+  resizeGardenCamera(camera, width, height);
+  camera.updateMatrixWorld(true);
+  garden.updateMatrixWorld(true);
+  let bottom = Number.POSITIVE_INFINITY;
+  garden.traverse((object) => {
+    if (!(object instanceof Mesh) || object instanceof InstancedMesh || object.name === 'day-sky-gradient') return;
+    const positions = object.geometry.getAttribute('position');
+    for (let index = 0; index < positions.count; index += 1) {
+      const screenPoint = new Vector3().fromBufferAttribute(positions, index)
+        .applyMatrix4(object.matrixWorld).project(camera);
+      bottom = Math.min(bottom, screenPoint.y);
+    }
+  });
+  garden.dispose();
+  materials.dispose();
+  return bottom;
+}
 
 test('production garden renders cleanly and picker covers plot targets across sizes', async ({ page }, testInfo) => {
   const errors: string[] = [];
@@ -47,6 +73,10 @@ test('production garden renders cleanly and picker covers plot targets across si
       await page.evaluate(value => window.gardenProbe.setInset(value), inset);
       const { canvasRect, plots, ground, sky } = await inspect(page);
       expect(plots.map(plot => plot.plotId)).toEqual(['plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5']);
+      const plotCenterSpan = (Math.max(...plots.map(({ x }) => x)) - Math.min(...plots.map(({ x }) => x))) / canvasRect.width;
+      const minimumPlotCenterSpan = viewport.height > viewport.width ? 0.4 : 0.2;
+      expect(plotCenterSpan, `${viewport.width}x${viewport.height} plot centers remain spread across the view`)
+        .toBeGreaterThan(minimumPlotCenterSpan);
       if (inset) {
         expect(canvasRect.left).toBeGreaterThan(0);
         expect(canvasRect.top).toBeGreaterThan(0);
@@ -71,4 +101,22 @@ test('production garden renders cleanly and picker covers plot targets across si
   await page.evaluate(() => { window.gardenProbe.dispose(); window.gardenProbe.dispose(); window.gardenProbe.resize(); });
   expect(await page.evaluate(({ x, y }) => window.gardenProbe.pick(x, y), lastCenter)).toBeNull();
   expect(errors).toEqual([]);
+});
+
+test('keeps the island above the Seeds label with UI space reserved', async ({ page }, testInfo) => {
+  const viewport = testInfo.project.name === 'desktop' ? { width: 1280, height: 800 } : { width: 390, height: 844 };
+  await page.setViewportSize(viewport);
+  await page.goto('./');
+  await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  const canvas = page.locator('#stage');
+  const seedLabel = page.locator('nav[aria-label="Seeds"] .garden-ui__tray-label');
+  await expect(seedLabel).toBeVisible();
+  const canvasRect = await canvas.boundingBox();
+  const labelRect = await seedLabel.boundingBox();
+  expect(canvasRect).not.toBeNull();
+  expect(labelRect).not.toBeNull();
+
+  const islandBottomNdc = projectedGardenBottomNdc(canvasRect!.width, canvasRect!.height);
+  const islandBottomY = canvasRect!.y + (1 - islandBottomNdc) * canvasRect!.height / 2;
+  expect(islandBottomY).toBeLessThan(labelRect!.y - 16);
 });

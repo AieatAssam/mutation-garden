@@ -7,7 +7,11 @@ import { createPointerInput } from '../input/pointer';
 import { createGardenUI } from '../ui/garden-ui';
 import { createPageLifecycle } from './lifecycle';
 import { createFixedStepLoop } from './loop';
-import { commandForPlotActivation, createPlotActivationGuard } from './commands';
+import {
+  commandForPlotActivation,
+  commandForSwipeHarvest,
+  createPlotActivationGuard,
+} from './commands';
 
 export function boot(canvas: HTMLCanvasElement): () => void {
   document.body.style.background = palette.environment['sky-day'].horizon;
@@ -84,6 +88,11 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           return;
         case 'ActivatePlot': {
           const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
+          if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
+          return;
+        }
+        case 'HarvestPlots': {
+          const command = commandForSwipeHarvest(latestSnapshot, intent.plotIds);
           if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
           return;
         }

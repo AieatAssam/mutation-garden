@@ -1,6 +1,6 @@
 # Architecture
 
-Status: v0.4, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADRs 0004 and 0006. Changes to this document need an ADR.
+Status: v0.5, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADRs 0004, 0006 and 0007. Changes to this document need an ADR.
 
 ## Stack (brief section 13)
 
@@ -122,7 +122,13 @@ interface GardenSnapshot { readonly coins: number; readonly nowMs: number;
 
 App owns selection and the command queue. UI emits a selected species ID; input emits `{ type: 'ActivatePlot', plotId }` or `{ type: 'HarvestPlots', plotIds }`. App uses its latest snapshot to turn activation into Plant for an empty plot or Harvest for an occupied plot; eligibility is always revalidated by sim. Swipe emits one batch at gesture end, deduplicated; a plot that was occupied when the gesture began never becomes an automatic replant target.
 
-For picking, app injects `pick(clientX, clientY): { kind: 'plot'; plotId: PlotId } | { kind: 'ground' } | null` into input, delegating to render's proxy raycast. Input captures ownership on pointerdown: plot gestures can tap/harvest, ground gestures can pan, misses do neither. Drag cancellation and pointercancel never activate a plot. A deliberate two-pointer pinch cancels pending taps/swipes; lifted pointers cannot generate a trailing tap. Input emits plain camera deltas; app forwards them to render. All CSS palette values are supplied by app. No Three.js object, mutable state reference or adapter import crosses these callbacks.
+For picking, app injects `pick(clientX, clientY): { kind: 'plot'; plotId: PlotId } | { kind: 'ground' } | null` into input, delegating to render's proxy raycast. Input captures ownership on pointerdown: plot gestures can tap/harvest, ground gestures can pan, misses do neither. Gesture cancellation and pointercancel never activate or harvest a plot. A deliberate two-pointer pinch cancels pending taps/swipes; lifted pointers cannot generate a trailing tap. Input emits plain camera deltas; app forwards them to render. All CSS palette values are supplied by app. No Three.js object, mutable state reference or adapter import crosses these callbacks.
+
+### Swipe harvest
+
+[ADR 0007](decisions/0007-swipe-harvest-intent.md) completes ADR 0004's `HarvestPlots` contract. A primary plot/plant-start gesture becomes a swipe only beyond the existing 10 CSS-pixel tap threshold. Input collects distinct picked IDs in first-crossing order, beginning with the down plot, and samples intervening segments at gaps no greater than 8 CSS pixels so sparse move events cover ordinary crossings. The final up segment participates. Sampling stays inside the current canvas; nonfinite positions or leaving the canvas cancel the pending swipe. No snapshot, maturity or scene data enters input.
+
+Normal release emits one `{ type: 'HarvestPlots'; plotIds: readonly PlotId[] }` and no tap or camera intent. Cancellation, additional contacts, lost capture, lifecycle interruption and disposal discard the batch and preserve ADR 0006's contact ownership. App's `commandForSwipeHarvest(snapshot, plotIds)` keeps distinct known occupied plots in order, without maturity filtering, and returns one existing Harvest command or null. Apply the existing activation guard once to the complete command before enqueueing. Sim revalidates at execution time and owns rewards and the successful batch count; no sim or save interface changes. Empty starts/crossings never become planting, and no partial harvest occurs before release.
 
 ### Deliberate camera zoom
 

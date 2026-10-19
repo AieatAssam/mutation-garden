@@ -50,3 +50,24 @@ export function commandForPlotActivation(
     ? { type: 'Harvest', plotIds: [plotId] }
     : { type: 'Plant', plotId, seedId: selectedSpeciesId };
 }
+
+/** Map a swipe batch to one harvest command using the latest snapshot. */
+export function commandForSwipeHarvest(
+  snapshot: GardenSnapshot,
+  plotIds: readonly PlotId[],
+): Command | null {
+  const plotsById = new Map(snapshot.plots.map((plot) => [plot.id, plot]));
+  const seen = new Set<PlotId>();
+  const occupiedPlotIds: PlotId[] = [];
+
+  for (const plotId of plotIds) {
+    if (seen.has(plotId)) continue;
+    seen.add(plotId);
+
+    if (plotsById.get(plotId)?.plant) occupiedPlotIds.push(plotId);
+  }
+
+  return occupiedPlotIds.length > 0
+    ? { type: 'Harvest', plotIds: occupiedPlotIds }
+    : null;
+}

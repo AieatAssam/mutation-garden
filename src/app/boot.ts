@@ -74,8 +74,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         r.render(frame.previous, frame.current, frame.alpha, motion.matches);
       },
     });
-    const input = createPointerInput(canvas, r.pick, ({ plotId }) => {
-      const command = commandForPlotActivation(latestSnapshot, plotId, selectedSpeciesId);
+    const input = createPointerInput(canvas, r.pick, (intent) => {
+      if (intent.type === 'PanCamera') {
+        r.pan(intent.deltaXCss, intent.deltaYCss);
+        return;
+      }
+      const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
       if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
     });
     const lifecycle = createPageLifecycle({

@@ -12,7 +12,11 @@ type Gesture = {
   readonly pointerId: number;
   readonly startX: number;
   readonly startY: number;
+  readonly startKind: 'plot' | 'ground' | 'miss';
   readonly plotId: PlotId | null;
+  panning: boolean;
+  panOffsetX: number;
+  panOffsetY: number;
   cancelled: boolean;
 };
 
@@ -65,10 +69,32 @@ export function createPointerInput(
     if (current) releaseCapture(current.pointerId);
   }
 
-  function cancelForMovement(current: Gesture, clientX: number, clientY: number): void {
-    if (current.cancelled) return;
-    const distance = Math.hypot(clientX - current.startX, clientY - current.startY);
-    if (distance > POINTER_TAP_MOVE_THRESHOLD_CSS_PX) current.cancelled = true;
+  function moveGesture(current: Gesture, clientX: number, clientY: number): void {
+    const distanceX = clientX - current.startX;
+    const distanceY = clientY - current.startY;
+    const distance = Math.hypot(distanceX, distanceY);
+
+    if (!current.cancelled && !current.panning && distance > POINTER_TAP_MOVE_THRESHOLD_CSS_PX) {
+      current.cancelled = true;
+      if (current.startKind === 'ground') {
+        current.panning = true;
+      }
+    }
+
+    if (current.panning) {
+      const beyondThreshold = Math.max(0, distance - POINTER_TAP_MOVE_THRESHOLD_CSS_PX);
+      const desiredX = distance === 0 ? 0 : distanceX * beyondThreshold / distance;
+      const desiredY = distance === 0 ? 0 : distanceY * beyondThreshold / distance;
+      const deltaXCss = desiredX - current.panOffsetX;
+      const deltaYCss = desiredY - current.panOffsetY;
+      // Advance the desired pan baseline even if the renderer clamps the pan.
+      current.panOffsetX = desiredX;
+      current.panOffsetY = desiredY;
+      if (deltaXCss !== 0 || deltaYCss !== 0) {
+        onIntent({ type: 'PanCamera', deltaXCss, deltaYCss });
+      }
+    }
+
   }
 
   function onPointerDown(event: PointerEvent): void {
@@ -91,7 +117,11 @@ export function createPointerInput(
       pointerId: event.pointerId,
       startX: event.clientX,
       startY: event.clientY,
+      startKind: result?.kind ?? 'miss',
       plotId: result?.kind === 'plot' ? result.plotId : null,
+      panning: false,
+      panOffsetX: 0,
+      panOffsetY: 0,
       cancelled: false,
     };
     try {
@@ -111,7 +141,7 @@ export function createPointerInput(
   function onPointerMove(event: PointerEvent): void {
     const current = gesture;
     if (disposed || !current || current.pointerId !== event.pointerId) return;
-    cancelForMovement(current, event.clientX, event.clientY);
+    moveGesture(current, event.clientX, event.clientY);
   }
 
   function onPointerUp(event: PointerEvent): void {
@@ -119,7 +149,7 @@ export function createPointerInput(
     if (pointersDown.size === 0) removeFallbackListeners();
     const current = gesture;
     if (disposed || !current || current.pointerId !== event.pointerId) return;
-    cancelForMovement(current, event.clientX, event.clientY);
+    moveGesture(current, event.clientX, event.clientY);
     const intent = !current.cancelled && current.plotId !== null && event.target === canvas
       ? { type: 'ActivatePlot' as const, plotId: current.plotId }
       : null;

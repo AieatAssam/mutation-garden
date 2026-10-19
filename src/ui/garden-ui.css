@@ -110,20 +110,25 @@
   justify-content: center;
   align-items: end;
   gap: 10px;
-  padding: 8px;
-  min-height: 76px;
+  box-sizing: border-box;
+  padding: 26px 8px 10px;
+  min-height: 98px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 18px;
+  background: var(--mg-ui-panel);
+  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
   pointer-events: none;
 }
 
 .garden-ui__tray-label {
   position: absolute;
-  bottom: calc(100% + 7px);
+  top: -3px;
   left: 50%;
-  padding: 4px 11px;
+  padding: 0 11px 2px;
   border: 3px solid var(--mg-ui-border);
-  border-radius: 14px;
+  border-bottom: 0;
+  border-radius: 14px 14px 0 0;
   background: var(--mg-ui-panel);
-  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
   font-size: 15px;
   font-weight: 700;
   line-height: 20px;
@@ -163,7 +168,15 @@
 }
 
 .garden-ui__seed.is-selected {
-  background: var(--mg-ui-accent-pressed);
+  background: var(--mg-ui-panel);
+  box-shadow: 0 8px 0 var(--mg-ui-border), 4px 4px 0 var(--mg-ui-misprint);
+  color: var(--mg-ui-accent);
+  transform: translateY(-3px);
+}
+
+.garden-ui__seed.is-selected:active {
+  box-shadow: 0 0 0 var(--mg-ui-border);
+  transform: translateY(5px);
 }
 
 @media (max-width: 600px) {

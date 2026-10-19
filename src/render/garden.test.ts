@@ -1,6 +1,6 @@
-import { BufferGeometry, Color, InstancedMesh, Mesh, MeshToonMaterial, type Material } from 'three';
+import { Box3, BufferGeometry, Color, InstancedMesh, Mesh, MeshToonMaterial, Raycaster, Vector3, type Material } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createGarden } from './garden';
+import { createGarden, GROUND_SURFACE } from './garden';
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 
@@ -22,9 +22,9 @@ describe('createGarden', () => {
     expect(new Set(anchors.map(({ plotId }) => plotId)).size).toBe(6);
     expect(garden.plots).toBe(anchors);
     expect(anchors.map(({ position }) => position.toArray())).toEqual([
-      [-1.05, 0.58, 2], [1.05, 0.58, 2],
-      [-1.05, 0.58, 0], [1.05, 0.58, 0],
-      [-1.05, 0.58, -2], [1.05, 0.58, -2],
+      [-1.05, 0.65, 2], [1.05, 0.65, 2],
+      [-1.05, 0.65, 0], [1.05, 0.65, 0],
+      [-1.05, 0.65, -2], [1.05, 0.65, -2],
     ]);
   });
 
@@ -53,10 +53,87 @@ describe('createGarden', () => {
     }
 
     const bedMaterial = beds[0]!.material as MeshToonMaterial;
-    const sourceBedMaterial = library.toon(palette.environment.soil[1]!);
+    const sourceBedMaterial = library.toon(palette.environment.soil[0]!);
     expect(bedMaterial).not.toBe(sourceBedMaterial);
     expect(bedMaterial.onBeforeCompile).toBe(sourceBedMaterial.onBeforeCompile);
     expect(bedMaterial.customProgramCacheKey).toBe(sourceBedMaterial.customProgramCacheKey);
+  });
+
+  it('raises each clay rim around a smaller inset of soil', () => {
+    const garden = createGarden(makeLibrary());
+    const beds = new Map<string, Mesh>();
+    const soils = new Map<string, Mesh>();
+    garden.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      if (object.userData.role === 'plot-bed') beds.set(object.userData.plotId, object);
+      if (object.userData.role === 'plot-soil') soils.set(object.userData.plotId, object);
+    });
+
+    expect([...beds.keys()]).toEqual(['plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5']);
+    expect([...soils.keys()]).toEqual([...beds.keys()]);
+    garden.updateMatrixWorld(true);
+    const raycaster = new Raycaster();
+    for (const [plotId, bed] of beds) {
+      const soil = soils.get(plotId)!;
+      bed.geometry.computeBoundingBox();
+      soil.geometry.computeBoundingBox();
+      const bedBounds = bed.geometry.boundingBox!;
+      const soilBounds = soil.geometry.boundingBox!;
+
+      expect(bedBounds.max.x - bedBounds.min.x).toBeCloseTo(1.75, 5);
+      expect(bedBounds.max.y - bedBounds.min.y).toBeCloseTo(0.22, 5);
+      expect(bedBounds.max.z - bedBounds.min.z).toBeCloseTo(1.75, 5);
+      expect(soilBounds.max.x - soilBounds.min.x).toBeCloseTo(1.39, 5);
+      expect(soilBounds.max.y - soilBounds.min.y).toBeCloseTo(0.1, 5);
+      expect(soilBounds.max.z - soilBounds.min.z).toBeCloseTo(1.39, 5);
+      expect(bed.position.x).toBe(soil.position.x);
+      expect(bed.position.z).toBe(soil.position.z);
+      expect(bed.position.y + bedBounds.min.y).toBeCloseTo(0.48, 5);
+      expect(bed.position.y + bedBounds.max.y - (soil.position.y + soilBounds.max.y)).toBeCloseTo(0.05, 5);
+      expect(bed.material).toBeInstanceOf(MeshToonMaterial);
+      expect((bed.material as MeshToonMaterial).color.getHexString())
+        .toBe(new Color(palette.environment.soil[0]!).getHexString());
+      expect(soil.material).toBeInstanceOf(MeshToonMaterial);
+      expect((soil.material as MeshToonMaterial).color.getHexString())
+        .toBe(new Color(palette.environment.soil[1]!).getHexString());
+
+      const center = bed.getWorldPosition(new Vector3());
+      raycaster.set(new Vector3(center.x, 1, center.z), new Vector3(0, -1, 0));
+      expect(raycaster.intersectObjects([bed, soil], false)[0]?.object).toBe(soil);
+      raycaster.set(new Vector3(center.x + 0.8, 1, center.z), new Vector3(0, -1, 0));
+      expect(raycaster.intersectObjects([bed, soil], false)[0]?.object).toBe(bed);
+    }
+  });
+
+  it('places the brown prop outside every bed with a contact shadow beneath it', () => {
+    const garden = createGarden(makeLibrary());
+    const beds: Mesh[] = [];
+    let prop: Mesh | undefined;
+    let shadow: Mesh | undefined;
+    garden.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      if (object.userData.role === 'plot-bed') beds.push(object);
+      if (object.userData.role === 'garden-prop') prop = object;
+      if (object.userData.role === 'prop-shadow') shadow = object;
+    });
+
+    expect(prop).toBeDefined();
+    expect(shadow).toBeDefined();
+    garden.updateMatrixWorld(true);
+    const propBounds = new Box3().setFromObject(prop!);
+    for (const bed of beds) {
+      const bedBounds = new Box3().setFromObject(bed);
+      const overlapsX = propBounds.max.x > bedBounds.min.x && propBounds.min.x < bedBounds.max.x;
+      const overlapsZ = propBounds.max.z > bedBounds.min.z && propBounds.min.z < bedBounds.max.z;
+      expect(overlapsX && overlapsZ).toBe(false);
+    }
+
+    const propCenter = prop!.getWorldPosition(new Vector3());
+    const shadowCenter = shadow!.getWorldPosition(new Vector3());
+    expect(shadowCenter.x).toBeCloseTo(propCenter.x, 5);
+    expect(shadowCenter.z).toBeCloseTo(propCenter.z, 5);
+    expect(shadowCenter.y).toBeGreaterThanOrEqual(GROUND_SURFACE.y);
+    expect(shadowCenter.y).toBeLessThanOrEqual(GROUND_SURFACE.y + 0.01);
   });
 
   it('instances three warm soil furrows per bed and bakes occlusion into the island edge', () => {

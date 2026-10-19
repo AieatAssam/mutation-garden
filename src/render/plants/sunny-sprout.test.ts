@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Color, Mesh, PlaneGeometry, ShaderMaterial, Vector3, type Material } from 'three';
+import { Box3, Color, CylinderGeometry, Mesh, PlaneGeometry, ShaderMaterial, Vector3, type Material } from 'three';
 import type { PlantSnapshot } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { palette } from '../palette';
@@ -70,6 +70,60 @@ describe('createSunnySprout', () => {
     expect(halo.geometry).toBeInstanceOf(PlaneGeometry);
     const haloWidth = (halo.geometry as PlaneGeometry).parameters.width;
     expect(haloWidth).toBeGreaterThan(fruitWidth * 2);
+    rig.dispose();
+  });
+
+  it('keeps a thick-stemmed lollipop silhouette with low separated leaves and eight fruit ribs', () => {
+    const { rig } = setup();
+    rig.update(plant('Harvestable', 1), 0, true);
+    rig.root.updateMatrixWorld(true);
+    const parts = meshes(rig);
+    const stem = parts.find((mesh) => mesh.userData.part === 'stem')!;
+    const leftLeaf = parts.find((mesh) => mesh.userData.part === 'left-leaf')!;
+    const rightLeaf = parts.find((mesh) => mesh.userData.part === 'right-leaf')!;
+    const fruit = parts.find((mesh) => mesh.userData.part === 'fruit')!;
+
+    expect(stem.geometry).toBeInstanceOf(CylinderGeometry);
+    const stemGeometry = stem.geometry as CylinderGeometry;
+    expect(stemGeometry.parameters.radiusTop * 2).toBeGreaterThanOrEqual(0.14);
+    expect(stemGeometry.parameters.radiusBottom * 2).toBeGreaterThanOrEqual(0.14);
+
+    const worldBounds = (mesh: Mesh) => {
+      mesh.geometry.computeBoundingBox();
+      return new Box3().copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld);
+    };
+    const fruitBounds = worldBounds(fruit);
+    const leftLeafBounds = worldBounds(leftLeaf);
+    const rightLeafBounds = worldBounds(rightLeaf);
+    const plantBounds = new Box3().union(worldBounds(stem)).union(leftLeafBounds).union(rightLeafBounds).union(fruitBounds);
+    const fruitHeight = fruitBounds.max.y - fruitBounds.min.y;
+    const plantHeight = plantBounds.max.y - plantBounds.min.y;
+    expect(fruitBounds.max.x - fruitBounds.min.x)
+      .toBeGreaterThan(leftLeafBounds.max.x - leftLeafBounds.min.x);
+    expect(fruitBounds.max.x - fruitBounds.min.x)
+      .toBeGreaterThan(rightLeafBounds.max.x - rightLeafBounds.min.x);
+    expect(leftLeafBounds.max.x).toBeLessThan(rightLeafBounds.min.x);
+    expect(Math.max(leftLeafBounds.max.y, rightLeafBounds.max.y)).toBeLessThan(fruitBounds.min.y);
+    expect(fruitHeight / plantHeight).toBeGreaterThanOrEqual(0.35);
+    expect(fruitHeight / plantHeight).toBeLessThanOrEqual(0.5);
+
+    const positions = fruit.geometry.getAttribute('position');
+    const equator: { angle: number; radius: number }[] = [];
+    for (let index = 0; index < positions.count; index += 1) {
+      const x = positions.getX(index);
+      const y = positions.getY(index);
+      const z = positions.getZ(index);
+      if (Math.abs(y) < 1e-6) equator.push({ angle: Math.atan2(z, x), radius: Math.hypot(x, z) });
+    }
+    equator.sort((a, b) => a.angle - b.angle);
+    if (equator.length === 33) equator.pop();
+    const peaks = equator.filter((point, index) => {
+      const before = equator[(index + equator.length - 1) % equator.length]!;
+      const after = equator[(index + 1) % equator.length]!;
+      return point.radius > before.radius && point.radius > after.radius;
+    });
+    expect(equator).toHaveLength(32);
+    expect(peaks).toHaveLength(8);
     rig.dispose();
   });
 

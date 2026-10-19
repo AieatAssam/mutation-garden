@@ -185,7 +185,7 @@ test('Bubble Berry costs three coins, matures in fifteen seconds, pays six once 
   await expect(coins).toHaveText('12');
   await expect(sunny).toHaveAttribute('aria-pressed', 'true');
 
-  const startedAt = Date.now();
+  const startedAt = await page.evaluate(() => Date.now());
   if (mobile) await bubble.tap();
   else await bubble.click();
   await expect(bubble).toHaveAttribute('aria-pressed', 'true');
@@ -199,10 +199,9 @@ test('Bubble Berry costs three coins, matures in fifteen seconds, pays six once 
   }).toBeGreaterThanOrEqual(plantedAt + 15_000);
 
   await activatePlot(page, plot, mobile);
-  await expect(coins).toHaveText('15');
-  const firstHarvestElapsedMs = Date.now() - startedAt;
-  console.info(`Bubble Berry first harvest (${testInfo.project.name}): ${firstHarvestElapsedMs}ms`);
-  expect(firstHarvestElapsedMs).toBeLessThan(30_000);
+  await page.waitForFunction(() =>
+    document.querySelector('[aria-label="Coins"]')?.textContent?.trim() === '15',
+  undefined, { polling: 'raf' });
   await activatePlot(page, plot, mobile);
   const repeatedTap = await page.evaluate(() => {
     const times = (document.body.dataset.bubblePointerUpTimes ?? '').split(',').map(Number);
@@ -211,6 +210,9 @@ test('Bubble Berry costs three coins, matures in fifteen seconds, pays six once 
       repeatAt: times.at(-1)!,
     };
   });
+  const firstHarvestElapsedMs = repeatedTap.harvestAt - startedAt;
+  console.info(`Bubble Berry first harvest (${testInfo.project.name}): ${firstHarvestElapsedMs}ms`);
+  expect(firstHarvestElapsedMs).toBeLessThan(30_000);
   expect(repeatedTap.repeatAt - repeatedTap.harvestAt).toBeGreaterThanOrEqual(0);
   expect(repeatedTap.repeatAt - repeatedTap.harvestAt).toBeLessThan(PLOT_ACTIVATION_GUARD_MS);
   const repeatTickAt = await page.evaluate(() => performance.now());

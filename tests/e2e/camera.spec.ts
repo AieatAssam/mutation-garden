@@ -95,17 +95,13 @@ test('ground swipes pan while plot and planted-plant swipes keep their down owne
 
   const translatedFruit0 = ripeSunnyFruitCenter(0, expectedCamera, rect!);
   await swipe(page, translatedFruit0, { x: 70, y: 12 }, mobile);
-  await expect(coins).toHaveText('11');
-  // The fruit is still at the same screen location after the drag and can be harvested.
-  await tap(page, translatedFruit0, mobile);
+  await expect(coins).toHaveText('13');
+  await swipe(page, translatedPlot0, { x: 70, y: 12 }, mobile);
   await expect(coins).toHaveText('13');
 
   const translatedPlot1 = expectedPlots[1]!;
-  await swipe(page, translatedPlot1, { x: 70, y: 12 }, mobile);
-  await expect(coins).toHaveText('13');
   await tap(page, translatedPlot1, mobile);
   await expect(coins).toHaveText('12');
-
   await swipe(page, translatedPlot1, { x: 70, y: 12 }, mobile);
   await expect(coins).toHaveText('12');
   const translatedPlot2 = expectedPlots[2]!;

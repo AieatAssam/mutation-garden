@@ -1,5 +1,6 @@
 import type { PlotId } from '../sim';
 import type { InputIntent } from './types';
+import { createSwipePathCollector, type SwipeCanvasBounds, type SwipePathCollector } from './swipe';
 
 export type PickResult =
   | { readonly kind: 'plot'; readonly plotId: PlotId }
@@ -24,10 +25,13 @@ type Gesture = {
   readonly startY: number;
   readonly startKind: PointerTrack['startKind'];
   readonly plotId: PlotId | null;
+  readonly swipeBounds: SwipeCanvasBounds | null;
+  readonly swipeCollector: SwipePathCollector<PlotId> | null;
   panning: boolean;
   panOffsetX: number;
   panOffsetY: number;
   cancelled: boolean;
+  swiping: boolean;
 };
 
 type Pinch = {
@@ -53,6 +57,24 @@ export function createPointerInput(
   const externalPointersDown = new Set<number>();
   let fallbackTarget: EventTarget | null = null;
   let disposed = false;
+
+  function readCanvasBounds(): SwipeCanvasBounds | null {
+    const rect = canvas.getBoundingClientRect();
+    if (!Number.isFinite(rect.left) || !Number.isFinite(rect.top)
+      || !Number.isFinite(rect.right) || !Number.isFinite(rect.bottom)
+      || rect.right < rect.left || rect.bottom < rect.top) return null;
+    return { left: rect.left, top: rect.top, right: rect.right, bottom: rect.bottom };
+  }
+
+  function sameBounds(first: SwipeCanvasBounds, second: SwipeCanvasBounds | null): boolean {
+    return second !== null && first.left === second.left && first.top === second.top
+      && first.right === second.right && first.bottom === second.bottom;
+  }
+
+  function isInsideBounds(bounds: SwipeCanvasBounds, x: number, y: number): boolean {
+    return Number.isFinite(x) && Number.isFinite(y)
+      && x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom;
+  }
 
   function releaseCapture(pointerId: number): void {
     if (!canvas.hasPointerCapture(pointerId)) return;
@@ -114,14 +136,22 @@ export function createPointerInput(
     }
   }
 
-  function moveGesture(current: Gesture, clientX: number, clientY: number): void {
+  function moveGesture(current: Gesture, clientX: number, clientY: number, sampleSwipePath = true): void {
+    const bounds = current.swipeBounds;
+    if (current.startKind === 'plot' && bounds
+      && (!sameBounds(bounds, readCanvasBounds()) || !isInsideBounds(bounds, clientX, clientY))) {
+      current.cancelled = true;
+    }
+    if (sampleSwipePath && !current.cancelled) current.swipeCollector?.addPoint({ x: clientX, y: clientY });
     const distanceX = clientX - current.startX;
     const distanceY = clientY - current.startY;
     const distance = Math.hypot(distanceX, distanceY);
 
-    if (!current.cancelled && !current.panning && distance > POINTER_TAP_MOVE_THRESHOLD_CSS_PX) {
-      current.cancelled = true;
+    if (!current.cancelled && !current.panning && !current.swiping
+      && distance > POINTER_TAP_MOVE_THRESHOLD_CSS_PX) {
       if (current.startKind === 'ground') current.panning = true;
+      else if (current.startKind === 'plot') current.swiping = true;
+      else current.cancelled = true;
     }
 
     if (current.panning) {
@@ -173,10 +203,16 @@ export function createPointerInput(
       movePinch();
     }
     if (gesture?.pointerId === event.pointerId && !cancelled && !sequenceBlocked) {
-      moveGesture(gesture, event.clientX, event.clientY);
-      const intent = !gesture.cancelled && gesture.plotId !== null && event.target === canvas
-        ? { type: 'ActivatePlot' as const, plotId: gesture.plotId }
-        : null;
+      moveGesture(gesture, event.clientX, event.clientY, false);
+      let intent: InputIntent | null = null;
+      if (!gesture.cancelled && event.target === canvas) {
+        if (gesture.swiping && gesture.swipeCollector) {
+          const plotIds = gesture.swipeCollector.finish({ x: event.clientX, y: event.clientY });
+          if (plotIds.length > 0) intent = { type: 'HarvestPlots', plotIds };
+        } else if (!gesture.swiping && gesture.plotId !== null) {
+          intent = { type: 'ActivatePlot', plotId: gesture.plotId };
+        }
+      }
       gesture = null;
       pointersDown.delete(event.pointerId);
       if (pointersDown.size === 0) sequenceBlocked = false;
@@ -224,16 +260,31 @@ export function createPointerInput(
       }
       const result = pick(event.clientX, event.clientY);
       const track = trackPointer(event, 'canvas', result);
+      const swipeBounds = track.startKind === 'plot' ? readCanvasBounds() : null;
+      const swipeCollector = swipeBounds && track.plotId !== null
+        ? createSwipePathCollector<PlotId>(
+          swipeBounds,
+          (x, y) => {
+            const hit = pick(x, y);
+            return hit?.kind === 'plot' ? hit.plotId : null;
+          },
+          { x: event.clientX, y: event.clientY },
+          track.plotId,
+        )
+        : null;
       gesture = {
         pointerId: event.pointerId,
         startX: event.clientX,
         startY: event.clientY,
         startKind: track.startKind,
         plotId: track.plotId,
+        swipeBounds,
+        swipeCollector,
         panning: false,
         panOffsetX: 0,
         panOffsetY: 0,
         cancelled: false,
+        swiping: false,
       };
       sequenceBlocked = false;
       capturePointer(event.pointerId);

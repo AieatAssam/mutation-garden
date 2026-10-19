@@ -8,16 +8,32 @@ export type PickResult =
 
 export const POINTER_TAP_MOVE_THRESHOLD_CSS_PX = 10;
 
+type PointerTrack = {
+  readonly pointerId: number;
+  readonly pointerType: string;
+  readonly origin: 'canvas' | 'outside';
+  readonly startKind: 'plot' | 'ground' | 'miss' | 'ui';
+  readonly plotId: PlotId | null;
+  x: number;
+  y: number;
+};
+
 type Gesture = {
   readonly pointerId: number;
   readonly startX: number;
   readonly startY: number;
-  readonly startKind: 'plot' | 'ground' | 'miss';
+  readonly startKind: PointerTrack['startKind'];
   readonly plotId: PlotId | null;
   panning: boolean;
   panOffsetX: number;
   panOffsetY: number;
   cancelled: boolean;
+};
+
+type Pinch = {
+  readonly pointerIds: readonly [number, number];
+  previousDistance: number;
+  crossedDeadZone: boolean;
 };
 
 export type PointerInput = {
@@ -31,7 +47,9 @@ export function createPointerInput(
   onIntent: (intent: InputIntent) => void,
 ): PointerInput {
   let gesture: Gesture | null = null;
-  const pointersDown = new Set<number>();
+  let pinch: Pinch | null = null;
+  let sequenceBlocked = false;
+  const pointersDown = new Map<number, PointerTrack>();
   let fallbackTarget: EventTarget | null = null;
   let disposed = false;
 
@@ -61,12 +79,38 @@ export function createPointerInput(
     fallbackTarget.addEventListener('pointercancel', fallbackCancelListener);
   }
 
-  function cancelGesture(): void {
-    const current = gesture;
+  function cancelActiveSequence(releaseCaptures = false): void {
+    const pointerIds = releaseCaptures ? [...pointersDown.keys()] : [];
     gesture = null;
+    pinch = null;
+    sequenceBlocked = pointersDown.size > 0;
     if (pointersDown.size > 0 && !fallbackTarget) addFallbackListeners();
     if (pointersDown.size === 0) removeFallbackListeners();
-    if (current) releaseCapture(current.pointerId);
+    // End internal ownership before release; lostpointercapture can be synchronous.
+    for (const pointerId of pointerIds) releaseCapture(pointerId);
+  }
+
+  function trackPointer(event: PointerEvent, origin: PointerTrack['origin'], result: PickResult): PointerTrack {
+    const track: PointerTrack = {
+      pointerId: event.pointerId,
+      pointerType: event.pointerType,
+      origin,
+      startKind: origin === 'outside' ? 'ui' : result?.kind ?? 'miss',
+      plotId: result?.kind === 'plot' ? result.plotId : null,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    pointersDown.set(event.pointerId, track);
+    return track;
+  }
+
+  function capturePointer(pointerId: number): void {
+    try {
+      canvas.setPointerCapture(pointerId);
+    } catch {
+      // Fallback listeners preserve the sequence when capture is unavailable.
+      addFallbackListeners();
+    }
   }
 
   function moveGesture(current: Gesture, clientX: number, clientY: number): void {
@@ -76,9 +120,7 @@ export function createPointerInput(
 
     if (!current.cancelled && !current.panning && distance > POINTER_TAP_MOVE_THRESHOLD_CSS_PX) {
       current.cancelled = true;
-      if (current.startKind === 'ground') {
-        current.panning = true;
-      }
+      if (current.startKind === 'ground') current.panning = true;
     }
 
     if (current.panning) {
@@ -94,80 +136,160 @@ export function createPointerInput(
         onIntent({ type: 'PanCamera', deltaXCss, deltaYCss });
       }
     }
+  }
 
+  function movePinch(): void {
+    const current = pinch;
+    if (!current || sequenceBlocked) return;
+    const first = pointersDown.get(current.pointerIds[0]);
+    const second = pointersDown.get(current.pointerIds[1]);
+    if (!first || !second) return;
+    const distance = Math.hypot(second.x - first.x, second.y - first.y);
+    if (!Number.isFinite(distance) || distance <= 0) return;
+
+    if (!current.crossedDeadZone) {
+      const delta = distance - current.previousDistance;
+      if (Math.abs(delta) <= POINTER_TAP_MOVE_THRESHOLD_CSS_PX) return;
+      const thresholdDistance = current.previousDistance + Math.sign(delta) * POINTER_TAP_MOVE_THRESHOLD_CSS_PX;
+      const scale = distance / thresholdDistance;
+      current.previousDistance = distance;
+      current.crossedDeadZone = true;
+      if (Number.isFinite(scale) && scale > 0 && scale !== 1) onIntent({ type: 'ZoomCamera', scale });
+      return;
+    }
+
+    const scale = distance / current.previousDistance;
+    current.previousDistance = distance;
+    if (Number.isFinite(scale) && scale > 0 && scale !== 1) onIntent({ type: 'ZoomCamera', scale });
+  }
+
+  function finishPointer(event: PointerEvent, cancelled: boolean): void {
+    const track = pointersDown.get(event.pointerId);
+    if (!track) return;
+    if (pinch?.pointerIds.includes(event.pointerId) && !cancelled && !sequenceBlocked) {
+      track.x = event.clientX;
+      track.y = event.clientY;
+      movePinch();
+    }
+    if (gesture?.pointerId === event.pointerId && !cancelled && !sequenceBlocked) {
+      moveGesture(gesture, event.clientX, event.clientY);
+      const intent = !gesture.cancelled && gesture.plotId !== null && event.target === canvas
+        ? { type: 'ActivatePlot' as const, plotId: gesture.plotId }
+        : null;
+      gesture = null;
+      pointersDown.delete(event.pointerId);
+      if (pointersDown.size === 0) sequenceBlocked = false;
+      releaseCapture(event.pointerId);
+      if (intent) onIntent(intent);
+      if (pointersDown.size === 0) removeFallbackListeners();
+      return;
+    }
+
+    if (pinch?.pointerIds.includes(event.pointerId)) {
+      // Either lift ends the pair. The remaining finger cannot pan or tap.
+      pinch = null;
+      sequenceBlocked = true;
+    }
+    pointersDown.delete(event.pointerId);
+    if (pointersDown.size === 0) {
+      gesture = null;
+      pinch = null;
+      sequenceBlocked = false;
+      removeFallbackListeners();
+    }
+    releaseCapture(event.pointerId);
   }
 
   function onPointerDown(event: PointerEvent): void {
-    if (disposed || event.target !== canvas) return;
-    if (pointersDown.has(event.pointerId)) return;
-    if (pointersDown.size > 0) {
-      pointersDown.add(event.pointerId);
-      cancelGesture();
-      return;
-    }
-    if (gesture) {
-      if (gesture.pointerId !== event.pointerId) cancelGesture();
-      return;
-    }
-    if (!event.isPrimary || event.button !== 0) return;
+    if (disposed || event.target !== canvas || pointersDown.has(event.pointerId)) return;
 
-    pointersDown.add(event.pointerId);
+    if (pointersDown.size === 0) {
+      if (!event.isPrimary || event.button !== 0) return;
+      const result = pick(event.clientX, event.clientY);
+      const track = trackPointer(event, 'canvas', result);
+      gesture = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        startKind: track.startKind,
+        plotId: track.plotId,
+        panning: false,
+        panOffsetX: 0,
+        panOffsetY: 0,
+        cancelled: false,
+      };
+      sequenceBlocked = false;
+      capturePointer(event.pointerId);
+      return;
+    }
+
     const result = pick(event.clientX, event.clientY);
-    gesture = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startKind: result?.kind ?? 'miss',
-      plotId: result?.kind === 'plot' ? result.plotId : null,
-      panning: false,
-      panOffsetX: 0,
-      panOffsetY: 0,
-      cancelled: false,
-    };
-    try {
-      canvas.setPointerCapture(event.pointerId);
-    } catch {
-      // A tap can still be recognized when capture is unavailable.
-      addFallbackListeners();
+    const second = trackPointer(event, 'canvas', result);
+    capturePointer(event.pointerId);
+    if (pointersDown.size === 2 && !sequenceBlocked) {
+      const [first] = [...pointersDown.values()];
+      gesture = null;
+      if (first && first.pointerType === 'touch' && second.pointerType === 'touch'
+        && first.origin === 'canvas' && second.origin === 'canvas'
+        && first.startKind === 'ground' && second.startKind === 'ground') {
+        const baseline = Math.hypot(second.x - first.x, second.y - first.y);
+        pinch = baseline > 0
+          ? { pointerIds: [first.pointerId, second.pointerId], previousDistance: baseline, crossedDeadZone: false }
+          : null;
+        if (!pinch) sequenceBlocked = true;
+      } else {
+        pinch = null;
+        sequenceBlocked = true;
+      }
+    } else {
+      pinch = null;
+      sequenceBlocked = true;
     }
   }
 
   function onDocumentPointerDown(event: PointerEvent): void {
-    if (disposed || pointersDown.size === 0 || pointersDown.has(event.pointerId)) return;
-    pointersDown.add(event.pointerId);
-    cancelGesture();
+    // Capture phase runs before the canvas target handler. Canvas contacts must
+    // reach it so an eligible second touch can be paired with its first touch.
+    if (disposed || event.target === canvas || pointersDown.has(event.pointerId)) return;
+    trackPointer(event, 'outside', null);
+    cancelActiveSequence();
+    addFallbackListeners();
   }
 
   function onPointerMove(event: PointerEvent): void {
+    if (disposed) return;
+    const track = pointersDown.get(event.pointerId);
+    if (!track) return;
+    track.x = event.clientX;
+    track.y = event.clientY;
+    if (sequenceBlocked) return;
+    if (pinch?.pointerIds.includes(event.pointerId)) {
+      movePinch();
+      return;
+    }
     const current = gesture;
-    if (disposed || !current || current.pointerId !== event.pointerId) return;
-    moveGesture(current, event.clientX, event.clientY);
+    if (current?.pointerId === event.pointerId) moveGesture(current, event.clientX, event.clientY);
   }
 
   function onPointerUp(event: PointerEvent): void {
-    pointersDown.delete(event.pointerId);
-    if (pointersDown.size === 0) removeFallbackListeners();
-    const current = gesture;
-    if (disposed || !current || current.pointerId !== event.pointerId) return;
-    moveGesture(current, event.clientX, event.clientY);
-    const intent = !current.cancelled && current.plotId !== null && event.target === canvas
-      ? { type: 'ActivatePlot' as const, plotId: current.plotId }
-      : null;
-    gesture = null;
-    releaseCapture(current.pointerId);
-    if (intent) onIntent(intent);
+    finishPointer(event, false);
   }
 
   function onPointerCancel(event: PointerEvent): void {
+    if (!pointersDown.has(event.pointerId)) return;
+    cancelActiveSequence();
     pointersDown.delete(event.pointerId);
-    if (gesture?.pointerId === event.pointerId) cancelGesture();
-    if (pointersDown.size === 0) removeFallbackListeners();
+    if (pointersDown.size === 0) {
+      sequenceBlocked = false;
+      removeFallbackListeners();
+    }
   }
 
   function onLostPointerCapture(event: PointerEvent): void {
-    pointersDown.delete(event.pointerId);
-    if (gesture?.pointerId === event.pointerId) gesture = null;
-    if (pointersDown.size === 0) removeFallbackListeners();
+    if (!pointersDown.has(event.pointerId)) return;
+    // Losing capture cancels the gesture, but the contact may still be down.
+    // Keep ownership until pointerup or pointercancel arrives.
+    cancelActiveSequence();
   }
 
   const fallbackMoveListener: EventListener = (event) => onPointerMove(event as PointerEvent);
@@ -182,7 +304,9 @@ export function createPointerInput(
   canvas.ownerDocument?.addEventListener?.('pointerdown', onDocumentPointerDown, true);
 
   return {
-    cancelGesture,
+    cancelGesture() {
+      cancelActiveSequence(true);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -192,11 +316,13 @@ export function createPointerInput(
       canvas.removeEventListener('pointercancel', onPointerCancel);
       canvas.removeEventListener('lostpointercapture', onLostPointerCapture);
       canvas.ownerDocument?.removeEventListener?.('pointerdown', onDocumentPointerDown, true);
-      const current = gesture;
+      const pointerIds = [...pointersDown.keys()];
       gesture = null;
+      pinch = null;
+      sequenceBlocked = true;
       pointersDown.clear();
       removeFallbackListeners();
-      if (current) releaseCapture(current.pointerId);
+      for (const pointerId of pointerIds) releaseCapture(pointerId);
     },
   };
 }

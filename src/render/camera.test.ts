@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { Mesh, Vector3 } from 'three';
-import { createGardenCamera, panGardenCamera, resizeGardenCamera } from './camera';
+import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGarden } from './garden';
 import { createMaterialLibrary } from './materials';
 
@@ -15,6 +15,7 @@ describe('garden camera', () => {
     position: camera.position.toArray(),
     quaternion: camera.quaternion.toArray(),
     frustum: [camera.left, camera.right, camera.top, camera.bottom],
+    zoom: camera.zoom,
   });
 
   it.each([
@@ -218,5 +219,119 @@ describe('garden camera', () => {
     expect(camera.position.distanceTo(portraitBase.position))
       .toBeLessThanOrEqual(saturatedCamera.position.distanceTo(portraitBase.position) + 1e-7);
     expect([...camera.position.toArray(), ...screenPoint(camera)].every(Number.isFinite)).toBe(true);
+  });
+
+  it('clamps zoom to the supported range and saturates repeated zoom commands', () => {
+    const camera = createGardenCamera();
+    resizeGardenCamera(camera, 390, 844);
+
+    zoomGardenCamera(camera, 1e100);
+    expect(camera.zoom).toBeCloseTo(1.35, 10);
+    const maxPose = pose(camera);
+    zoomGardenCamera(camera, 1e100);
+    expect(pose(camera)).toEqual(maxPose);
+
+    zoomGardenCamera(camera, 1e-100);
+    expect(camera.zoom).toBeCloseTo(1, 10);
+    const minPose = pose(camera);
+    zoomGardenCamera(camera, 1e-100);
+    expect(pose(camera)).toEqual(minPose);
+  });
+
+  it('ignores invalid zoom scales and safely clamps extreme finite scales', () => {
+    const camera = createGardenCamera();
+    resizeGardenCamera(camera, 390, 844);
+    zoomGardenCamera(camera, 1.2);
+    const beforeInvalidScales = pose(camera);
+
+    for (const scale of [NaN, Infinity, -Infinity, 0, -1]) {
+      zoomGardenCamera(camera, scale);
+      expect(pose(camera), `scale ${scale} leaves camera unchanged`).toEqual(beforeInvalidScales);
+    }
+    zoomGardenCamera(camera, Number.MIN_VALUE);
+    expect(camera.zoom).toBeCloseTo(1, 10);
+    zoomGardenCamera(camera, 1.2);
+    zoomGardenCamera(camera, Number.MAX_VALUE);
+    expect(camera.zoom).toBeCloseTo(1.35, 10);
+    expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);
+
+    zoomGardenCamera(camera, 1 / Number.MAX_VALUE);
+    expect(camera.zoom).toBeCloseTo(1, 10);
+    expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);
+  });
+
+  it('responds immediately when zoom reverses after reaching a limit', () => {
+    const camera = createGardenCamera();
+    resizeGardenCamera(camera, 390, 844);
+    zoomGardenCamera(camera, 100);
+    expect(camera.zoom).toBeCloseTo(1.35, 10);
+
+    zoomGardenCamera(camera, 0.9);
+
+    expect(camera.zoom).toBeCloseTo(1.215, 10);
+  });
+
+  it.each([
+    [1, 390, 844], [1, 1280, 800],
+    [1.35, 390, 844], [1.35, 1280, 800],
+  ] as const)(
+    'keeps zoom-aware pan within horizontal target bounds at zoom %s on %sx%s', (requestedZoom, width, height) => {
+      const camera = createGardenCamera();
+      resizeGardenCamera(camera, width, height);
+      zoomGardenCamera(camera, requestedZoom);
+      const projectedX = () => {
+        camera.updateMatrixWorld(true);
+        return [[-1.05, 0.65, 2], [1.05, 0.65, 2], [-1.05, 0.65, 0], [1.05, 0.65, 0],
+          [-1.05, 0.65, -2], [1.05, 0.65, -2]].map((point) =>
+          (new Vector3(point[0], point[1], point[2]).project(camera).x + 1) * width / 2);
+      };
+      const start = projectedX();
+
+      for (const dx of [-1e9, 1e9]) {
+        panGardenCamera(camera, dx, 0, width, height);
+        const atEdge = projectedX();
+        expect(atEdge.some((x, index) => Math.abs(x - start[index]!) > 1)).toBe(true);
+        for (const x of atEdge) {
+          expect(x - 24).toBeGreaterThanOrEqual(8 - 1e-5);
+          expect(x + 24).toBeLessThanOrEqual(width - 8 + 1e-5);
+        }
+      }
+    },
+  );
+
+  it('preserves a valid zoom across phone, landscape and desktop resize sizes', () => {
+    const camera = createGardenCamera();
+    resizeGardenCamera(camera, 390, 844);
+    zoomGardenCamera(camera, 1.2);
+
+    for (const [width, height] of [[360, 800], [390, 844], [844, 390], [1280, 800]] as const) {
+      resizeGardenCamera(camera, width, height);
+      expect(camera.zoom, `${width}x${height}`).toBeCloseTo(1.2, 10);
+      expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);
+    }
+  });
+
+  it('preserves zoom that fits after a landscape to narrow-portrait resize', () => {
+    const width = 320;
+    const camera = createGardenCamera();
+    resizeGardenCamera(camera, 1280, 800);
+    zoomGardenCamera(camera, 1.3);
+    resizeGardenCamera(camera, width, 800);
+
+    expect(camera.zoom).toBeCloseTo(1.3, 10);
+    const targetXs = () => {
+      camera.updateMatrixWorld(true);
+      return [[-1.05, 0.65, 2], [1.05, 0.65, 2], [-1.05, 0.65, 0], [1.05, 0.65, 0],
+        [-1.05, 0.65, -2], [1.05, 0.65, -2]].map(([x, y, z]) =>
+        (new Vector3(x, y, z).project(camera).x + 1) * width / 2);
+    };
+
+    for (const deltaX of [-1e9, 1e9]) {
+      panGardenCamera(camera, deltaX, 0, width, 800);
+      for (const x of targetXs()) {
+        expect(x - 24).toBeGreaterThanOrEqual(8 - 1e-5);
+        expect(x + 24).toBeLessThanOrEqual(width - 8 + 1e-5);
+      }
+    }
   });
 });

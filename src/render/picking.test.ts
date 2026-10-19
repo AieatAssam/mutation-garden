@@ -1,7 +1,7 @@
 import { BufferGeometry, Box3, Material, Mesh, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GardenSnapshot, PlantSnapshot } from '../sim';
-import { createGardenCamera, panGardenCamera, resizeGardenCamera } from './camera';
+import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGarden, type Garden } from './garden';
 import { createMaterialLibrary } from './materials';
 import { createGardenPicker } from './picking';
@@ -153,6 +153,33 @@ describe('garden picker', () => {
         }
       }
       picker.dispose();
+    },
+  );
+
+  it.each([[360, 800], [390, 844], [844, 390], [1280, 800]] as const)(
+    'picks all four corners of six accessible 48px plot targets at minimum and maximum zoom on %ix%i', (width, height) => {
+      for (const requestedZoom of [1, 1.35]) {
+        const { camera, picker, anchorScreen } = setup(width, height);
+        zoomGardenCamera(camera, requestedZoom);
+
+        for (const deltaX of [-1e9, 1e9]) {
+          panGardenCamera(camera, deltaX, 0, width, height);
+          for (let index = 0; index < 6; index += 1) {
+            const [x, y] = anchorScreen(index);
+            for (const [dx, dy] of [[-24, -24], [24, -24], [-24, 24], [24, 24]] as const) {
+              const px = x + dx;
+              const py = y + dy;
+              expect(px, `${width}x${height} zoom ${requestedZoom} plot-${index} left corner edge`)
+                .toBeGreaterThanOrEqual(8 - 1e-5);
+              expect(px, `${width}x${height} zoom ${requestedZoom} plot-${index} right corner edge`)
+                .toBeLessThanOrEqual(width - 8 + 1e-5);
+              expect(picker.pick(px, py), `${width}x${height} zoom ${requestedZoom} plot-${index} corner ${dx},${dy}`)
+                .toEqual({ kind: 'plot', plotId: `plot-${index}` });
+            }
+          }
+        }
+        picker.dispose();
+      }
     },
   );
 

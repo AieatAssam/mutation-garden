@@ -12,7 +12,7 @@ import {
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
-import { createGardenCamera, panGardenCamera, resizeGardenCamera } from './camera';
+import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot } from '../sim';
 import { createPlantReconciler } from './plants/reconcile';
@@ -20,6 +20,7 @@ import { createPlantReconciler } from './plants/reconcile';
 export interface Renderer {
   resize(width: number, height: number): void;
   pan(deltaXCss: number, deltaYCss: number): void;
+  zoom(scale: number): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   pick(clientX: number, clientY: number): PickResult;
   dispose(): void;
@@ -70,6 +71,11 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
         !Number.isFinite(rect.width) || !Number.isFinite(rect.height) ||
         rect.width <= 0 || rect.height <= 0) return;
       panGardenCamera(camera, deltaXCss, deltaYCss, rect.width, rect.height);
+      draw();
+    },
+    zoom(scale) {
+      if (disposed) return;
+      zoomGardenCamera(camera, scale);
       draw();
     },
     render(previous, current, alpha, reducedMotion) {

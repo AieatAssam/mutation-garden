@@ -1,6 +1,7 @@
 import { AmbientLight, Box3, Color, DirectionalLight, Group, HemisphereLight, Mesh, MeshToonMaterial, OrthographicCamera, Scene, Vector3, WebGLRenderer } from 'three';
 import { createMaterialLibrary } from '../../../src/render/materials';
 import { createBubbleBerry } from '../../../src/render/plants/bubble-berry';
+import { createTwistroot } from '../../../src/render/plants/twistroot';
 import { createPlantReconciler } from '../../../src/render/plants/reconcile';
 import { createGardenCamera, resizeGardenCamera } from '../../../src/render/camera';
 import { createGarden } from '../../../src/render/garden';
@@ -15,8 +16,16 @@ document.documentElement.style.setProperty('--tomato', palette.ink['misprint-tom
 const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
 const silhouetteCanvas = document.querySelector<HTMLCanvasElement>('#silhouette')!;
 const status = document.querySelector<HTMLElement>('#status')!;
+const hasWebGlError = (target: HTMLCanvasElement) => {
+  const gl = target.getContext('webgl2');
+  return Boolean(gl && gl.getError() !== gl.NO_ERROR);
+};
+const speciesId: PlantSnapshot['speciesId'] = new URLSearchParams(location.search).get('species') === 'twistroot' ? 'twistroot' : 'bubble-berry';
+document.title = speciesId === 'twistroot' ? 'Twistroot render fixture' : 'Bubble Berry render fixture';
+silhouetteCanvas.setAttribute('aria-label', `${speciesId === 'twistroot' ? 'Twistroot' : 'Bubble Berry'} silhouette`);
 const stages: PlantSnapshot['stage'][] = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'];
-const progress = [0.02, 0.2, 0.48, 0.78, 1];
+const progress = speciesId === 'twistroot' ? [0.02, 0.12, 0.4, 0.88, 1] : [0.02, 0.2, 0.48, 0.78, 1];
+const makeRig = speciesId === 'twistroot' ? createTwistroot : createBubbleBerry;
 let renderer: WebGLRenderer;
 const cleanup: Array<() => void> = [];
 
@@ -27,13 +36,13 @@ function renderSilhouette() {
   const camera = new OrthographicCamera(-0.9, 0.9, 0.9, -0.9, 0.1, 20);
   camera.position.set(0, 2.5, 5); camera.lookAt(0, 0.3, 0);
   const silhouetteMaterial = new MeshToonMaterial({ color: palette.ink['press-ink'], toneMapped: false });
-  const rig = createBubbleBerry({
+  const rig = makeRig({
     toon: () => silhouetteMaterial,
     outline: () => { const mesh = new Mesh(); mesh.visible = false; return mesh; },
     blob: () => { const mesh = new Mesh(); mesh.visible = false; return mesh; },
     dispose() {},
   });
-  rig.update({ speciesId: 'bubble-berry', plantedAt: 0, progress: 1, stage: 'Harvestable' }, 0, true);
+  rig.update({ speciesId, plantedAt: 0, progress: 1, stage: 'Harvestable' }, 0, true);
   rig.root.traverse((object) => {
     if (object instanceof Mesh && (String(object.userData.part).endsWith('-outline')
       || object.userData.part === 'halo' || object.userData.part === 'blob')) object.visible = false;
@@ -44,7 +53,8 @@ function renderSilhouette() {
   const width = bounds.max.x - bounds.min.x;
   const height = bounds.max.y - bounds.min.y;
   rig.root.position.sub(center);
-  const frameSize = Math.max(width, height) * 1.3;
+  const silhouetteMargin = speciesId === 'twistroot' ? 48 / 46 : 1.3;
+  const frameSize = Math.max(width, height) * silhouetteMargin;
   camera.left = -frameSize / 2; camera.right = frameSize / 2;
   camera.top = frameSize / 2; camera.bottom = -frameSize / 2;
   camera.position.set(0, 0, frameSize * 3); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix();
@@ -65,8 +75,8 @@ function renderLineup() {
   const rigs = stages.map((stage, index) => {
     const holder = new Group();
     holder.scale.setScalar(1.55); scene.add(holder);
-    const rig = createBubbleBerry(materialLibrary, index * 410);
-    rig.update({ speciesId: 'bubble-berry', plantedAt: 0, stage, progress: progress[index]! }, 0, true);
+    const rig = makeRig(materialLibrary, index * 410);
+    rig.update({ speciesId, plantedAt: 0, stage, progress: progress[index]! }, 0, true);
     rig.root.updateMatrixWorld(true);
     const bounds = new Box3().setFromObject(rig.root);
     const centerY = portrait
@@ -77,8 +87,38 @@ function renderLineup() {
   });
   status.dataset.stageHeights = JSON.stringify(rigs.map((rig) => {
     rig.root.updateMatrixWorld(true);
-    const bounds = new Box3().setFromObject(rig.root);
+    const bounds = new Box3();
+    if (speciesId === 'twistroot') {
+      rig.root.traverse((object) => {
+        if (object instanceof Mesh && ['root-body', 'tuft-leaf'].includes(String(object.userData.part))) bounds.expandByObject(object);
+      });
+    } else {
+      bounds.setFromObject(rig.root);
+    }
     return bounds.max.y - bounds.min.y;
+  }));
+  const initialPoses = rigs.map((rig) => {
+    rig.root.updateMatrixWorld(true);
+    const pose: number[] = [];
+    rig.root.traverse((object) => {
+      pose.push(...object.matrixWorld.toArray());
+      if (object instanceof Mesh && object.userData.part === 'root-body') {
+        pose.push(...Array.from(object.geometry.getAttribute('position').array, (value) => Number(value)));
+      }
+    });
+    return pose;
+  });
+  rigs.forEach((rig, index) => rig.update({ speciesId, plantedAt: 0, stage: stages[index]!, progress: progress[index]! }, 60_000, true));
+  status.dataset.reducedMotionStable = String(rigs.every((rig, index) => {
+    rig.root.updateMatrixWorld(true);
+    const pose: number[] = [];
+    rig.root.traverse((object) => {
+      pose.push(...object.matrixWorld.toArray());
+      if (object instanceof Mesh && object.userData.part === 'root-body') {
+        pose.push(...Array.from(object.geometry.getAttribute('position').array, (value) => Number(value)));
+      }
+    });
+    return pose.every((value, item) => value === initialPoses[index]![item]);
   }));
   const resize = () => {
     renderer.setSize(innerWidth, innerHeight, false);
@@ -102,7 +142,7 @@ function renderSixRipeGarden() {
   const keyLight = new DirectionalLight(day.key, 2.2); keyLight.position.set(-4, 7, 5); scene.add(keyLight);
   const camera = createGardenCamera();
   const plants = createPlantReconciler(garden.plots, materials);
-  const planted: PlantSnapshot = { speciesId: 'bubble-berry', plantedAt: 0, stage: 'Harvestable', progress: 1 };
+  const planted: PlantSnapshot = { speciesId, plantedAt: 0, stage: 'Harvestable', progress: 1 };
   const snapshot: GardenSnapshot = { nowMs: 15_000, coins: 100, plots: garden.plots.map((plot) => ({ id: plot.plotId, plant: planted })) };
   renderer.setSize(innerWidth, innerHeight, false); resizeGardenCamera(camera, innerWidth, innerHeight);
   renderer.render(scene, camera);
@@ -110,7 +150,12 @@ function renderSixRipeGarden() {
   renderer.render(scene, camera);
   status.dataset.drawCalls = String(renderer.info.render.calls);
   status.dataset.plants = String(garden.plots.length);
-  status.dataset.ripe = String(garden.plots.filter((plot) => plot.children.length === 1).length);
+  const ripeSignal = speciesId === 'twistroot' ? 'ripe-halo' : 'halo';
+  status.dataset.ripe = String(garden.plots.filter((plot) => {
+    let visible = false;
+    plot.traverse((object) => { if (object instanceof Mesh && object.userData.part === ripeSignal && object.visible) visible = true; });
+    return visible;
+  }).length);
   const resize = () => { renderer.setSize(innerWidth, innerHeight, false); resizeGardenCamera(camera, innerWidth, innerHeight); renderer.render(scene, camera); };
   window.addEventListener('resize', resize);
   cleanup.push(() => { window.removeEventListener('resize', resize); plants.dispose(); garden.dispose(); materials.dispose(); renderer.dispose(); });
@@ -119,6 +164,7 @@ function renderSixRipeGarden() {
 if (new URLSearchParams(location.search).has('six-ripe')) renderSixRipeGarden();
 else { renderLineup(); renderSilhouette(); }
 requestAnimationFrame(() => {
+  status.dataset.webglError = String(hasWebGlError(canvas) || (status.dataset.mode !== 'six-ripe' && hasWebGlError(silhouetteCanvas)));
   status.dataset.render = 'complete'; status.dataset.frame = 'ready'; status.textContent = 'Ready';
 });
 window.addEventListener('pagehide', () => { cleanup.forEach((dispose) => dispose()); });

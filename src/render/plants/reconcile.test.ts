@@ -53,7 +53,8 @@ describe('plant reconciliation', () => {
     expect(halo).toHaveBeenCalledTimes(1); borrowed.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     reconciler.update(snap(2, [null]), snap(3, [plant(3, 0.2, 'Sprout')]), 0, true);
     const replanted = anchors[0]!.children[0]!; expect(replanted).not.toBe(root);
-    reconciler.update(snap(3, [plant(3, 0.2)]), snap(4, [plant(4, 0.3, 'Sprout', 'twistroot')]), 0, true);
+    const unsupported = { ...plant(4, 0.3, 'Sprout'), speciesId: 'unsupported' } as unknown as PlantSnapshot;
+    reconciler.update(snap(3, [plant(3, 0.2)]), snap(4, [unsupported]), 0, true);
     expect(anchors[0]!.children).toHaveLength(0); reconciler.dispose(); reconciler.dispose();
     expect(borrowed.every((dispose) => dispose.mock.calls.length === 0)).toBe(true);
     expect(materials.toon).toBeDefined();
@@ -80,6 +81,37 @@ describe('plant reconciliation', () => {
     reconciler.update(snap(104, [null]), snap(105, [{ ...bubble, plantedAt: 105, progress: 0.12, stage: 'Sprout' }]), 1, true);
     const replanted = anchors[0]!.children[0]!;
     expect(replanted).not.toBe(bubbleRig); expect(part(replanted, 'berries')).toBeDefined();
+    reconciler.dispose();
+  });
+
+  it('creates and reuses Twistroot, replaces other species, and removes it on harvest or replant', () => {
+    const { anchors, reconciler } = setup();
+    const sunny = plant(1, 0.4, 'Growing', 'sunny-sprout');
+    reconciler.update(snap(100, [sunny]), snap(101, [sunny]), 1, true);
+    const sunnyRig = anchors[0]!.children[0]!;
+    const twistroot: PlantSnapshot = { speciesId: 'twistroot', plantedAt: 2, progress: 0.4, stage: 'Growing' };
+    reconciler.update(snap(101, [sunny]), snap(102, [twistroot]), 1, true);
+    const rootRig = anchors[0]!.children[0]!;
+    expect(rootRig).not.toBe(sunnyRig);
+    expect(part(rootRig, 'root-body')).toBeDefined();
+    expect(part(rootRig, 'ripe-halo').visible).toBe(false);
+
+    const growing: PlantSnapshot = { ...twistroot, progress: 0.88, stage: 'Mature' };
+    reconciler.update(snap(102, [twistroot]), snap(103, [growing]), 1, true);
+    expect(anchors[0]!.children[0]).toBe(rootRig);
+    expect(part(rootRig, 'root-body')).toBeDefined();
+
+    const ripe: PlantSnapshot = { ...twistroot, progress: 1, stage: 'Harvestable' };
+    reconciler.update(snap(103, [growing]), snap(104, [ripe]), 1, true);
+    expect(anchors[0]!.children[0]).toBe(rootRig);
+    expect(part(rootRig, 'ripe-halo').visible).toBe(true);
+
+    reconciler.update(snap(104, [ripe]), snap(105, [null]), 1, true);
+    expect(anchors[0]!.children).toHaveLength(0);
+    reconciler.update(snap(105, [null]), snap(106, [{ ...twistroot, plantedAt: 106, progress: 0.12, stage: 'Sprout' }]), 1, true);
+    const replanted = anchors[0]!.children[0]!;
+    expect(replanted).not.toBe(rootRig);
+    expect(part(replanted, 'root-body')).toBeDefined();
     reconciler.dispose();
   });
 });

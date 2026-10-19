@@ -1,6 +1,13 @@
 import { OrthographicCamera, Vector3 } from 'three';
 
 const MAX_PAN_DISTANCE = 2.5;
+const PLOT_TARGET_HALF_SIZE = 24;
+const PLOT_TARGET_MARGIN = 8;
+const PLOT_TARGET_CENTERS = [
+  [-1.05, 0.65, 2], [1.05, 0.65, 2],
+  [-1.05, 0.65, 0], [1.05, 0.65, 0],
+  [-1.05, 0.65, -2], [1.05, 0.65, -2],
+] as const;
 
 interface CameraPanState {
   basePosition: Vector3;
@@ -8,6 +15,7 @@ interface CameraPanState {
   offset: Vector3;
   viewportWidth: number;
   viewportHeight: number;
+  lastSaturatedInput: { deltaXCss: number; deltaYCss: number } | undefined;
 }
 
 const panStates = new WeakMap<OrthographicCamera, CameraPanState>();
@@ -15,6 +23,30 @@ const panStates = new WeakMap<OrthographicCamera, CameraPanState>();
 function applyPose(camera: OrthographicCamera, state: CameraPanState): void {
   camera.position.copy(state.basePosition).add(state.offset);
   camera.lookAt(state.baseTarget.clone().add(state.offset));
+}
+
+function horizontalPanDeltaBounds(camera: OrthographicCamera, width: number): readonly [number, number] {
+  camera.updateMatrixWorld(true);
+  let minDelta = Number.NEGATIVE_INFINITY;
+  let maxDelta = Number.POSITIVE_INFINITY;
+  for (const center of PLOT_TARGET_CENTERS) {
+    const screenX = (new Vector3(...center).project(camera).x + 1) * width / 2;
+    minDelta = Math.max(minDelta, PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN - screenX);
+    maxDelta = Math.min(maxDelta, width - PLOT_TARGET_HALF_SIZE - PLOT_TARGET_MARGIN - screenX);
+  }
+  return [minDelta, maxDelta];
+}
+
+function keepPlotTargetsInView(camera: OrthographicCamera, state: CameraPanState): void {
+  if (state.viewportWidth <= 0) return;
+  applyPose(camera, state);
+  const [minDelta, maxDelta] = horizontalPanDeltaBounds(camera, state.viewportWidth);
+  if (minDelta > maxDelta) return;
+  const correction = Math.max(minDelta, Math.min(maxDelta, 0));
+  if (correction === 0) return;
+  const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const worldUnitsPerCssPixel = (camera.right - camera.left) / state.viewportWidth;
+  state.offset.addScaledVector(right, -correction * worldUnitsPerCssPixel);
 }
 
 function getPanState(camera: OrthographicCamera): CameraPanState {
@@ -26,6 +58,7 @@ function getPanState(camera: OrthographicCamera): CameraPanState {
       offset: new Vector3(),
       viewportWidth: 0,
       viewportHeight: 0,
+      lastSaturatedInput: undefined,
     };
     panStates.set(camera, state);
   }
@@ -59,6 +92,7 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   }
   state.viewportWidth = safeWidth;
   state.viewportHeight = safeHeight;
+  state.lastSaturatedInput = undefined;
   const offsetLength = state.offset.length();
   if (offsetLength > MAX_PAN_DISTANCE) state.offset.multiplyScalar(MAX_PAN_DISTANCE / offsetLength);
   camera.left = -viewHeight * aspect * 0.5;
@@ -66,6 +100,7 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   camera.top = viewHeight * 0.5;
   camera.bottom = -viewHeight * 0.5;
   camera.updateProjectionMatrix();
+  keepPlotTargetsInView(camera, state);
   applyPose(camera, state);
 }
 
@@ -98,15 +133,29 @@ export function panGardenCamera(
   if (!Number.isFinite(maxCssDeltaX) || !Number.isFinite(maxCssDeltaY)) return;
   const boundedDeltaX = Math.max(-maxCssDeltaX, Math.min(maxCssDeltaX, deltaXCss));
   const boundedDeltaY = Math.max(-maxCssDeltaY, Math.min(maxCssDeltaY, deltaYCss));
+  const inputWasBounded = boundedDeltaX !== deltaXCss || boundedDeltaY !== deltaYCss;
+  // Keep an oversized command idempotent after saturation without suppressing later tangent drags.
+  if (inputWasBounded && state.offset.length() >= MAX_PAN_DISTANCE - 1e-9 &&
+    state.lastSaturatedInput?.deltaXCss === deltaXCss &&
+    state.lastSaturatedInput.deltaYCss === deltaYCss) return;
+  state.lastSaturatedInput = undefined;
 
   const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
   const up = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
-  const panX = -boundedDeltaX * worldUnitsPerCssPixelX;
   const panY = boundedDeltaY * worldUnitsPerCssPixelY;
-  state.offset.addScaledVector(right, panX);
-  state.offset.addScaledVector(up, panY);
+  const [minHorizontalDelta, maxHorizontalDelta] = horizontalPanDeltaBounds(camera, cssWidth);
+  const boundedHorizontalDelta = minHorizontalDelta <= maxHorizontalDelta
+    ? Math.max(minHorizontalDelta, Math.min(maxHorizontalDelta, boundedDeltaX))
+    : 0;
+  const requestedOffset = new Vector3()
+    .addScaledVector(right, -boundedHorizontalDelta * worldUnitsPerCssPixelX)
+    .addScaledVector(up, panY);
+  state.offset.add(requestedOffset);
 
   const offsetLength = state.offset.length();
   if (offsetLength > MAX_PAN_DISTANCE) state.offset.multiplyScalar(MAX_PAN_DISTANCE / offsetLength);
+  if (inputWasBounded && state.offset.length() >= MAX_PAN_DISTANCE - 1e-9) {
+    state.lastSaturatedInput = { deltaXCss, deltaYCss };
+  }
   applyPose(camera, state);
 }

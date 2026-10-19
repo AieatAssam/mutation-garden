@@ -79,6 +79,33 @@ describe('garden picker', () => {
     picker.dispose();
   });
 
+  it.each([[390, 844], [1280, 800]] as const)(
+    'keeps all six 48px targets pickable at both horizontal pan limits on %ix%i', (width, height) => {
+      const { camera, picker, anchorScreen } = setup(width, height);
+      const before = Array.from({ length: 6 }, (_, index) => anchorScreen(index));
+      const corners = [[0, 0], [-24, -24], [24, -24], [-24, 24], [24, 24]] as const;
+
+      for (const deltaX of [-1e9, 1e9]) {
+        panGardenCamera(camera, deltaX, 0, width, height);
+        for (let index = 0; index < 6; index += 1) {
+          const [x, y] = anchorScreen(index);
+          expect(Math.abs(x - before[index]![0]), `plot-${index} visibly moves`).toBeGreaterThan(1);
+          for (const [dx, dy] of corners) {
+            const px = x + dx;
+            const py = y + dy;
+            expect(px, `plot-${index} surface left edge`).toBeGreaterThanOrEqual(8 - 1e-6);
+            expect(px, `plot-${index} surface right edge`).toBeLessThanOrEqual(width - 8 + 1e-6);
+            expect(py, `plot-${index} surface top edge`).toBeGreaterThanOrEqual(0);
+            expect(py, `plot-${index} surface bottom edge`).toBeLessThanOrEqual(height);
+            expect(picker.pick(px, py), `${width}x${height} plot-${index} at ${dx},${dy}`)
+              .toEqual({ kind: 'plot', plotId: `plot-${index}` });
+          }
+        }
+      }
+      picker.dispose();
+    },
+  );
+
   it('rejects nonfinite, outside and empty-rect coordinates', () => {
     const { picker, rect } = setup();
     for (const [x, y] of [[NaN, 10], [10, Infinity], [-1, 10], [391, 10], [10, 845]] as const) {

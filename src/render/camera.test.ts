@@ -110,6 +110,37 @@ describe('garden camera', () => {
     expect(afterVerticalDrag[1]).toBeLessThan(afterHorizontalDrag[1]);
   });
 
+  it.each([[390, 844], [1280, 800]] as const)(
+    'keeps every plot center inside the horizontal pan envelope at %ix%i', (width, height) => {
+      const materials = createMaterialLibrary();
+      const garden = createGarden(materials);
+      const camera = createGardenCamera();
+      resizeGardenCamera(camera, width, height);
+      const centers = () => {
+        camera.updateMatrixWorld(true);
+        garden.updateMatrixWorld(true);
+        return garden.plots.map((plot) => {
+          const projected = plot.getWorldPosition(new Vector3()).project(camera);
+          return { x: (projected.x + 1) * width / 2, y: (1 - projected.y) * height / 2 };
+        });
+      };
+      const before = centers();
+
+      for (const deltaX of [-1e9, 1e9]) {
+        panGardenCamera(camera, deltaX, 0);
+        const atBound = centers();
+        expect(atBound).toHaveLength(6);
+        expect(atBound.some((point, index) => Math.abs(point.x - before[index]!.x) > 1)).toBe(true);
+        for (const [index, point] of atBound.entries()) {
+          expect(point.x, `plot-${index} left target edge`).toBeGreaterThanOrEqual(8 - 1e-6);
+          expect(point.x, `plot-${index} right target edge`).toBeLessThanOrEqual(width - 8 + 1e-6);
+        }
+      }
+      garden.dispose();
+      materials.dispose();
+    },
+  );
+
   it('keeps the existing horizontal pan continuous across the vertical clamp threshold', () => {
     const cameraBeforeThreshold = createGardenCamera();
     const cameraAtThreshold = createGardenCamera();
@@ -124,6 +155,17 @@ describe('garden camera', () => {
     const xBeforeThreshold = screenPoint(cameraBeforeThreshold)[0];
     const xAtThreshold = screenPoint(cameraAtThreshold)[0];
     expect(Math.abs(xAtThreshold - xBeforeThreshold)).toBeLessThan(0.0025);
+  });
+
+  it('keeps horizontal pan responsive after reaching the vertical distance limit', () => {
+    const camera = createGardenCamera();
+    resizeGardenCamera(camera, 390, 844);
+    panGardenCamera(camera, 0, 1e9);
+    const atVerticalLimit = screenPoint(camera)[0];
+
+    panGardenCamera(camera, 20, 0);
+
+    expect(screenPoint(camera)[0]).toBeGreaterThan(atVerticalLimit);
   });
 
   it('clamps large pans to a finite bound and ignores invalid input', () => {

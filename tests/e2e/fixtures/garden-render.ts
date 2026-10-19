@@ -1,5 +1,5 @@
 import { createRenderer } from '../../../src/render/renderer';
-import { createGardenCamera, resizeGardenCamera } from '../../../src/render/camera';
+import { createGardenCamera, panGardenCamera, resizeGardenCamera } from '../../../src/render/camera';
 import { createGarden } from '../../../src/render/garden';
 import { createMaterialLibrary } from '../../../src/render/materials';
 import type { PickResult } from '../../../src/render/picking';
@@ -14,6 +14,7 @@ interface GardenProbe {
     sky: { x: number; y: number };
   };
   pick(x: number, y: number): PickResult;
+  pan(deltaX: number, deltaY: number): void;
   resize(): void;
   setInset(enabled: boolean): void;
   dispose(): void;
@@ -22,7 +23,7 @@ interface GardenProbe {
 const canvas = document.querySelector<HTMLCanvasElement>('#stage');
 if (!canvas) throw new Error('Garden fixture canvas is missing');
 const stage = canvas as HTMLCanvasElement;
-const probeWindow = window as Window & { gardenProbe: GardenProbe };
+const probeWindow = window as unknown as Window & { gardenProbe: GardenProbe };
 const renderer = createRenderer(stage);
 const probeMaterials = createMaterialLibrary();
 const probeGarden = createGarden(probeMaterials);
@@ -64,6 +65,11 @@ probeWindow.gardenProbe = {
     };
   },
   pick: (x, y) => renderer.pick(x, y),
+  pan(deltaX, deltaY) {
+    renderer.pan(deltaX, deltaY);
+    const rect = stage.getBoundingClientRect();
+    panGardenCamera(referenceCamera, deltaX, deltaY, rect.width, rect.height);
+  },
   resize,
   setInset(enabled) {
     inset = enabled;

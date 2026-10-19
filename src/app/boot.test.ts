@@ -4,15 +4,15 @@ import * as loopModule from './loop';
 import { boot } from './boot';
 
 const {
-  disposeRenderer, resizeRenderer, panRenderer, renderRenderer, pickRenderer,
+  disposeRenderer, resizeRenderer, panRenderer, zoomRenderer, renderRenderer, pickRenderer,
   createGardenUI, updateGardenUI, disposeGardenUI, createPointerInput,
 } = vi.hoisted(() => ({
-  disposeRenderer: vi.fn(), resizeRenderer: vi.fn(), panRenderer: vi.fn(), renderRenderer: vi.fn(),
+  disposeRenderer: vi.fn(), resizeRenderer: vi.fn(), panRenderer: vi.fn(), zoomRenderer: vi.fn(), renderRenderer: vi.fn(),
   pickRenderer: vi.fn(() => null),
   createGardenUI: vi.fn(), updateGardenUI: vi.fn(), disposeGardenUI: vi.fn(),
   createPointerInput: vi.fn(),
 }));
-vi.mock('../render/renderer', () => ({ createRenderer: () => ({ resize: resizeRenderer, pan: panRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer }) }));
+vi.mock('../render/renderer', () => ({ createRenderer: () => ({ resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer }) }));
 vi.mock('../input/pointer', () => ({
   createPointerInput: (canvas: HTMLCanvasElement, pick: unknown, onIntent: unknown) =>
     createPointerInput(canvas, pick, onIntent),
@@ -26,6 +26,7 @@ describe('boot animation wiring', () => {
     createPointerInput.mockReset().mockReturnValue({ cancelGesture: vi.fn(), dispose: vi.fn() });
     pickRenderer.mockReset().mockReturnValue(null);
     panRenderer.mockReset();
+    zoomRenderer.mockReset();
   });
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 
@@ -61,6 +62,11 @@ describe('boot animation wiring', () => {
     onIntent({ type: 'PanCamera', deltaXCss: 12, deltaYCss: -7 });
     expect(panRenderer).toHaveBeenCalledTimes(1);
     expect(panRenderer).toHaveBeenLastCalledWith(12, -7);
+    expect(enqueue).not.toHaveBeenCalled();
+
+    onIntent({ type: 'ZoomCamera', scale: 1.275 });
+    expect(zoomRenderer).toHaveBeenCalledTimes(1);
+    expect(zoomRenderer).toHaveBeenCalledWith(1.275);
     expect(enqueue).not.toHaveBeenCalled();
 
     onIntent({ type: 'ActivatePlot', plotId: 'plot-0' });

@@ -7,4 +7,7 @@ export type InputIntent = {
   readonly type: 'PanCamera';
   readonly deltaXCss: number;
   readonly deltaYCss: number;
+} | {
+  readonly type: 'ZoomCamera';
+  readonly scale: number;
 };

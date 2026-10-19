@@ -110,6 +110,7 @@
   justify-content: center;
   align-items: end;
   gap: 10px;
+  padding: 8px;
   min-height: 76px;
   pointer-events: none;
 }
@@ -163,6 +164,23 @@
 
 .garden-ui__seed.is-selected {
   background: var(--mg-ui-accent-pressed);
+}
+
+@media (max-width: 600px) {
+  .garden-ui__tray {
+    gap: 8px;
+  }
+
+  .garden-ui__seed {
+    box-sizing: border-box;
+    flex: 1 1 0;
+    width: 0;
+    min-width: 0;
+    min-height: 56px;
+    padding: 4px 6px;
+    font-size: clamp(13px, 3.6vw, 15px);
+    line-height: 1.15;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

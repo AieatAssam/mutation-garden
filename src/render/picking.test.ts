@@ -1,6 +1,6 @@
 import { BufferGeometry, Material, Mesh, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createGardenCamera, resizeGardenCamera } from './camera';
+import { createGardenCamera, panGardenCamera, resizeGardenCamera } from './camera';
 import { createGarden, type Garden } from './garden';
 import { createMaterialLibrary } from './materials';
 import { createGardenPicker } from './picking';
@@ -64,13 +64,37 @@ describe('garden picker', () => {
     picker.dispose();
   });
 
+  it('raycasts actual plot centers after the camera has been panned', () => {
+    const { picker, camera, anchorScreen } = setup();
+    const before = anchorScreen(0);
+
+    panGardenCamera(camera, 72, 44);
+
+    const after = anchorScreen(0);
+    expect(after).not.toEqual(before);
+    for (let i = 0; i < 6; i += 1) {
+      const [x, y] = anchorScreen(i);
+      expect(picker.pick(x, y)).toEqual({ kind: 'plot', plotId: `plot-${i}` });
+    }
+    picker.dispose();
+  });
+
   it('rejects nonfinite, outside and empty-rect coordinates', () => {
     const { picker, rect } = setup();
     for (const [x, y] of [[NaN, 10], [10, Infinity], [-1, 10], [391, 10], [10, 845]] as const) {
       expect(picker.pick(x, y)).toBeNull();
     }
-    rect.width = 0;
-    expect(picker.pick(0, 10)).toBeNull();
+    for (const invalidRect of [
+      { left: NaN, top: 0, width: 390, height: 844 },
+      { left: 0, top: Infinity, width: 390, height: 844 },
+      { left: 0, top: 0, width: Infinity, height: 844 },
+      { left: 0, top: 0, width: 390, height: NaN },
+      { left: 0, top: 0, width: 0, height: 844 },
+      { left: 0, top: 0, width: 390, height: -1 },
+    ]) {
+      Object.assign(rect, invalidRect);
+      expect(picker.pick(10, 10)).toBeNull();
+    }
     picker.dispose();
   });
 

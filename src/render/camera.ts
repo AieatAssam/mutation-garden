@@ -1,6 +1,8 @@
 import { OrthographicCamera, Vector3 } from 'three';
 
 const MAX_PAN_DISTANCE = 2.5;
+const MIN_CAMERA_ZOOM = 1;
+const MAX_CAMERA_ZOOM = 1.35;
 const PLOT_TARGET_HALF_SIZE = 24;
 const PLOT_TARGET_MARGIN = 8;
 const PLOT_TARGET_CENTERS = [
@@ -37,6 +39,32 @@ function horizontalPanDeltaBounds(camera: OrthographicCamera, width: number): re
   return [minDelta, maxDelta];
 }
 
+function maximumCameraZoom(camera: OrthographicCamera, state: CameraPanState): number {
+  if (state.viewportWidth <= 0 || !Number.isFinite(camera.zoom) || camera.zoom <= 0) {
+    return MAX_CAMERA_ZOOM;
+  }
+
+  camera.updateMatrixWorld(true);
+  let left = Number.POSITIVE_INFINITY;
+  let right = Number.NEGATIVE_INFINITY;
+  for (const center of PLOT_TARGET_CENTERS) {
+    const screenX = (new Vector3(...center).project(camera).x + 1) * state.viewportWidth / 2;
+    left = Math.min(left, screenX);
+    right = Math.max(right, screenX);
+  }
+
+  const currentSpan = right - left;
+  const availableWidth = state.viewportWidth - 2 * (PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN);
+  if (!Number.isFinite(currentSpan) || currentSpan <= 0 || availableWidth <= 0) return MIN_CAMERA_ZOOM;
+  const fitZoom = camera.zoom * availableWidth / currentSpan;
+  return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, fitZoom));
+}
+
+function reconcileZoom(camera: OrthographicCamera, state: CameraPanState): void {
+  camera.zoom = Math.min(camera.zoom, maximumCameraZoom(camera, state));
+  camera.updateProjectionMatrix();
+}
+
 function keepPlotTargetsInView(camera: OrthographicCamera, state: CameraPanState): void {
   if (state.viewportWidth <= 0) return;
   applyPose(camera, state);
@@ -45,7 +73,7 @@ function keepPlotTargetsInView(camera: OrthographicCamera, state: CameraPanState
   const correction = Math.max(minDelta, Math.min(maxDelta, 0));
   if (correction === 0) return;
   const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-  const worldUnitsPerCssPixel = (camera.right - camera.left) / state.viewportWidth;
+  const worldUnitsPerCssPixel = (camera.right - camera.left) / (state.viewportWidth * camera.zoom);
   state.offset.addScaledVector(right, -correction * worldUnitsPerCssPixel);
 }
 
@@ -67,6 +95,8 @@ function getPanState(camera: OrthographicCamera): CameraPanState {
 
 export function createGardenCamera(): OrthographicCamera {
   const camera = new OrthographicCamera(-4, 4, 4, -4, 0.1, 100);
+  camera.zoom = MIN_CAMERA_ZOOM;
+  camera.updateProjectionMatrix();
   camera.position.set(0, 6, 14);
   camera.lookAt(0, 0, 0);
   return camera;
@@ -100,6 +130,27 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   camera.top = viewHeight * 0.5;
   camera.bottom = -viewHeight * 0.5;
   camera.updateProjectionMatrix();
+  applyPose(camera, state);
+  reconcileZoom(camera, state);
+  keepPlotTargetsInView(camera, state);
+  applyPose(camera, state);
+}
+
+/** Apply a finite, positive zoom increment while keeping every plot target in view. */
+export function zoomGardenCamera(camera: OrthographicCamera, scale: number): void {
+  if (!Number.isFinite(scale) || scale <= 0 || !Number.isFinite(camera.zoom) || camera.zoom <= 0) return;
+  const state = panStates.get(camera);
+  if (!state) return;
+
+  const maximumZoom = maximumCameraZoom(camera, state);
+  const nextZoom = scale >= maximumZoom / camera.zoom
+    ? maximumZoom
+    : Math.max(MIN_CAMERA_ZOOM, camera.zoom * scale);
+  if (nextZoom === camera.zoom) return;
+
+  camera.zoom = nextZoom;
+  camera.updateProjectionMatrix();
+  state.lastSaturatedInput = undefined;
   keepPlotTargetsInView(camera, state);
   applyPose(camera, state);
 }
@@ -122,8 +173,8 @@ export function panGardenCamera(
 
   const cssWidth = viewportWidth ?? state.viewportWidth;
   const cssHeight = viewportHeight ?? state.viewportHeight;
-  const worldUnitsPerCssPixelX = (camera.right - camera.left) / cssWidth;
-  const worldUnitsPerCssPixelY = (camera.top - camera.bottom) / cssHeight;
+  const worldUnitsPerCssPixelX = (camera.right - camera.left) / (cssWidth * camera.zoom);
+  const worldUnitsPerCssPixelY = (camera.top - camera.bottom) / (cssHeight * camera.zoom);
   if (!Number.isFinite(worldUnitsPerCssPixelX) || worldUnitsPerCssPixelX <= 0 ||
     !Number.isFinite(worldUnitsPerCssPixelY) || worldUnitsPerCssPixelY <= 0) return;
 

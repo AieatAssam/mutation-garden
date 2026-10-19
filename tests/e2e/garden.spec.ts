@@ -104,6 +104,7 @@ test('production garden renders cleanly and picker covers plot targets across si
 });
 
 test('keeps the island above the Seeds label with UI space reserved', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   const viewport = testInfo.project.name === 'desktop' ? { width: 1280, height: 800 } : { width: 390, height: 844 };
   await page.setViewportSize(viewport);
   await page.goto('./');

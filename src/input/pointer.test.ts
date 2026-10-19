@@ -558,3 +558,84 @@ describe('plot pointer input', () => {
     },
   );
 });
+
+describe('owned two-touch pinch input', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  function beginGroundPinch() {
+    const { down, intents, move, up, ...rest } = setup(() => ({ kind: 'ground' }));
+    down({ pointerId: 1, pointerType: 'touch', isPrimary: true, clientX: 0, clientY: 0 });
+    down({ pointerId: 2, pointerType: 'touch', isPrimary: false, clientX: 100, clientY: 0 });
+    return {
+      ...rest,
+      down,
+      intents,
+      move,
+      up,
+      moveFirst: (clientX: number, clientY = 0) => move({ pointerId: 1, clientX, clientY }),
+      moveSecond: (clientX: number, clientY = 0) => move({ pointerId: 2, clientX, clientY }),
+      upFirst: () => up({ pointerId: 1 }),
+      upSecond: () => up({ pointerId: 2, isPrimary: false }),
+    };
+  }
+
+  it.each([
+    ['outward', 120, 120 / 110],
+    ['inward', 80, 80 / 90],
+  ])('emits an incremental zoom for an eligible %s pinch after removing the dead zone', (_direction, distance, scale) => {
+    const { intents, moveSecond } = beginGroundPinch();
+
+    moveSecond(distance);
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale }]);
+  });
+
+  it('does not zoom at the exact threshold and starts just beyond it', () => {
+    const { intents, moveSecond } = beginGroundPinch();
+
+    moveSecond(110);
+    expect(intents).toEqual([]);
+
+    moveSecond(110.01);
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: 110.01 / 110 }]);
+  });
+
+  it('updates the distance baseline through a zoom clamp so reversing direction zooms back out', () => {
+    const { intents, moveSecond } = beginGroundPinch();
+    let zoom = 1;
+
+    moveSecond(200);
+    const outward = intents.at(-1);
+    expect(outward).toEqual({ type: 'ZoomCamera', scale: 200 / 110 });
+    if (outward?.type === 'ZoomCamera') zoom = Math.min(1.35, zoom * outward.scale);
+    expect(zoom).toBe(1.35);
+
+    moveSecond(190);
+    const reversal = intents.at(-1);
+    expect(reversal).toEqual({ type: 'ZoomCamera', scale: 0.95 });
+    if (reversal?.type === 'ZoomCamera') zoom *= reversal.scale;
+    expect(zoom).toBeCloseTo(1.2825);
+    expect(intents).toEqual([
+      { type: 'ZoomCamera', scale: 200 / 110 },
+      { type: 'ZoomCamera', scale: 0.95 },
+    ]);
+  });
+
+  it.each([
+    ['plot or plant', () => ({ kind: 'plot', plotId: 'plot-2' as PlotId })],
+    ['miss', () => null],
+  ])('rejects a pinch when the first contact began on a %s', (_label, firstPick) => {
+    const picker = vi.fn((x: number): PickResult => x === 0 ? firstPick() as PickResult : { kind: 'ground' });
+    const { down, intents, move, up } = setup(picker);
+
+    down({ pointerId: 1, clientX: 0, clientY: 0 });
+    down({ pointerId: 2, isPrimary: false, clientX: 100, clientY: 0 });
+    move({ pointerId: 2, clientX: 130, clientY: 0 });
+    up({ pointerId: 2, isPrimary: false });
+    up({ pointerId: 1 });
+
+    expect(intents).toEqual([]);
+    expect(picker).toHaveBeenCalledTimes(2);
+  });
+
+});

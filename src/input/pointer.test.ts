@@ -3,10 +3,8 @@ import type { PlotId } from '../sim';
 import { createPointerInput, POINTER_TAP_MOVE_THRESHOLD_CSS_PX, type PickResult } from './pointer';
 import type { InputIntent } from './types';
 
-type PointerHandler = (event: PointerEvent) => void;
-
 function createCanvas() {
-  const listeners = new Map<string, Set<PointerHandler>>();
+  const listeners = new Map<string, Set<EventListener>>();
   const fallbackListeners = new Map<string, Set<EventListener>>();
   const documentListeners = new Map<string, Set<EventListener>>();
   const capturedPointers = new Set<number>();
@@ -23,6 +21,8 @@ function createCanvas() {
   } as unknown as Window;
   const ownerDocument = {
     defaultView,
+    visibilityState: 'visible',
+    hidden: false,
     addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
       const typedListener = listener as EventListener;
       const handlers = documentListeners.get(type) ?? new Set<EventListener>();
@@ -34,19 +34,22 @@ function createCanvas() {
     }),
   } as unknown as Document;
   const canvas = {
-    addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
-      const typedListener = listener as PointerHandler;
-      const handlers = listeners.get(type) ?? new Set<PointerHandler>();
+    addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject, _options?: AddEventListenerOptions | boolean) => {
+      void _options;
+      const typedListener = listener as EventListener;
+      const handlers = listeners.get(type) ?? new Set<EventListener>();
       handlers.add(typedListener);
       listeners.set(type, handlers);
     }),
-    removeEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
-      listeners.get(type)?.delete(listener as PointerHandler);
+    removeEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject, _options?: EventListenerOptions | boolean) => {
+      void _options;
+      listeners.get(type)?.delete(listener as EventListener);
     }),
     setPointerCapture: vi.fn((pointerId: number) => { capturedPointers.add(pointerId); }),
     releasePointerCapture: vi.fn((pointerId: number) => { capturedPointers.delete(pointerId); }),
     hasPointerCapture: vi.fn((pointerId: number) => capturedPointers.has(pointerId)),
     ownerDocument,
+    clientHeight: 600,
   } as unknown as HTMLCanvasElement;
 
   function dispatch(type: string, init: Partial<PointerEvent> = {}): void {
@@ -64,7 +67,7 @@ function createCanvas() {
       preventDefault: vi.fn(),
       ...init,
     } as unknown as PointerEvent;
-    listeners.get(type)?.forEach((handler) => handler(event));
+    listeners.get(type)?.forEach((handler) => handler(event as unknown as Event));
   }
 
   function dispatchWindow(type: string, init: Partial<PointerEvent> = {}): void {
@@ -82,7 +85,27 @@ function createCanvas() {
       preventDefault: vi.fn(),
       ...init,
     } as unknown as PointerEvent;
+    // Pointerup/cancel bubbles through the owner document before reaching the
+    // window fallback listener, so run document capture handlers first.
+    if (type === 'pointerup' || type === 'pointercancel') dispatchDocument(type, init);
     fallbackListeners.get(type)?.forEach((handler) => handler(event));
+  }
+
+  function dispatchWheel(init: Partial<WheelEvent> = {}): WheelEvent {
+    const event = {
+      type: 'wheel',
+      deltaX: 0,
+      deltaY: 100,
+      deltaMode: 0,
+      ctrlKey: false,
+      target: canvas,
+      currentTarget: canvas,
+      cancelable: true,
+      preventDefault: vi.fn(),
+      ...init,
+    } as unknown as WheelEvent;
+    listeners.get('wheel')?.forEach((handler) => handler(event));
+    return event;
   }
 
   function dispatchDocument(type: string, init: Partial<PointerEvent> = {}): void {
@@ -103,11 +126,11 @@ function createCanvas() {
     documentListeners.get(type)?.forEach((handler) => handler(event));
   }
 
-  return { canvas, defaultView, dispatch, dispatchDocument, dispatchWindow, documentListeners, fallbackListeners, listeners, ownerDocument };
+  return { canvas, defaultView, dispatch, dispatchDocument, dispatchWindow, dispatchWheel, documentListeners, fallbackListeners, listeners, ownerDocument };
 }
 
 function setup(pickResult: (x: number, y: number) => PickResult = () => ({ kind: 'plot', plotId: 'plot-2' as PlotId })) {
-  const { canvas, defaultView, dispatch, dispatchDocument, dispatchWindow, documentListeners, fallbackListeners, listeners, ownerDocument } = createCanvas();
+  const { canvas, defaultView, dispatch, dispatchDocument, dispatchWindow, dispatchWheel, documentListeners, fallbackListeners, listeners, ownerDocument } = createCanvas();
   const intents: InputIntent[] = [];
   const pick = vi.fn(pickResult);
   const onIntent = vi.fn((intent: InputIntent) => intents.push(intent));
@@ -116,7 +139,7 @@ function setup(pickResult: (x: number, y: number) => PickResult = () => ({ kind:
   const move = (overrides: Partial<PointerEvent> = {}) => dispatch('pointermove', overrides);
   const up = (overrides: Partial<PointerEvent> = {}) => dispatch('pointerup', overrides);
 
-  return { canvas, defaultView, dispatch, dispatchDocument, dispatchWindow, documentListeners, down, fallbackListeners, intents, input, listeners, move, onIntent, ownerDocument, pick, up };
+  return { canvas, defaultView, dispatch, dispatchDocument, dispatchWindow, dispatchWheel, documentListeners, down, fallbackListeners, intents, input, listeners, move, onIntent, ownerDocument, pick, up };
 }
 
 describe('plot pointer input', () => {
@@ -385,8 +408,10 @@ describe('plot pointer input', () => {
 
     input.dispose();
     expect([...documentListeners.values()].every((group) => group.size === 0)).toBe(true);
-    expect(ownerDocument.removeEventListener).toHaveBeenCalledTimes(1);
+    expect(ownerDocument.removeEventListener).toHaveBeenCalledTimes(3);
     expect(ownerDocument.removeEventListener).toHaveBeenCalledWith('pointerdown', expect.any(Function), true);
+    expect(ownerDocument.removeEventListener).toHaveBeenCalledWith('pointerup', expect.any(Function), true);
+    expect(ownerDocument.removeEventListener).toHaveBeenCalledWith('pointercancel', expect.any(Function), true);
   });
 
   it('cancels a pending tap when the owner calls cancelGesture', () => {
@@ -820,5 +845,206 @@ describe('owned two-touch pinch input', () => {
     move({ pointerId: 2, clientX: 120, clientY: 0 });
 
     expect(intents).toEqual([{ type: 'ZoomCamera', scale: 120 / 110 }]);
+  });
+});
+
+describe('canvas wheel zoom input', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it.each([
+    ['pixel', 0, 100, Math.exp(-0.1)],
+    ['line', 1, 2, Math.exp(-0.032)],
+    ['page', 2, 1, Math.exp(-0.6)],
+  ])('normalizes %s wheel deltas to CSS pixels', (_unit, deltaMode, deltaY, scale) => {
+    const { dispatchWheel, intents } = setup();
+
+    const event = dispatchWheel({ deltaMode, deltaY });
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: expect.closeTo(scale) }]);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps Ctrl-modified trackpad wheel on the same zoom path', () => {
+    const { dispatchWheel, intents } = setup();
+
+    const event = dispatchWheel({ deltaY: -50, ctrlKey: true });
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: expect.closeTo(Math.exp(0.05)) }]);
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    [5000, Math.exp(-1)],
+    [-5000, Math.exp(1)],
+  ])('clamps a normalized wheel delta of %i CSS pixels before scaling', (deltaY, scale) => {
+    const { dispatchWheel, intents } = setup();
+
+    dispatchWheel({ deltaY });
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: expect.closeTo(scale) }]);
+  });
+
+  it('accepts wheel over plot coordinates without picking the garden', () => {
+    const { dispatchWheel, intents, pick } = setup(() => ({ kind: 'plot', plotId: 'plot-2' as PlotId }));
+
+    const event = dispatchWheel({ clientX: 20, clientY: 30 });
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: expect.closeTo(Math.exp(-0.1)) }]);
+    expect(pick).not.toHaveBeenCalled();
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['zero', { deltaY: 0 }],
+    ['non-finite', { deltaY: Number.NaN }],
+    ['positive infinity', { deltaY: Number.POSITIVE_INFINITY }],
+    ['negative infinity', { deltaY: Number.NEGATIVE_INFINITY }],
+  ] as const)('ignores %s wheel input without preventing the browser default', (_label, init) => {
+    const { dispatchWheel, intents } = setup();
+
+    const event = dispatchWheel(init);
+
+    expect(intents).toEqual([]);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('leaves UI-origin wheel events untouched', () => {
+    const { canvas, dispatchWheel, intents, pick } = setup();
+
+    const event = dispatchWheel({ target: {} as EventTarget });
+
+    expect(intents).toEqual([]);
+    expect(pick).not.toHaveBeenCalled();
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(canvas.addEventListener).toHaveBeenCalledWith('wheel', expect.any(Function), { passive: false });
+  });
+
+  it('ignores wheel while a pointer is active and preserves that ground pan sequence', () => {
+    const { dispatchWheel, down, intents, move } = setup(() => ({ kind: 'ground' }));
+
+    down({ pointerId: 2, clientX: 20, clientY: 30 });
+    const event = dispatchWheel();
+    move({ pointerId: 2, clientX: 31, clientY: 30 });
+
+    expect(intents).toEqual([{ type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 }]);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('ignores canvas wheel while a UI-origin pointer is active, then accepts it after pointerup', () => {
+    const { dispatchDocument, dispatchWheel, dispatchWindow, intents } = setup();
+
+    dispatchDocument('pointerdown', { pointerId: 20, target: {} as EventTarget });
+    const blockedEvent = dispatchWheel();
+    expect(intents).toEqual([]);
+    expect(blockedEvent.preventDefault).not.toHaveBeenCalled();
+
+    dispatchWindow('pointerup', { pointerId: 20 });
+    const acceptedEvent = dispatchWheel();
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: expect.closeTo(Math.exp(-0.1)) }]);
+    expect(acceptedEvent.preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['right', 2, 2],
+    ['middle', 1, 4],
+  ] as const)(
+    'blocks wheel and gesture input while the %s mouse button is held, then recovers after pointerup',
+    (_buttonName, button, buttons) => {
+      const { dispatchWindow, dispatchWheel, down, intents, move, up } = setup(() => ({ kind: 'ground' }));
+
+      down({ pointerId: 31, pointerType: 'mouse', button, buttons, clientX: 20, clientY: 30 });
+      const blockedWheel = dispatchWheel();
+      dispatchWindow('pointermove', {
+        pointerId: 31,
+        pointerType: 'mouse',
+        clientX: 40,
+        clientY: 30,
+      });
+      dispatchWindow('pointerup', {
+        pointerId: 31,
+        pointerType: 'mouse',
+        button,
+        buttons: 0,
+        target: {} as EventTarget,
+      });
+
+      expect(blockedWheel.preventDefault).not.toHaveBeenCalled();
+      expect(intents).toEqual([]);
+
+      down({ pointerId: 32, pointerType: 'mouse', button: 0, buttons: 1, clientX: 20, clientY: 30 });
+      move({ pointerId: 32, pointerType: 'mouse', clientX: 31, clientY: 30 });
+      up({ pointerId: 32, pointerType: 'mouse', button: 0, buttons: 0, clientX: 31, clientY: 30 });
+      const acceptedWheel = dispatchWheel();
+
+      expect(intents).toEqual([
+        { type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 },
+        { type: 'ZoomCamera', scale: expect.closeTo(Math.exp(-0.1)) },
+      ]);
+      expect(acceptedWheel.preventDefault).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it.each([
+    ['right', 2, 2],
+    ['middle', 1, 4],
+  ] as const)(
+    'clears blocked %s mouse-button ownership after pointercancel',
+    (_buttonName, button, buttons) => {
+      const { dispatchWindow, dispatchWheel, down, intents, move, up } = setup(() => ({ kind: 'ground' }));
+
+      down({ pointerId: 41, pointerType: 'mouse', button, buttons, clientX: 20, clientY: 30 });
+      const blockedWheel = dispatchWheel();
+      dispatchWindow('pointermove', {
+        pointerId: 41,
+        pointerType: 'mouse',
+        clientX: 40,
+        clientY: 30,
+      });
+      dispatchWindow('pointercancel', {
+        pointerId: 41,
+        pointerType: 'mouse',
+        button,
+        buttons,
+        target: {} as EventTarget,
+      });
+
+      expect(blockedWheel.preventDefault).not.toHaveBeenCalled();
+      expect(intents).toEqual([]);
+
+      down({ pointerId: 42, pointerType: 'mouse', button: 0, buttons: 1, clientX: 20, clientY: 30 });
+      move({ pointerId: 42, pointerType: 'mouse', clientX: 31, clientY: 30 });
+      up({ pointerId: 42, pointerType: 'mouse', button: 0, buttons: 0, clientX: 31, clientY: 30 });
+      const acceptedWheel = dispatchWheel();
+
+      expect(intents).toEqual([
+        { type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 },
+        { type: 'ZoomCamera', scale: expect.closeTo(Math.exp(-0.1)) },
+      ]);
+      expect(acceptedWheel.preventDefault).toHaveBeenCalledTimes(1);
+    },
+  );
+
+  it('ignores wheel while the owner document is hidden', () => {
+    const { dispatchWheel, intents, ownerDocument } = setup();
+    Object.defineProperty(ownerDocument, 'hidden', { configurable: true, value: true });
+
+    const event = dispatchWheel();
+
+    expect(intents).toEqual([]);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('removes the non-passive wheel listener on disposal and ignores later wheel events', () => {
+    const { canvas, dispatchWheel, input, intents, listeners } = setup();
+    const wheelListener = listeners.get('wheel')?.values().next().value;
+    expect(wheelListener).toBeDefined();
+    input.dispose();
+
+    const event = dispatchWheel();
+
+    expect(canvas.removeEventListener).toHaveBeenCalledWith('wheel', wheelListener);
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(intents).toEqual([]);
+    expect(listeners.get('wheel')?.size).toBe(0);
   });
 });

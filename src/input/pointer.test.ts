@@ -638,4 +638,187 @@ describe('owned two-touch pinch input', () => {
     expect(picker).toHaveBeenCalledTimes(2);
   });
 
+  it('rejects a pair when the second contact starts on a UI sibling and suppresses the remaining finger', () => {
+    const { dispatchDocument, dispatchWindow, down, intents, move, up } = setup(() => ({ kind: 'ground' }));
+
+    down({ pointerId: 1, clientX: 0, clientY: 0 });
+    dispatchDocument('pointerdown', { pointerId: 2, pointerType: 'touch', target: {} as EventTarget, clientX: 100, clientY: 0 });
+    move({ pointerId: 1, clientX: 50, clientY: 0 });
+    up({ pointerId: 1 });
+    dispatchWindow('pointerup', { pointerId: 2, target: {} as EventTarget });
+
+    expect(intents).toEqual([]);
+
+    down({ pointerId: 3, clientX: 0, clientY: 0 });
+    move({ pointerId: 3, clientX: 11, clientY: 0 });
+    up({ pointerId: 3, clientX: 11, clientY: 0 });
+    expect(intents).toEqual([{ type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 }]);
+  });
+
+  it('rejects a third contact and suppresses zoom, pan, and activation until every contact ends', () => {
+    const { down, intents, move, up } = beginGroundPinch();
+    down({ pointerId: 3, pointerType: 'touch', isPrimary: false, clientX: 50, clientY: 80 });
+    move({ pointerId: 2, clientX: 140, clientY: 0 });
+    move({ pointerId: 1, clientX: 30, clientY: 0 });
+    up({ pointerId: 1 });
+    up({ pointerId: 2, isPrimary: false });
+    up({ pointerId: 3, isPrimary: false });
+
+    expect(intents).toEqual([]);
+  });
+
+  it('rejects a pair whose contacts use different pointer devices', () => {
+    const { down, intents, move, up } = setup(() => ({ kind: 'ground' }));
+
+    down({ pointerId: 1, pointerType: 'touch', clientX: 0, clientY: 0 });
+    down({ pointerId: 2, pointerType: 'pen', isPrimary: false, clientX: 100, clientY: 0 });
+    move({ pointerId: 2, clientX: 130, clientY: 0 });
+    up({ pointerId: 2, pointerType: 'pen', isPrimary: false });
+    up({ pointerId: 1 });
+
+    expect(intents).toEqual([]);
+  });
+
+  it.each([
+    ['first', 1],
+    ['second', 2],
+  ])('does not resume the remaining finger as a pan after the %s pointer lifts', (_label, liftedId) => {
+    const { down, intents, move, up } = beginGroundPinch();
+    move({ pointerId: 2, clientX: 130, clientY: 0 });
+    up({ pointerId: liftedId, isPrimary: liftedId === 1, clientX: liftedId === 1 ? 0 : 130, clientY: 0 });
+    const remainingId = liftedId === 1 ? 2 : 1;
+    move({ pointerId: remainingId, clientX: 0, clientY: 50 });
+    up({ pointerId: remainingId, isPrimary: remainingId === 1, clientX: remainingId === 1 ? 0 : 130, clientY: 0 });
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: 130 / 110 }]);
+
+    down({ pointerId: 3, pointerType: 'touch', isPrimary: true, clientX: 0, clientY: 0 });
+    move({ pointerId: 3, clientX: 11, clientY: 0 });
+    up({ pointerId: 3, clientX: 11, clientY: 0 });
+    expect(intents).toEqual([
+      { type: 'ZoomCamera', scale: 130 / 110 },
+      { type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 },
+    ]);
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'] as const)(
+    'cancels a pinch after %s, suppresses remaining contacts, then accepts a fresh gesture',
+    (terminalEvent) => {
+      const { dispatch, dispatchWindow, down, fallbackListeners, intents, move, up } = beginGroundPinch();
+      move({ pointerId: 2, clientX: 130, clientY: 0 });
+      dispatch(terminalEvent, { pointerId: 2 });
+      move({ pointerId: 1, clientX: 30, clientY: 0 });
+      dispatchWindow('pointerup', { pointerId: 1, target: {} as EventTarget });
+      if (terminalEvent === 'lostpointercapture') {
+        dispatchWindow('pointerup', { pointerId: 2, target: {} as EventTarget, isPrimary: false });
+      }
+
+      expect(intents).toEqual([{ type: 'ZoomCamera', scale: 130 / 110 }]);
+      expect([...fallbackListeners.values()].every((group) => group.size === 0)).toBe(true);
+
+      down({ pointerId: 3, clientX: 0, clientY: 0 });
+      move({ pointerId: 3, clientX: 11, clientY: 0 });
+      up({ pointerId: 3, clientX: 11, clientY: 0 });
+      expect(intents.at(-1)).toEqual({ type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 });
+    },
+  );
+
+  it.each(['lifecycle cancellation', 'disposal'] as const)(
+    'suppresses remaining-contact activity after %s',
+    (ending) => {
+      const { dispatchWindow, down, fallbackListeners, input, intents, move, up } = beginGroundPinch();
+      move({ pointerId: 2, clientX: 130, clientY: 0 });
+      if (ending === 'lifecycle cancellation') input.cancelGesture();
+      else input.dispose();
+      if (ending === 'lifecycle cancellation') {
+        dispatchWindow('pointermove', { pointerId: 1, clientX: 30, clientY: 0, target: {} as EventTarget });
+        dispatchWindow('pointerup', { pointerId: 1, target: {} as EventTarget });
+        dispatchWindow('pointerup', { pointerId: 2, isPrimary: false, target: {} as EventTarget });
+      } else {
+        move({ pointerId: 1, clientX: 30, clientY: 0 });
+        up({ pointerId: 1 });
+        up({ pointerId: 2, isPrimary: false });
+      }
+
+      expect(intents).toEqual([{ type: 'ZoomCamera', scale: 130 / 110 }]);
+      expect([...fallbackListeners.values()].every((group) => group.size === 0)).toBe(true);
+      if (ending === 'lifecycle cancellation') {
+        down({ pointerId: 3, clientX: 0, clientY: 0 });
+        move({ pointerId: 3, clientX: 11, clientY: 0 });
+        up({ pointerId: 3, clientX: 11, clientY: 0 });
+        expect(intents.at(-1)).toEqual({ type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 });
+      }
+    },
+  );
+
+  it('keeps cancelled pinch contacts owned through lost capture until fallback pointerup ends each contact', () => {
+    const { canvas, dispatch, dispatchWindow, down, fallbackListeners, input, intents, move, up } = setup(() => ({ kind: 'ground' }));
+    const releaseCapture = vi.mocked(canvas.releasePointerCapture);
+    const releaseCaptureNormally = releaseCapture.getMockImplementation();
+    releaseCapture.mockImplementation((pointerId) => {
+      releaseCaptureNormally?.(pointerId);
+      dispatch('lostpointercapture', { pointerId });
+    });
+    down({ pointerId: 1, pointerType: 'touch', isPrimary: true, clientX: 0, clientY: 0 });
+    down({ pointerId: 2, pointerType: 'touch', isPrimary: false, clientX: 100, clientY: 0 });
+
+    input.cancelGesture();
+    expect([...fallbackListeners.values()].reduce((count, group) => count + group.size, 0)).toBe(3);
+
+    // A new contact cannot take ownership while either cancelled pinch finger remains down.
+    down({ pointerId: 3, pointerType: 'touch', isPrimary: false, clientX: 0, clientY: 0 });
+    move({ pointerId: 3, clientX: 20, clientY: 0 });
+    dispatchWindow('pointerup', { pointerId: 3, target: {} as EventTarget, clientX: 20, clientY: 0 });
+    dispatchWindow('pointerup', { pointerId: 1, target: {} as EventTarget });
+    expect([...fallbackListeners.values()].reduce((count, group) => count + group.size, 0)).toBe(3);
+
+    // Ending one original contact still leaves the sequence blocked for the other.
+    down({ pointerId: 4, pointerType: 'touch', isPrimary: false, clientX: 0, clientY: 0 });
+    move({ pointerId: 4, clientX: 20, clientY: 0 });
+    dispatchWindow('pointerup', { pointerId: 4, target: {} as EventTarget, clientX: 20, clientY: 0 });
+    dispatchWindow('pointerup', { pointerId: 2, isPrimary: false, target: {} as EventTarget });
+    expect([...fallbackListeners.values()].every((group) => group.size === 0)).toBe(true);
+    expect(intents).toEqual([]);
+
+    down({ pointerId: 5, pointerType: 'touch', isPrimary: true, clientX: 0, clientY: 0 });
+    move({ pointerId: 5, clientX: 11, clientY: 0 });
+    up({ pointerId: 5, clientX: 11, clientY: 0 });
+    expect(intents).toEqual([{ type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 }]);
+  });
+
+  it('cleans up failed-capture fallback listeners and accepts a fresh gesture after all contacts release', () => {
+    const { canvas, dispatchWindow, down, fallbackListeners, intents, move, up } = setup(() => ({ kind: 'ground' }));
+    vi.mocked(canvas.setPointerCapture).mockImplementation(() => { throw new Error('capture unavailable'); });
+
+    down({ pointerId: 1, clientX: 0, clientY: 0 });
+    down({ pointerId: 2, isPrimary: false, clientX: 100, clientY: 0 });
+    move({ pointerId: 2, clientX: 120, clientY: 0 });
+    dispatchWindow('pointerup', { pointerId: 2, isPrimary: false, clientX: 120, clientY: 0 });
+    dispatchWindow('pointerup', { pointerId: 1, clientX: 0, clientY: 0 });
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: 120 / 110 }]);
+    expect([...fallbackListeners.values()].every((group) => group.size === 0)).toBe(true);
+
+    down({ pointerId: 3, clientX: 0, clientY: 0 });
+    move({ pointerId: 3, clientX: 11, clientY: 0 });
+    up({ pointerId: 3, clientX: 11, clientY: 0 });
+    expect(intents.at(-1)).toEqual({ type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 });
+  });
+
+  it('lets the canvas listener claim a second contact after document capture sees its canvas target', () => {
+    const { canvas, dispatchDocument, down, intents, move } = setup(() => ({ kind: 'ground' }));
+    down({ pointerId: 1, clientX: 0, clientY: 0 });
+    dispatchDocument('pointerdown', {
+      pointerId: 2,
+      pointerType: 'touch',
+      isPrimary: false,
+      target: canvas,
+      clientX: 100,
+      clientY: 0,
+    });
+    down({ pointerId: 2, pointerType: 'touch', isPrimary: false, clientX: 100, clientY: 0 });
+    move({ pointerId: 2, clientX: 120, clientY: 0 });
+
+    expect(intents).toEqual([{ type: 'ZoomCamera', scale: 120 / 110 }]);
+  });
 });

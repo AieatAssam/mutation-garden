@@ -5,6 +5,7 @@ const MIN_CAMERA_ZOOM = 1;
 const MAX_CAMERA_ZOOM = 1.35;
 const PLOT_TARGET_HALF_SIZE = 24;
 const PLOT_TARGET_MARGIN = 8;
+const PORTRAIT_FRAMING_OFFSET = -2;
 const PLOT_TARGET_CENTERS = [
   [-1.05, 0.65, 2], [1.05, 0.65, 2],
   [-1.05, 0.65, 0], [1.05, 0.65, 0],
@@ -127,8 +128,9 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   if (offsetLength > MAX_PAN_DISTANCE) state.offset.multiplyScalar(MAX_PAN_DISTANCE / offsetLength);
   camera.left = -viewHeight * aspect * 0.5;
   camera.right = viewHeight * aspect * 0.5;
-  camera.top = viewHeight * 0.5;
-  camera.bottom = -viewHeight * 0.5;
+  const verticalCenter = portrait ? PORTRAIT_FRAMING_OFFSET : 0;
+  camera.top = viewHeight * 0.5 + verticalCenter;
+  camera.bottom = -viewHeight * 0.5 + verticalCenter;
   camera.updateProjectionMatrix();
   applyPose(camera, state);
   reconcileZoom(camera, state);

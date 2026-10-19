@@ -202,15 +202,19 @@ describe('garden picker', () => {
     picker.dispose();
   });
 
-  it.each([
-    [390, 844, 72, 479],
-    [1280, 800, 563, 327],
-  ] as const)('ignores the transparent ripe Twistroot halo outside the plot target at %ix%i', (width, height, x, y) => {
-    const { picker, garden } = setup(width, height);
-    addRipeTwistroot(garden);
-    expect(picker.pick(x, y)).toEqual({ kind: 'ground' });
-    picker.dispose();
-  });
+  it.each([[390, 844], [1280, 800]] as const)(
+    'ignores the transparent ripe Twistroot halo outside the plot target at %ix%i', (width, height) => {
+      const { picker, garden, screen, anchorScreen } = setup(width, height);
+      addRipeTwistroot(garden);
+      const halo = garden.plots[0]!.getObjectByName('ripe-halo');
+      expect(halo).toBeDefined();
+      const [x, y] = screen(halo!.localToWorld(new Vector3(0.45, 0.45, 0)));
+      const [anchorX, anchorY] = anchorScreen(0);
+      expect(Math.max(Math.abs(x - anchorX), Math.abs(y - anchorY))).toBeGreaterThan(24);
+      expect(picker.pick(x, y)).toEqual({ kind: 'ground' });
+      picker.dispose();
+    },
+  );
 
   it('rejects nonfinite, outside and empty-rect coordinates', () => {
     const { picker, rect } = setup();

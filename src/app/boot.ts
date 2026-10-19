@@ -38,7 +38,6 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   document.body.append(uiRoot);
   const gardenUI = createGardenUI(uiRoot, {
     species: SPECIES
-      .filter(({ id }) => id === 'sunny-sprout' || id === 'bubble-berry')
       .map(({ id, name }) => ({ id, name })),
     selectedId: selectedSpeciesId,
     coins,

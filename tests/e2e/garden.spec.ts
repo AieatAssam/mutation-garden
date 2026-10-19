@@ -51,7 +51,8 @@ test('production garden renders cleanly and picker covers plot targets across si
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
   const desktop = testInfo.project.name === 'desktop';
-  await page.setViewportSize(desktop ? { width: 1280, height: 800 } : viewports[0]!);
+  const projectViewport = desktop ? { width: 1280, height: 800 } : { width: 390, height: 844 };
+  await page.setViewportSize(projectViewport);
   await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/garden-render.html');
   await expect(page.locator('body')).toHaveAttribute('data-render', 'complete');
   await expect(page.locator('#stage')).toBeVisible();
@@ -100,14 +101,9 @@ test('production garden renders cleanly and picker covers plot targets across si
   const lastCenter = (await inspect(page)).plots[0]!;
   await page.evaluate(() => { window.gardenProbe.dispose(); window.gardenProbe.dispose(); window.gardenProbe.resize(); });
   expect(await page.evaluate(({ x, y }) => window.gardenProbe.pick(x, y), lastCenter)).toBeNull();
-  expect(errors).toEqual([]);
-});
 
-test('keeps the island above the Seeds label with UI space reserved', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
-  const viewport = testInfo.project.name === 'desktop' ? { width: 1280, height: 800 } : { width: 390, height: 844 };
-  await page.setViewportSize(viewport);
-  await page.goto('./');
+  await page.setViewportSize(projectViewport);
+  await page.goto('http://localhost:4173/mutation-garden/');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
   const canvas = page.locator('#stage');
   const seedLabel = page.locator('nav[aria-label="Seeds"] .garden-ui__tray-label');
@@ -116,8 +112,9 @@ test('keeps the island above the Seeds label with UI space reserved', async ({ p
   const labelRect = await seedLabel.boundingBox();
   expect(canvasRect).not.toBeNull();
   expect(labelRect).not.toBeNull();
-
   const islandBottomNdc = projectedGardenBottomNdc(canvasRect!.width, canvasRect!.height);
   const islandBottomY = canvasRect!.y + (1 - islandBottomNdc) * canvasRect!.height / 2;
   expect(islandBottomY).toBeLessThan(labelRect!.y - 16);
+
+  expect(errors).toEqual([]);
 });

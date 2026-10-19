@@ -1,0 +1,152 @@
+import { expect, test, type Page } from '@playwright/test';
+import { createHash } from 'node:crypto';
+import { Vector3 } from 'three';
+import { PLOT_ACTIVATION_GUARD_MS } from '../../src/app/commands';
+import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
+
+type Point = { x: number; y: number };
+
+function plotCenter(plotId: number, rect: { x: number; y: number; width: number; height: number }): Point {
+  const camera = createGardenCamera();
+  resizeGardenCamera(camera, rect.width, rect.height);
+  camera.updateMatrixWorld(true);
+  const world = new Vector3([-1.05, 1.05][plotId % 2]!, 0.65, [2, 0, -2][Math.floor(plotId / 2)]!);
+  const projected = world.project(camera);
+  return {
+    x: rect.x + (projected.x + 1) * rect.width / 2,
+    y: rect.y + (1 - projected.y) * rect.height / 2,
+  };
+}
+
+async function plotSignature(page: Page, point: Point): Promise<string> {
+  const rect = await page.locator('#stage').boundingBox();
+  expect(rect).not.toBeNull();
+  const width = Math.min(40, Math.floor(rect!.width));
+  const height = Math.min(40, Math.floor(rect!.height));
+  const clip = {
+    x: Math.floor(Math.max(rect!.x, Math.min(point.x - width / 2, rect!.x + rect!.width - width))),
+    y: Math.floor(Math.max(rect!.y, Math.min(point.y - height / 2, rect!.y + rect!.height - height))),
+    width,
+    height,
+  };
+  const image = await page.screenshot({ clip, animations: 'disabled', scale: 'css' });
+  return createHash('sha256').update(image).digest('hex');
+}
+
+async function swipe(page: Page, points: Point[], mobile: boolean): Promise<void> {
+  const [start, ...path] = points;
+  if (!start) throw new Error('A swipe needs a starting point');
+  if (mobile) {
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart', touchPoints: [{ id: 1, x: start.x, y: start.y }],
+    });
+    for (const point of path) {
+      await session.send('Input.dispatchTouchEvent', {
+        type: 'touchMove', touchPoints: [{ id: 1, x: point.x, y: point.y }],
+      });
+    }
+    await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await session.detach();
+  } else {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    for (const point of path) await page.mouse.move(point.x, point.y, { steps: 4 });
+    await page.mouse.up();
+  }
+}
+
+async function cancelSwipe(page: Page, start: Point, end: Point, mobile: boolean): Promise<void> {
+  if (mobile) {
+    const session = await page.context().newCDPSession(page);
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchStart', touchPoints: [{ id: 1, x: start.x, y: start.y }],
+    });
+    await session.send('Input.dispatchTouchEvent', {
+      type: 'touchMove', touchPoints: [{ id: 1, x: end.x, y: end.y }],
+    });
+    await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
+    await session.detach();
+  } else {
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(-2, -2, { steps: 4 });
+    await page.mouse.up();
+  }
+}
+
+test('plot swipe harvests each ripe crossing once and cancellation preserves ownership', async ({ page }, info) => {
+  test.setTimeout(120_000);
+  const mobile = info.project.name === 'mobile-portrait';
+  const viewport = mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 };
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await page.setViewportSize(viewport);
+  await page.goto('./');
+  await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  const canvas = page.locator('#stage');
+  await expect(canvas).toBeVisible();
+  const rect = await canvas.boundingBox();
+  expect(rect).not.toBeNull();
+
+  const plots = [0, 1, 2, 4].map((id) => plotCenter(id, rect!));
+  const untouchedPlot = plotCenter(3, rect!);
+  const coins = page.getByRole('status', { name: 'Coins' });
+  const seeds = page.getByRole('navigation', { name: 'Seeds' });
+  const sunny = seeds.getByRole('button', { name: 'Sunny Sprout' });
+  await expect(coins).toHaveText('12');
+  for (const id of [0, 2, 4]) {
+    if (mobile) await sunny.tap();
+    else await sunny.click();
+    await expect(sunny).toHaveAttribute('aria-pressed', 'true');
+    if (mobile) await page.touchscreen.tap(plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.x, plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.y);
+    else await page.mouse.click(plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.x, plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.y);
+  }
+  await expect(coins).toHaveText('9');
+  const plantedAt = await page.evaluate(() => Date.now());
+  await expect.poll(() => page.evaluate(() => Date.now()), {
+    intervals: [100, 250, 500], timeout: 15_000,
+  }).toBeGreaterThanOrEqual(plantedAt + 8_250);
+
+  // A canceled plot-owned path across ripe crops must neither harvest nor pan.
+  const beforeCancellation = await plotSignature(page, untouchedPlot);
+  await cancelSwipe(page, plots[0]!, plots[3]!, mobile);
+  await expect(coins).toHaveText('9');
+  expect(await plotSignature(page, untouchedPlot)).toBe(beforeCancellation);
+  const bubble = seeds.getByRole('button', { name: 'Bubble Berry' });
+  if (mobile) await bubble.tap();
+  else await bubble.click();
+  await expect(bubble).toHaveAttribute('aria-pressed', 'true');
+  if (mobile) await page.touchscreen.tap(plots[1]!.x, plots[1]!.y);
+  else await page.mouse.click(plots[1]!.x, plots[1]!.y);
+  await expect(coins).toHaveText('6');
+  const beforeHarvest = await plotSignature(page, untouchedPlot);
+
+  // A fresh swipe crosses three ripe plants, reverses over one, and commits one batch.
+  await swipe(page, [plots[0]!, plots[2]!, plots[3]!, plots[2]!], mobile);
+  await expect(coins).toHaveText('12');
+  await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
+  expect(await plotSignature(page, untouchedPlot)).toBe(beforeHarvest);
+  const harvestAt = await page.evaluate(() => Date.now());
+
+  // Repeating the same harvest cannot pay again or turn its release into planting.
+  await swipe(page, [plots[0]!, plots[2]!, plots[3]!], mobile);
+  await expect(coins).toHaveText('12');
+  await expect.poll(() => page.evaluate(() => Date.now()), {
+    intervals: [10, 25, 50], timeout: 5_000,
+  }).toBeGreaterThanOrEqual(harvestAt + PLOT_ACTIVATION_GUARD_MS);
+
+  await swipe(page, [plots[0]!, plots[2]!, plots[3]!], mobile);
+  const simTickAt = await page.evaluate(() => performance.now());
+  await expect.poll(() => page.evaluate(() => performance.now()), {
+    intervals: [10, 25, 50], timeout: 5_000,
+  }).toBeGreaterThan(simTickAt + 150);
+  await expect(coins).toHaveText('12');
+
+  if (mobile) await page.touchscreen.tap(plots[0]!.x, plots[0]!.y);
+  else await page.mouse.click(plots[0]!.x, plots[0]!.y);
+  await expect(coins).toHaveText('9');
+  expect(errors).toEqual([]);
+});

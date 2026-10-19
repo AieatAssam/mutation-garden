@@ -130,9 +130,11 @@ test('selected seed depresses while pressed and returns to its raised state on r
 
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
   const twistroot = seeds.getByRole('button', { name: 'Twistroot' });
-  if (testInfo.project.name === 'mobile-portrait') await twistroot.tap();
-  else await twistroot.click();
+  await twistroot.focus();
+  await twistroot.press('Enter');
   await expect(twistroot).toHaveAttribute('aria-pressed', 'true');
+  await page.mouse.move(0, 0);
+  await expect(twistroot).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, -3)');
 
   const bounds = await twistroot.boundingBox();
   expect(bounds).not.toBeNull();

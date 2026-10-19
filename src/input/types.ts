@@ -4,6 +4,9 @@ export type InputIntent = {
   readonly type: 'ActivatePlot';
   readonly plotId: PlotId;
 } | {
+  readonly type: 'HarvestPlots';
+  readonly plotIds: readonly PlotId[];
+} | {
   readonly type: 'PanCamera';
   readonly deltaXCss: number;
   readonly deltaYCss: number;

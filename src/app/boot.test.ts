@@ -99,6 +99,55 @@ describe('boot animation wiring', () => {
     expect(pointerInput.dispose).toHaveBeenCalledTimes(1);
   });
 
+  it('queues one ordered swipe batch and guards every batch target against immediate replanting', () => {
+    createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI });
+    let onRender: ((frame: { previous: GardenSnapshot; current: GardenSnapshot; alpha: number }) => void) | undefined;
+    const enqueue = vi.fn();
+    vi.spyOn(loopModule, 'createFixedStepLoop').mockImplementation((options) => {
+      onRender = options.onRender;
+      return { enqueue, catchUp: vi.fn(), stop: vi.fn(), start: vi.fn() };
+    });
+    const pointerInput = { cancelGesture: vi.fn(), dispose: vi.fn() };
+    createPointerInput.mockReturnValue(pointerInput);
+    let nowMs = 1_000;
+    const now = vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
+    const windowStub = {
+      innerWidth: 390, innerHeight: 844, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      matchMedia: vi.fn(() => ({ matches: false })),
+    };
+    const uiRoot = { dataset: {}, style: { setProperty: vi.fn() }, remove: vi.fn() };
+    const documentStub = {
+      body: { style: {}, dataset: {}, append: vi.fn() }, hidden: false,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), createElement: vi.fn(() => uiRoot),
+    };
+    vi.stubGlobal('window', windowStub as unknown as Window);
+    vi.stubGlobal('document', documentStub as unknown as Document);
+
+    const cleanup = boot({} as HTMLCanvasElement);
+    const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
+    const planted = getSnapshot(step(createInitialState(1, 1_000), [
+      { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-2', seedId: 'sunny-sprout' },
+    ], 1_000).state);
+    onRender!({ previous: planted, current: planted, alpha: 0 });
+
+    nowMs = 1_001;
+    onIntent({ type: 'HarvestPlots', plotIds: ['plot-2', 'plot-0', 'plot-2', 'unknown-plot' as import('../sim').PlotId] });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).toHaveBeenCalledWith({ type: 'Harvest', plotIds: ['plot-2', 'plot-0'] });
+    expect(now).toHaveBeenCalledTimes(2); // Initial state plus one guard timestamp for the entire batch.
+
+    nowMs = 1_002;
+    const empty = getSnapshot(createInitialState(1, 1_000));
+    onRender!({ previous: planted, current: empty, alpha: 0 });
+    onIntent({ type: 'ActivatePlot', plotId: 'plot-0' });
+    onIntent({ type: 'ActivatePlot', plotId: 'plot-2' });
+    expect(enqueue).toHaveBeenCalledTimes(1);
+    expect(enqueue).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'Plant' }));
+
+    cleanup();
+  });
+
   it('forwards the first snapshot and motion preference, resizes, cancels and cleans up once', () => {
     createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI });
     vi.spyOn(Date, 'now').mockReturnValueOnce(1_000).mockReturnValueOnce(1_100).mockReturnValueOnce(1_200);

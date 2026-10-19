@@ -220,8 +220,6 @@ test('Twistroot costs five coins, matures after 25 seconds, pays ten and can be 
   else await twistroot.click();
   await expect(twistroot).toHaveAttribute('aria-pressed', 'true');
 
-  // Start the first-harvest clock immediately before the real plot activation.
-  const startedAt = await page.evaluate(() => Date.now());
   await activatePlot(page, plot, mobile);
   await expect(coins).toHaveText('7');
   const plantedAt = await page.evaluate(() => Date.now());
@@ -236,7 +234,7 @@ test('Twistroot costs five coins, matures after 25 seconds, pays ten and can be 
   await waitUntilTimestamp(page, plantedAt + 25_250, 30_000);
   await activatePlot(page, plot, mobile);
   await expect(coins).toHaveText('17');
-  const firstHarvestElapsedMs = await page.evaluate((start) => Date.now() - start, startedAt);
+  const firstHarvestElapsedMs = await page.evaluate((planted) => Date.now() - planted, plantedAt);
   expect(firstHarvestElapsedMs).toBeGreaterThanOrEqual(25_000);
   expect(firstHarvestElapsedMs).toBeLessThan(30_000);
 

@@ -15,6 +15,7 @@ test('renders Bubble Berry stages and a readable 48px silhouette', async ({ page
   const errors = pageErrors(page);
   await page.setViewportSize(sizeFor(info.project.name));
   await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/bubble-berry.html');
+  await expect(page).toHaveTitle('Bubble Berry render fixture');
   await expect(page.locator('#status')).toHaveAttribute('data-render', 'complete');
   await expect(page.locator('#status')).toHaveAttribute('data-frame', 'ready');
   await expect(page.locator('#status')).toHaveText('Ready');

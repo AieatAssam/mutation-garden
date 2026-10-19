@@ -107,6 +107,7 @@ describe('boot animation wiring', () => {
       species: [
         { id: 'sunny-sprout', name: 'Sunny Sprout' },
         { id: 'bubble-berry', name: 'Bubble Berry' },
+        { id: 'twistroot', name: 'Twistroot' },
       ],
       selectedId: 'sunny-sprout',
       coins: 12,
@@ -114,20 +115,22 @@ describe('boot animation wiring', () => {
     }));
     expect(documentStub.body.append).toHaveBeenCalledWith(uiRoot);
     const uiOptions = createGardenUI.mock.calls[0]![1] as {
-      onSelect: (id: 'sunny-sprout' | 'bubble-berry') => void;
+      onSelect: (id: 'sunny-sprout' | 'bubble-berry' | 'twistroot') => void;
     };
     uiOptions.onSelect('bubble-berry');
     expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'bubble-berry', coins: 12 });
+    uiOptions.onSelect('twistroot');
+    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'twistroot', coins: 12 });
     const resizeListener = windowStub.addEventListener.mock.calls.find(([type]) => type === 'resize')?.[1] as () => void;
     expect(resizeRenderer).toHaveBeenLastCalledWith(390, 844); windowStub.innerWidth = 800; windowStub.innerHeight = 600; resizeListener();
     expect(resizeRenderer).toHaveBeenLastCalledWith(800, 600); expect(windowStub.matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
     expect(frame).toBeTypeOf('function'); frame!(0); const nextFrame = frame!; nextFrame(216);
     const [previous, current, alpha, motion] = renderRenderer.mock.calls[0]!;
     expect(previous).toBe(current); expect((current as GardenSnapshot).plots).toHaveLength(6); expect(alpha).toBe(0); expect(motion).toBe(true);
-    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'bubble-berry', coins: 12 });
+    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'twistroot', coins: 12 });
     const [prior, latest, blend, moving] = renderRenderer.mock.calls[1]!;
     expect(prior).not.toBe(latest); expect((prior as GardenSnapshot).nowMs).toBe(1_100); expect((latest as GardenSnapshot).nowMs).toBe(1_200);
-    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'bubble-berry', coins: 12 });
+    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'twistroot', coins: 12 });
     expect(blend).toBeCloseTo(0.16); expect(moving).toBe(true);
     reduced = false; frame!(232); expect(renderRenderer.mock.calls[2]![3]).toBe(false);
     cleanup(); cleanup();

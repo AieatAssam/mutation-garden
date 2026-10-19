@@ -64,10 +64,10 @@ async function waitForSimTick(page: Page, afterMs: number): Promise<void> {
   }).toBeGreaterThan(afterMs + 150);
 }
 
-async function waitUntilTimestamp(page: Page, timestampMs: number): Promise<void> {
+async function waitUntilTimestamp(page: Page, timestampMs: number, timeout = 12_000): Promise<void> {
   await expect.poll(() => page.evaluate(() => Date.now()), {
     intervals: [100, 250, 500],
-    timeout: 12_000,
+    timeout,
   }).toBeGreaterThanOrEqual(timestampMs);
 }
 
@@ -196,5 +196,54 @@ test('Bubble Berry costs three coins, matures in fifteen seconds and pays six', 
   const firstHarvestElapsedMs = Date.now() - startedAt;
   console.info(`Bubble Berry first harvest (${testInfo.project.name}): ${firstHarvestElapsedMs}ms`);
   expect(firstHarvestElapsedMs).toBeLessThan(30_000);
+  expect(errors).toEqual([]);
+});
+
+test('Twistroot costs five coins, matures after 25 seconds, pays ten and can be replanted', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
+  const mobile = testInfo.project.name === 'mobile-portrait';
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+
+  const plot = await firstPlotCenter(page, testInfo.project.name);
+  await page.goto('./');
+  await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  const seeds = page.getByRole('navigation', { name: 'Seeds' });
+  const twistroot = seeds.getByRole('button', { name: 'Twistroot' });
+  const coins = page.getByRole('status', { name: 'Coins' });
+  await expect(coins).toHaveText('12');
+  await expect(seeds.getByRole('button', { name: 'Sunny Sprout' })).toHaveAttribute('aria-pressed', 'true');
+
+  if (mobile) await twistroot.tap();
+  else await twistroot.click();
+  await expect(twistroot).toHaveAttribute('aria-pressed', 'true');
+
+  // Start the first-harvest clock immediately before the real plot activation.
+  const startedAt = await page.evaluate(() => Date.now());
+  await activatePlot(page, plot, mobile);
+  await expect(coins).toHaveText('7');
+  const plantedAt = await page.evaluate(() => Date.now());
+
+  // An early real activation must leave the Twistroot planted and keep the exact balance.
+  const immatureTapAt = await page.evaluate(() => performance.now());
+  await activatePlot(page, plot, mobile);
+  await waitForSimTick(page, immatureTapAt);
+  await expect(coins).toHaveText('7');
+
+  // The timestamped production plant reaches its 25-second harvest threshold before the next tap.
+  await waitUntilTimestamp(page, plantedAt + 25_250, 30_000);
+  await activatePlot(page, plot, mobile);
+  await expect(coins).toHaveText('17');
+  const firstHarvestElapsedMs = await page.evaluate((start) => Date.now() - start, startedAt);
+  expect(firstHarvestElapsedMs).toBeGreaterThanOrEqual(25_000);
+  expect(firstHarvestElapsedMs).toBeLessThan(30_000);
+
+  const harvestedAt = await page.evaluate(() => Date.now());
+  await waitUntilTimestampIsRendered(page, harvestedAt + PLOT_ACTIVATION_GUARD_MS);
+  await activatePlot(page, plot, mobile);
+  await expect(coins).toHaveText('12');
+  await expect(twistroot).toHaveAttribute('aria-pressed', 'true');
   expect(errors).toEqual([]);
 });

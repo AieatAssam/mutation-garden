@@ -50,6 +50,7 @@ export function createPointerInput(
   let pinch: Pinch | null = null;
   let sequenceBlocked = false;
   const pointersDown = new Map<number, PointerTrack>();
+  const externalPointersDown = new Set<number>();
   let fallbackTarget: EventTarget | null = null;
   let disposed = false;
 
@@ -203,8 +204,24 @@ export function createPointerInput(
   function onPointerDown(event: PointerEvent): void {
     if (disposed || event.target !== canvas || pointersDown.has(event.pointerId)) return;
 
+    if (externalPointersDown.size > 0) {
+      // A UI contact owns the sequence. Remember this canvas contact so a later
+      // lift cannot turn the remaining finger into a fresh gesture.
+      trackPointer(event, 'canvas', null);
+      sequenceBlocked = true;
+      addFallbackListeners();
+      return;
+    }
+
     if (pointersDown.size === 0) {
-      if (!event.isPrimary || event.button !== 0) return;
+      if (!event.isPrimary || event.button !== 0) {
+        // A rejected button still owns this contact until it ends. That keeps
+        // wheel zoom and any later contacts from becoming gestures mid-hold.
+        trackPointer(event, 'canvas', null);
+        sequenceBlocked = true;
+        addFallbackListeners();
+        return;
+      }
       const result = pick(event.clientX, event.clientY);
       const track = trackPointer(event, 'canvas', result);
       gesture = {
@@ -251,9 +268,14 @@ export function createPointerInput(
     // Capture phase runs before the canvas target handler. Canvas contacts must
     // reach it so an eligible second touch can be paired with its first touch.
     if (disposed || event.target === canvas || pointersDown.has(event.pointerId)) return;
+    externalPointersDown.add(event.pointerId);
     trackPointer(event, 'outside', null);
     cancelActiveSequence();
     addFallbackListeners();
+  }
+
+  function onDocumentPointerEnd(event: PointerEvent): void {
+    externalPointersDown.delete(event.pointerId);
   }
 
   function onPointerMove(event: PointerEvent): void {
@@ -292,6 +314,36 @@ export function createPointerInput(
     cancelActiveSequence();
   }
 
+  function onWheel(event: WheelEvent): void {
+    if (disposed || event.target !== canvas || pointersDown.size > 0 || externalPointersDown.size > 0
+      || canvas.ownerDocument?.hidden) return;
+    if (!Number.isFinite(event.deltaY) || event.deltaY === 0) return;
+
+    let pixelsPerUnit: number;
+    switch (event.deltaMode) {
+      case 0:
+        pixelsPerUnit = 1;
+        break;
+      case 1:
+        pixelsPerUnit = 16;
+        break;
+      case 2:
+        pixelsPerUnit = canvas.clientHeight;
+        break;
+      default:
+        return;
+    }
+    if (!Number.isFinite(pixelsPerUnit) || pixelsPerUnit <= 0) return;
+
+    const boundedDelta = Math.abs(event.deltaY) > 1000 / pixelsPerUnit
+      ? Math.sign(event.deltaY) * 1000
+      : event.deltaY * pixelsPerUnit;
+    if (!Number.isFinite(boundedDelta) || boundedDelta === 0) return;
+
+    event.preventDefault();
+    onIntent({ type: 'ZoomCamera', scale: Math.exp(-0.001 * boundedDelta) });
+  }
+
   const fallbackMoveListener: EventListener = (event) => onPointerMove(event as PointerEvent);
   const fallbackUpListener: EventListener = (event) => onPointerUp(event as PointerEvent);
   const fallbackCancelListener: EventListener = (event) => onPointerCancel(event as PointerEvent);
@@ -301,7 +353,10 @@ export function createPointerInput(
   canvas.addEventListener('pointerup', onPointerUp);
   canvas.addEventListener('pointercancel', onPointerCancel);
   canvas.addEventListener('lostpointercapture', onLostPointerCapture);
+  canvas.addEventListener('wheel', onWheel, { passive: false });
   canvas.ownerDocument?.addEventListener?.('pointerdown', onDocumentPointerDown, true);
+  canvas.ownerDocument?.addEventListener?.('pointerup', onDocumentPointerEnd, true);
+  canvas.ownerDocument?.addEventListener?.('pointercancel', onDocumentPointerEnd, true);
 
   return {
     cancelGesture() {
@@ -315,12 +370,16 @@ export function createPointerInput(
       canvas.removeEventListener('pointerup', onPointerUp);
       canvas.removeEventListener('pointercancel', onPointerCancel);
       canvas.removeEventListener('lostpointercapture', onLostPointerCapture);
+      canvas.removeEventListener('wheel', onWheel);
       canvas.ownerDocument?.removeEventListener?.('pointerdown', onDocumentPointerDown, true);
+      canvas.ownerDocument?.removeEventListener?.('pointerup', onDocumentPointerEnd, true);
+      canvas.ownerDocument?.removeEventListener?.('pointercancel', onDocumentPointerEnd, true);
       const pointerIds = [...pointersDown.keys()];
       gesture = null;
       pinch = null;
       sequenceBlocked = true;
       pointersDown.clear();
+      externalPointersDown.clear();
       removeFallbackListeners();
       for (const pointerId of pointerIds) releaseCapture(pointerId);
     },

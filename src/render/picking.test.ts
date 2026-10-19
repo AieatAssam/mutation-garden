@@ -1,13 +1,17 @@
-import { BufferGeometry, Material, Mesh, Vector3 } from 'three';
+import { BufferGeometry, Box3, Material, Mesh, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { GardenSnapshot, PlantSnapshot } from '../sim';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera } from './camera';
 import { createGarden, type Garden } from './garden';
 import { createMaterialLibrary } from './materials';
 import { createGardenPicker } from './picking';
+import { createPlantReconciler, type PlantReconciler } from './plants/reconcile';
 
 const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
 const gardens: Garden[] = [];
+const plantReconcilers: PlantReconciler[] = [];
 afterEach(() => {
+  plantReconcilers.splice(0).forEach((reconciler) => reconciler.dispose());
   gardens.splice(0).forEach((garden) => garden.dispose());
   libraries.splice(0).forEach((library) => library.dispose());
 });
@@ -25,6 +29,52 @@ function setup(width = 390, height = 844) {
   };
   const anchorScreen = (index: number) => screen(garden.plots[index]!.getWorldPosition(new Vector3()));
   return { camera, garden, picker, rect, screen, anchorScreen };
+}
+
+function addSunnyPlant(garden: Garden, stage: PlantSnapshot['stage'], progress: number): PlantReconciler {
+  const library = libraries[libraries.length - 1]!;
+  const reconciler = createPlantReconciler(garden.plots, library);
+  plantReconcilers.push(reconciler);
+  updateSunnyPlant(garden, reconciler, stage, progress);
+  return reconciler;
+}
+
+function updateSunnyPlant(garden: Garden, reconciler: PlantReconciler, stage: PlantSnapshot['stage'], progress: number): void {
+  const plant: PlantSnapshot = { speciesId: 'sunny-sprout', plantedAt: 0, stage, progress };
+  const snapshot = {
+    nowMs: 8_000,
+    coins: 12,
+    plots: garden.plots.map(({ plotId }) => ({ id: plotId, plant: plotId === 'plot-0' ? plant : null })),
+  } as GardenSnapshot;
+  reconciler.update(snapshot, snapshot, 1, true);
+}
+
+function addRipeTwistroot(garden: Garden): PlantReconciler {
+  const library = libraries[libraries.length - 1]!;
+  const reconciler = createPlantReconciler(garden.plots, library);
+  plantReconcilers.push(reconciler);
+  const plant: PlantSnapshot = { speciesId: 'twistroot', plantedAt: 0, stage: 'Harvestable', progress: 1 };
+  const snapshot = {
+    nowMs: 25_000,
+    coins: 12,
+    plots: garden.plots.map(({ plotId }) => ({ id: plotId, plant: plotId === 'plot-0' ? plant : null })),
+  } as GardenSnapshot;
+  reconciler.update(snapshot, snapshot, 1, true);
+  garden.updateMatrixWorld(true);
+  return reconciler;
+}
+
+function partCenter(garden: Garden, part: string): Vector3 {
+  const anchor = garden.plots[0]!;
+  let center: Vector3 | undefined;
+  anchor.traverse((object) => {
+    if (!(object instanceof Mesh) || object.userData.part !== part) return;
+    object.geometry.computeBoundingBox();
+    center = new Box3().copy(object.geometry.boundingBox!).getCenter(new Vector3());
+    object.localToWorld(center);
+  });
+  if (!center) throw new Error(`Missing Sunny Sprout part: ${part}`);
+  return center;
 }
 
 describe('garden picker', () => {
@@ -105,6 +155,35 @@ describe('garden picker', () => {
       picker.dispose();
     },
   );
+
+  it('picks visible Sunny plant geometry and resolves ripe fruit to its owning plot before an overlapping plot target', () => {
+    const { picker, camera, garden, screen, anchorScreen } = setup();
+    const reconciler = addSunnyPlant(garden, 'Growing', 0.6);
+    const [stemX, stemY] = screen(partCenter(garden, 'stem'));
+    expect(picker.pick(stemX, stemY)).toEqual({ kind: 'plot', plotId: 'plot-0' });
+
+    updateSunnyPlant(garden, reconciler, 'Harvestable', 1);
+    const fruit = partCenter(garden, 'fruit');
+    const localFruit = garden.worldToLocal(fruit.clone().add(new Vector3(0, -0.08, 0)));
+    garden.plots[1]!.position.copy(localFruit);
+    camera.updateMatrixWorld(true);
+    garden.updateMatrixWorld(true);
+    const [fruitX, fruitY] = screen(fruit);
+    const [ownerX, ownerY] = anchorScreen(0);
+    expect(Math.hypot(fruitX - ownerX, fruitY - ownerY)).toBeGreaterThan(24);
+    expect(picker.pick(fruitX, fruitY)).toEqual({ kind: 'plot', plotId: 'plot-0' });
+    picker.dispose();
+  });
+
+  it.each([
+    [390, 844, 72, 479],
+    [1280, 800, 563, 327],
+  ] as const)('ignores the transparent ripe Twistroot halo outside the plot target at %ix%i', (width, height, x, y) => {
+    const { picker, garden } = setup(width, height);
+    addRipeTwistroot(garden);
+    expect(picker.pick(x, y)).toEqual({ kind: 'ground' });
+    picker.dispose();
+  });
 
   it('rejects nonfinite, outside and empty-rect coordinates', () => {
     const { picker, rect } = setup();

@@ -3,6 +3,7 @@ import {
   DoubleSide,
   Mesh,
   MeshBasicMaterial,
+  Object3D,
   PlaneGeometry,
   Quaternion,
   Raycaster,
@@ -15,6 +16,23 @@ import { GROUND_SURFACE, type Garden } from './garden';
 import { palette } from './palette';
 
 export type PickResult = { readonly kind: 'plot'; readonly plotId: PlotId } | { readonly kind: 'ground' } | null;
+
+function isVisibleUnder(object: Object3D, ancestor: Object3D): boolean {
+  for (let current: Object3D | null = object; current; current = current.parent) {
+    if (!current.visible) return false;
+    if (current === ancestor) return true;
+  }
+  return false;
+}
+
+function isPlantSurface(object: Object3D): object is Mesh {
+  if (!(object instanceof Mesh)) return false;
+  const part = object.userData.part;
+  return typeof part === 'string'
+    && part !== 'blob'
+    && !part.endsWith('halo')
+    && !part.endsWith('outline');
+}
 
 export function createGardenPicker(
   canvas: Pick<HTMLCanvasElement, 'getBoundingClientRect'>,
@@ -83,6 +101,16 @@ export function createGardenPicker(
         1 - ((clientY - rect.top) / rect.height) * 2,
       );
       raycaster.setFromCamera(pointer, camera);
+
+      const plantTargets = garden.plots.flatMap((anchor) => anchor.children.map((root) => ({ anchor, root })));
+      const plantHits = raycaster.intersectObjects(plantTargets.map(({ root }) => root), true);
+      for (const hit of plantHits) {
+        const target = plantTargets.find(({ root }) => root.getObjectById(hit.object.id));
+        if (target && isPlantSurface(hit.object) && isVisibleUnder(hit.object, target.anchor)) {
+          return { kind: 'plot', plotId: target.anchor.plotId };
+        }
+      }
+
       const plotHit = raycaster.intersectObjects(plotTargets, false)[0];
       if (plotHit) {
         const index = plotTargets.indexOf(plotHit.object as typeof plotTargets[number]);

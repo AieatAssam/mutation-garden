@@ -4,15 +4,15 @@ import * as loopModule from './loop';
 import { boot } from './boot';
 
 const {
-  disposeRenderer, resizeRenderer, renderRenderer, pickRenderer,
+  disposeRenderer, resizeRenderer, panRenderer, renderRenderer, pickRenderer,
   createGardenUI, updateGardenUI, disposeGardenUI, createPointerInput,
 } = vi.hoisted(() => ({
-  disposeRenderer: vi.fn(), resizeRenderer: vi.fn(), renderRenderer: vi.fn(),
+  disposeRenderer: vi.fn(), resizeRenderer: vi.fn(), panRenderer: vi.fn(), renderRenderer: vi.fn(),
   pickRenderer: vi.fn(() => null),
   createGardenUI: vi.fn(), updateGardenUI: vi.fn(), disposeGardenUI: vi.fn(),
   createPointerInput: vi.fn(),
 }));
-vi.mock('../render/renderer', () => ({ createRenderer: () => ({ resize: resizeRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer }) }));
+vi.mock('../render/renderer', () => ({ createRenderer: () => ({ resize: resizeRenderer, pan: panRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer }) }));
 vi.mock('../input/pointer', () => ({
   createPointerInput: (canvas: HTMLCanvasElement, pick: unknown, onIntent: unknown) =>
     createPointerInput(canvas, pick, onIntent),
@@ -25,6 +25,7 @@ describe('boot animation wiring', () => {
   beforeEach(() => {
     createPointerInput.mockReset().mockReturnValue({ cancelGesture: vi.fn(), dispose: vi.fn() });
     pickRenderer.mockReset().mockReturnValue(null);
+    panRenderer.mockReset();
   });
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 
@@ -55,7 +56,12 @@ describe('boot animation wiring', () => {
 
     const cleanup = boot(canvas);
     expect(createPointerInput).toHaveBeenCalledWith(canvas, pickRenderer, expect.any(Function));
-    const onIntent = createPointerInput.mock.calls[0]![2] as (intent: { type: 'ActivatePlot'; plotId: string }) => void;
+    const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
+
+    onIntent({ type: 'PanCamera', deltaXCss: 12, deltaYCss: -7 });
+    expect(panRenderer).toHaveBeenCalledTimes(1);
+    expect(panRenderer).toHaveBeenLastCalledWith(12, -7);
+    expect(enqueue).not.toHaveBeenCalled();
 
     onIntent({ type: 'ActivatePlot', plotId: 'plot-0' });
     expect(enqueue).toHaveBeenLastCalledWith({ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' });

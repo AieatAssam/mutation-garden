@@ -417,4 +417,144 @@ describe('plot pointer input', () => {
     expect(canvas.releasePointerCapture).toHaveBeenCalledTimes(1);
     expect([...listeners.values()].every((group) => group.size === 0)).toBe(true);
   });
+
+  it('locks ownership to ground on pointerdown and pans incrementally after the strict threshold', () => {
+    const picker = vi.fn((x: number): PickResult => x < 25
+      ? { kind: 'ground' }
+      : { kind: 'plot', plotId: 'plot-4' as PlotId });
+    const { down, intents, move, pick, up } = setup(picker);
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 27, clientY: 30 });
+    move({ clientX: 31, clientY: 30 });
+    move({ clientX: 36, clientY: 30 });
+    up({ clientX: 38, clientY: 30 });
+
+    expect(pick).toHaveBeenCalledTimes(1);
+    expect(intents).toEqual([
+      { type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 },
+      { type: 'PanCamera', deltaXCss: 5, deltaYCss: 0 },
+      { type: 'PanCamera', deltaXCss: 2, deltaYCss: 0 },
+    ]);
+  });
+
+  it('does not pan at exactly 10px from a ground down point', () => {
+    const { down, intents, move, up } = setup(() => ({ kind: 'ground' }));
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 30, clientY: 30 });
+    up({ clientX: 30, clientY: 30 });
+
+    expect(intents).toEqual([]);
+  });
+
+  it('returns the camera to its original offset when a ground drag crosses and reverses the threshold', () => {
+    const { down, intents, move, up } = setup(() => ({ kind: 'ground' }));
+
+    down({ clientX: 0, clientY: 0 });
+    move({ clientX: 20, clientY: 0 });
+    move({ clientX: 0, clientY: 0 });
+    up({ clientX: 0, clientY: 0 });
+
+    expect(intents).toEqual([
+      { type: 'PanCamera', deltaXCss: 10, deltaYCss: 0 },
+      { type: 'PanCamera', deltaXCss: -10, deltaYCss: 0 },
+    ]);
+    expect(intents.some(intent => intent.type === 'ActivatePlot')).toBe(false);
+  });
+
+  it('keeps plot-start ownership while dragging across ground', () => {
+    const picker = vi.fn((x: number): PickResult => x < 25
+      ? { kind: 'plot', plotId: 'plot-2' as PlotId }
+      : { kind: 'ground' });
+    const { down, intents, move, pick, up } = setup(picker);
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 40, clientY: 30 });
+    up({ clientX: 40, clientY: 30 });
+
+    expect(pick).toHaveBeenCalledTimes(1);
+    expect(intents).toEqual([]);
+  });
+
+  it.each([
+    ['miss', () => null],
+    ['ground', () => ({ kind: 'ground' } as const)],
+  ])('never pans for a %s down, even when later movement crosses a plot', (_label, startPick) => {
+    const picker = vi.fn((x: number): PickResult => x < 25
+      ? startPick()
+      : { kind: 'plot', plotId: 'plot-4' as PlotId });
+    const { down, intents, move, pick, up } = setup(picker);
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 40, clientY: 30 });
+    up({ clientX: 40, clientY: 30 });
+
+    expect(pick).toHaveBeenCalledTimes(1);
+    expect(intents).toEqual(startPick() === null ? [] : [{ type: 'PanCamera', deltaXCss: 10, deltaYCss: 0 }]);
+  });
+
+  it('uses pointerup coordinates for the final ground pan delta', () => {
+    const { down, intents, up } = setup(() => ({ kind: 'ground' }));
+
+    down({ clientX: 20, clientY: 30 });
+    up({ clientX: 31, clientY: 26 });
+
+    expect(intents).toEqual([{ type: 'PanCamera', deltaXCss: expect.closeTo(11 - 10 * 11 / Math.hypot(11, 4)), deltaYCss: expect.closeTo(-4 + 10 * 4 / Math.hypot(11, 4)) }]);
+  });
+
+  it('advances pointer coordinates independently of a renderer clamp', () => {
+    const { down, intents, move, up } = setup(() => ({ kind: 'ground' }));
+
+    down({ clientX: 0, clientY: 0 });
+    move({ clientX: 11, clientY: 0 });
+    move({ clientX: 1_000, clientY: 0 });
+    move({ clientX: 1_005, clientY: 0 });
+    up({ clientX: 1_005, clientY: 0 });
+
+    expect(intents).toEqual([
+      { type: 'PanCamera', deltaXCss: 1, deltaYCss: 0 },
+      { type: 'PanCamera', deltaXCss: 989, deltaYCss: 0 },
+      { type: 'PanCamera', deltaXCss: 5, deltaYCss: 0 },
+    ]);
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'] as const)(
+    'does not emit a trailing activation after %s during a plot gesture',
+    (terminalEvent) => {
+      const { dispatch, down, intents, up } = setup();
+
+      down({ pointerId: 9 });
+      dispatch(terminalEvent, { pointerId: 9 });
+      up({ pointerId: 9 });
+
+      expect(intents).toEqual([]);
+    },
+  );
+
+  it('does not emit a trailing activation after capture failure and off-canvas movement/up', () => {
+    const { canvas, dispatchWindow, down, intents } = setup();
+    vi.mocked(canvas.setPointerCapture).mockImplementation(() => { throw new Error('capture unavailable'); });
+
+    down({ pointerId: 10, clientX: 20, clientY: 30 });
+    dispatchWindow('pointermove', { pointerId: 10, clientX: 40, clientY: 30 });
+    dispatchWindow('pointerup', { pointerId: 10, clientX: 40, clientY: 30, target: {} as EventTarget });
+
+    expect(intents).toEqual([]);
+  });
+
+  it.each(['second pointer', 'UI-origin pointer', 'visibility cancellation', 'disposal'] as const)(
+    'does not emit a trailing tap after %s cancels a plot gesture',
+    (cancellation) => {
+      const { dispatchDocument, down, input, intents, up } = setup();
+      down({ pointerId: 11 });
+      if (cancellation === 'second pointer') down({ pointerId: 12, isPrimary: false });
+      if (cancellation === 'UI-origin pointer') dispatchDocument('pointerdown', { pointerId: 12, target: {} as EventTarget });
+      if (cancellation === 'visibility cancellation') input.cancelGesture();
+      if (cancellation === 'disposal') input.dispose();
+      up({ pointerId: 11 });
+
+      expect(intents).toEqual([]);
+    },
+  );
 });

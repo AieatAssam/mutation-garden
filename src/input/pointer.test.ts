@@ -48,6 +48,7 @@ function createCanvas() {
     setPointerCapture: vi.fn((pointerId: number) => { capturedPointers.add(pointerId); }),
     releasePointerCapture: vi.fn((pointerId: number) => { capturedPointers.delete(pointerId); }),
     hasPointerCapture: vi.fn((pointerId: number) => capturedPointers.has(pointerId)),
+    getBoundingClientRect: vi.fn(() => ({ left: 0, top: 0, right: 400, bottom: 600, width: 400, height: 600, x: 0, y: 0, toJSON: () => ({}) })),
     ownerDocument,
     clientHeight: 600,
   } as unknown as HTMLCanvasElement;
@@ -154,7 +155,7 @@ describe('plot pointer input', () => {
     up({ clientX: 24, clientY: 30 });
 
     expect(intents).toEqual([{ type: 'ActivatePlot', plotId: 'plot-2' }]);
-    expect(pick).toHaveBeenCalledTimes(1);
+    expect(pick).toHaveBeenCalledTimes(3);
   });
 
   it('accepts a valid primary mouse click', () => {
@@ -177,29 +178,138 @@ describe('plot pointer input', () => {
     expect(intents).toEqual([{ type: 'ActivatePlot', plotId: 'plot-2' }]);
   });
 
-  it('cancels a tap when pointerup crosses the threshold without a move event', () => {
+  it('uses pointerup to commit movement strictly beyond 10px when no move event arrived', () => {
     const { down, intents, up } = setup();
 
     down({ clientX: 20, clientY: 30 });
     up({ clientX: 30.01, clientY: 30 });
 
+    expect(intents).toEqual([{ type: 'HarvestPlots', plotIds: ['plot-2'] }]);
+    expect(intents).toHaveLength(1);
+  });
+
+  it('keeps the down plot first and samples sparse move and final-up segments in first-crossing order', () => {
+    const picker = vi.fn((x: number): PickResult => {
+      if (x < 32) return { kind: 'plot', plotId: 'plot-2' as PlotId };
+      if (x < 64) return { kind: 'plot', plotId: 'plot-4' as PlotId };
+      if (x < 88) return { kind: 'plot', plotId: 'plot-1' as PlotId };
+      return { kind: 'plot', plotId: 'plot-3' as PlotId };
+    });
+    const { down, intents, move, up } = setup(picker);
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 40, clientY: 30 });
+    up({ clientX: 100, clientY: 30 });
+
+    expect(intents).toEqual([{
+      type: 'HarvestPlots',
+      plotIds: ['plot-2', 'plot-4', 'plot-1', 'plot-3'],
+    }]);
+    expect(intents).toHaveLength(1);
+    expect(picker).toHaveBeenCalledWith(100, 30);
+  });
+
+  it('deduplicates plots when the swipe crosses them repeatedly', () => {
+    const picker = vi.fn((x: number): PickResult => x < 50
+      ? { kind: 'plot', plotId: 'plot-2' as PlotId }
+      : { kind: 'plot', plotId: 'plot-4' as PlotId });
+    const { down, intents, move, up } = setup(picker);
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 80, clientY: 30 });
+    move({ clientX: 20, clientY: 30 });
+    up({ clientX: 80, clientY: 30 });
+
+    expect(intents).toEqual([{ type: 'HarvestPlots', plotIds: ['plot-2', 'plot-4'] }]);
+  });
+
+  it('allows an empty-plot start to collect occupied candidates without activating a plot', () => {
+    const picker = vi.fn((x: number): PickResult => x < 50
+      ? { kind: 'plot', plotId: 'plot-2' as PlotId }
+      : { kind: 'plot', plotId: 'plot-4' as PlotId });
+    const { down, intents, up } = setup(picker);
+
+    down({ clientX: 20, clientY: 30 }); // plot-2 is empty in the app snapshot.
+    up({ clientX: 60, clientY: 30 });
+
+    expect(intents).toEqual([{ type: 'HarvestPlots', plotIds: ['plot-2', 'plot-4'] }]);
+    expect(intents.some(intent => intent.type === 'ActivatePlot')).toBe(false);
+  });
+
+  it('permanently cancels a plot swipe that leaves the canvas, even after re-entry', () => {
+    const { down, intents, move, up } = setup((x) => ({ kind: 'plot', plotId: (x < 50 ? 'plot-2' : 'plot-4') as PlotId }));
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 401, clientY: 30 });
+    move({ clientX: 40, clientY: 30 });
+    up({ clientX: 40, clientY: 30 });
+
     expect(intents).toEqual([]);
   });
+
+  it('cancels when the canvas bounds change and never picks outside the current bounds', () => {
+    const { canvas, down, intents, move, pick, up } = setup(() => ({ kind: 'plot', plotId: 'plot-2' as PlotId }));
+    vi.mocked(canvas.getBoundingClientRect)
+      .mockReturnValueOnce({ left: 0, top: 0, right: 100, bottom: 100 } as DOMRect)
+      .mockReturnValue({ left: 0, top: 0, right: 30, bottom: 100 } as DOMRect);
+
+    down({ clientX: 20, clientY: 30 });
+    move({ clientX: 40, clientY: 30 });
+    up({ clientX: 40, clientY: 30 });
+
+    expect(intents).toEqual([]);
+    expect(pick).not.toHaveBeenCalledWith(40, 30);
+  });
+
+  it.each(['pointercancel', 'lostpointercapture', 'cancelGesture', 'second contact', 'UI contact', 'dispose'] as const)(
+    'discards a pending swipe after %s',
+    (cancellation) => {
+      const { dispatch, dispatchDocument, dispatchWindow, down, input, intents, move, up } = setup();
+      down({ pointerId: 11, clientX: 20, clientY: 30 });
+      move({ pointerId: 11, clientX: 40, clientY: 30 });
+
+      if (cancellation === 'pointercancel' || cancellation === 'lostpointercapture') {
+        dispatch(cancellation, { pointerId: 11 });
+        up({ pointerId: 11 });
+      } else if (cancellation === 'cancelGesture') {
+        input.cancelGesture();
+        up({ pointerId: 11 });
+      } else if (cancellation === 'second contact') {
+        down({ pointerId: 12, isPrimary: false, clientX: 80, clientY: 30 });
+        up({ pointerId: 11 });
+        up({ pointerId: 12, isPrimary: false });
+      } else if (cancellation === 'UI contact') {
+        dispatchDocument('pointerdown', { pointerId: 12, target: {} as EventTarget });
+        up({ pointerId: 11 });
+        dispatchWindow('pointerup', { pointerId: 12, target: {} as EventTarget });
+      } else {
+        input.dispose();
+        up({ pointerId: 11 });
+      }
+
+      expect(intents, cancellation).toEqual([]);
+      if (cancellation !== 'dispose') {
+        down({ pointerId: 13, clientX: 20, clientY: 30 });
+        up({ pointerId: 13, clientX: 20, clientY: 30 });
+        expect(intents).toEqual([{ type: 'ActivatePlot', plotId: 'plot-2' }]);
+      }
+    },
+  );
 
   it.each([
     ['vertical', 20, 41],
     ['diagonal', 28, 38],
-  ])('cancels a %s drag over the threshold', (_direction, clientX, clientY) => {
+  ])('commits a %s plot drag over the threshold as harvest', (_direction, clientX, clientY) => {
     const { down, intents, move, up } = setup();
 
     down({ clientX: 20, clientY: 30 });
     move({ clientX, clientY });
     up({ clientX, clientY });
 
-    expect(intents).toEqual([]);
+    expect(intents).toEqual([{ type: 'HarvestPlots', plotIds: ['plot-2'] }]);
   });
 
-  it('keeps a gesture cancelled after crossing the threshold and returning to its start', () => {
+  it('keeps swipe intent after crossing the threshold and returning to its start', () => {
     const { down, intents, move, up } = setup();
 
     down({ clientX: 20, clientY: 30 });
@@ -207,7 +317,7 @@ describe('plot pointer input', () => {
     move({ clientX: 20, clientY: 30 });
     up({ clientX: 20, clientY: 30 });
 
-    expect(intents).toEqual([]);
+    expect(intents).toEqual([{ type: 'HarvestPlots', plotIds: ['plot-2'] }]);
   });
 
   it('emits at most once for duplicate pointerup events', () => {
@@ -488,18 +598,17 @@ describe('plot pointer input', () => {
     expect(intents.some(intent => intent.type === 'ActivatePlot')).toBe(false);
   });
 
-  it('keeps plot-start ownership while dragging across ground', () => {
+  it('keeps plot-start ownership and harvests the starting plot while crossing ground', () => {
     const picker = vi.fn((x: number): PickResult => x < 25
       ? { kind: 'plot', plotId: 'plot-2' as PlotId }
       : { kind: 'ground' });
-    const { down, intents, move, pick, up } = setup(picker);
+    const { down, intents, move, up } = setup(picker);
 
     down({ clientX: 20, clientY: 30 });
     move({ clientX: 40, clientY: 30 });
     up({ clientX: 40, clientY: 30 });
 
-    expect(pick).toHaveBeenCalledTimes(1);
-    expect(intents).toEqual([]);
+    expect(intents).toEqual([{ type: 'HarvestPlots', plotIds: ['plot-2'] }]);
   });
 
   it.each([

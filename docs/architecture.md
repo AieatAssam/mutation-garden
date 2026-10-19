@@ -1,6 +1,6 @@
 # Architecture
 
-Status: v0.3, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADR 0004. Changes to this document need an ADR.
+Status: v0.4, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADRs 0004 and 0006. Changes to this document need an ADR.
 
 ## Stack (brief section 13)
 
@@ -123,6 +123,16 @@ interface GardenSnapshot { readonly coins: number; readonly nowMs: number;
 App owns selection and the command queue. UI emits a selected species ID; input emits `{ type: 'ActivatePlot', plotId }` or `{ type: 'HarvestPlots', plotIds }`. App uses its latest snapshot to turn activation into Plant for an empty plot or Harvest for an occupied plot; eligibility is always revalidated by sim. Swipe emits one batch at gesture end, deduplicated; a plot that was occupied when the gesture began never becomes an automatic replant target.
 
 For picking, app injects `pick(clientX, clientY): { kind: 'plot'; plotId: PlotId } | { kind: 'ground' } | null` into input, delegating to render's proxy raycast. Input captures ownership on pointerdown: plot gestures can tap/harvest, ground gestures can pan, misses do neither. Drag cancellation and pointercancel never activate a plot. A deliberate two-pointer pinch cancels pending taps/swipes; lifted pointers cannot generate a trailing tap. Input emits plain camera deltas; app forwards them to render. All CSS palette values are supplied by app. No Three.js object, mutable state reference or adapter import crosses these callbacks.
+
+### Deliberate camera zoom
+
+[ADR 0006](decisions/0006-deliberate-camera-zoom.md) defines the M1-17b interface extension: input emits `{ type: 'ZoomCamera'; scale: number }`, app forwards it to `Renderer.zoom(scale)`, and render owns `zoomGardenCamera(camera, scale)`. Positive finite scales above 1 magnify. Camera intents never enter the sim command queue or save state.
+
+Only two touch pointers that both started on canvas empty ground can pinch. A second contact cancels pending single-pointer work; plot/plant, miss, UI-origin, third-pointer or mixed-device contacts block the sequence until all pointers end. Pinch begins after a 10 CSS-pixel pair-distance change, with the dead zone removed; emit incremental ratios and update the baseline even at camera limits. Keep the view centre fixed. Pointer cancellation, unexpected capture loss, lifecycle interruption and disposal never leave a trailing tap or resume a remaining finger as pan. Document capture and canvas listeners must share contact ownership and capture-failure cleanup.
+
+Wheel over the canvas is a separate deliberate zoom action, including over plots. Ignore it during any active contacts, while hidden or after disposal. A non-passive canvas listener normalizes wheel units and prevents default for accepted events; UI-origin wheel remains untouched. See ADR 0006 for normalization and scale constants.
+
+The approved responsive camera is zoom 1; render bounds magnification to 1–1.35, tightening the maximum if necessary to fit six plot targets horizontally. Zoom and resize preserve a valid pan offset and the existing 48 px targets with 8 px horizontal margins. Convert CSS pan deltas and boundary corrections using frustum size divided by zoom. Preserve zoom across resize subject to those limits. Direct gesture motion has no inertia or automated easing, including under reduced motion. Default framing keeps every essential action available with one finger.
 
 ## Time
 

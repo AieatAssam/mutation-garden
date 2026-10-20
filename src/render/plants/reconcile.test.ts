@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Group, Mesh, type Material, type Object3D } from 'three';
+import { Box3, Group, Mesh, Vector3, type Material, type Object3D } from 'three';
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { createPlantReconciler } from './reconcile';
@@ -14,8 +14,121 @@ const setup = (ids: PlotId[] = ['plot-0']) => {
 const plant = (plantedAt: number, progress: number, stage: PlantSnapshot['stage'] = 'Growing', speciesId: PlantSnapshot['speciesId'] = 'sunny-sprout'): PlantSnapshot => ({ speciesId, plantedAt, progress, stage });
 const snap = (nowMs: number, values: (PlantSnapshot | null)[], ids: PlotId[] = values.map((_, i) => `plot-${i}`)) => ({ nowMs, coins: 12, plots: values.map((value, i) => ({ id: ids[i]!, plant: value })) }) as GardenSnapshot;
 const part = (root: Object3D, name: string) => { let found: Mesh | undefined; root.traverse((node) => { if (node instanceof Mesh && node.userData.part === name) found = node; }); return found!; };
+const isSemanticSurface = (mesh: Mesh) => {
+  const name = String(mesh.userData.part ?? mesh.name);
+  return !name.includes('outline') && name !== 'blob' && name !== 'halo' && name !== 'ripe-halo';
+};
+const semanticWorldTop = (anchor: Group) => {
+  anchor.updateWorldMatrix(true, true);
+  const top = new Vector3(0, -Infinity, 0);
+  const bounds = new Box3();
+  anchor.traverse((node) => {
+    if (!(node instanceof Mesh) || !isSemanticSurface(node)) return;
+    let visible = true;
+    for (let current: Object3D | null = node; current; current = current.parent) visible &&= current.visible;
+    if (!visible) return;
+    node.geometry.computeBoundingBox();
+    if (!node.geometry.boundingBox) return;
+    bounds.copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld);
+    if (bounds.max.y > top.y) {
+      top.set((bounds.min.x + bounds.max.x) / 2, bounds.max.y, (bounds.min.z + bounds.max.z) / 2);
+    }
+  });
+  return top;
+};
 
 describe('plant reconciliation', () => {
+  it('reports the visible semantic world-space top for every supported plant and follows live growth and animation', () => {
+    const { anchors, reconciler } = setup(['plot-0', 'plot-1', 'plot-2']);
+    const target = new Vector3(99, 99, 99);
+    const cases: PlantSnapshot[] = [
+      plant(1, 0.2, 'Growing', 'sunny-sprout'),
+      plant(2, 0.55, 'Growing', 'bubble-berry'),
+      plant(3, 0.42, 'Growing', 'twistroot'),
+    ];
+
+    cases.forEach((value, index) => {
+      const before = snap(100, [null, null, null]);
+      // Keep only the selected plant while preserving its plot id.
+      const selected = snap(100, [value], [`plot-${index}`]);
+      reconciler.update(before, selected, 1, true);
+      anchors[index]!.position.set(index + 1, 0.5, -index - 2);
+      anchors[index]!.rotation.y = Math.PI / 4;
+      anchors[index]!.scale.set(1.2, 1.1, 0.8);
+      expect(reconciler.getTop(`plot-${index}`, target)).toBe(true);
+      const expected = semanticWorldTop(anchors[index]!);
+      expect(target.x).toBeCloseTo(expected.x, 5);
+      expect(target.y).toBeCloseTo(expected.y, 5);
+      expect(target.z).toBeCloseTo(expected.z, 5);
+    });
+
+    const sunny = plant(10, 0.15, 'Growing', 'sunny-sprout');
+    const moreGrown = { ...sunny, progress: 0.78 };
+    reconciler.update(snap(100, [null]), snap(100, [sunny]), 1, false);
+    const early = new Vector3();
+    expect(reconciler.getTop('plot-0', early)).toBe(true);
+    reconciler.update(snap(100, [sunny]), snap(100, [moreGrown]), 1, false);
+    const grown = new Vector3();
+    expect(reconciler.getTop('plot-0', grown)).toBe(true);
+    expect(grown.y).toBeGreaterThan(early.y);
+
+    const ripe = { ...moreGrown, stage: 'Harvestable' as const };
+    reconciler.update(snap(100, [moreGrown]), snap(100, [ripe]), 1, false);
+    const animatedA = new Vector3();
+    const animatedB = new Vector3();
+    expect(reconciler.getTop('plot-0', animatedA)).toBe(true);
+    reconciler.update(snap(850, [ripe]), snap(850, [ripe]), 1, false);
+    expect(reconciler.getTop('plot-0', animatedB)).toBe(true);
+    expect(animatedA.distanceTo(animatedB)).toBeGreaterThan(0);
+    reconciler.dispose();
+  });
+
+  it('does not report outlines, hidden surfaces, blobs or halos as the top and preserves the target when no plant is available', () => {
+    const { anchors, reconciler } = setup();
+    const target = new Vector3(7, 8, 9);
+    const untouched = () => expect(target.toArray()).toEqual([7, 8, 9]);
+    expect(reconciler.getTop('missing-plot' as PlotId, target)).toBe(false); untouched();
+    expect(reconciler.getTop('plot-0', target)).toBe(false); untouched();
+
+    const bubble = plant(1, 0.8, 'Harvestable', 'bubble-berry');
+    reconciler.update(snap(0, [null]), snap(100, [bubble]), 1, true);
+    const rig = anchors[0]!.children[0]!;
+    const berries = part(rig, 'berries');
+    const outline = part(rig, 'berries-outline');
+    const halo = part(rig, 'halo');
+    const blob = part(rig, 'blob');
+    berries.visible = false;
+    outline.position.y = 100;
+    halo.position.y = 100;
+    blob.position.y = 100;
+    const expected = semanticWorldTop(anchors[0]!);
+    expect(reconciler.getTop('plot-0', target)).toBe(true);
+    expect(target.x).toBeCloseTo(expected.x, 5);
+    expect(target.y).toBeCloseTo(expected.y, 5);
+    expect(target.z).toBeCloseTo(expected.z, 5);
+    expect(target.y).toBeLessThan(100);
+
+    const visibleTarget = target.clone();
+    anchors[0]!.visible = false;
+    expect(reconciler.getTop('plot-0', target)).toBe(false);
+    expect(target.equals(visibleTarget)).toBe(true);
+    anchors[0]!.visible = true;
+
+    const oldTarget = target.clone();
+    reconciler.update(snap(100, [bubble]), snap(101, [null]), 1, true);
+    expect(reconciler.getTop('plot-0', target)).toBe(false); expect(target.equals(oldTarget)).toBe(true);
+    const replacement = plant(102, 0.3, 'Sprout', 'twistroot');
+    reconciler.update(snap(101, [null]), snap(102, [replacement]), 1, true);
+    expect(reconciler.getTop('plot-0', target)).toBe(true);
+    const replacementTop = semanticWorldTop(anchors[0]!);
+    expect(target.x).toBeCloseTo(replacementTop.x, 5);
+    expect(target.y).toBeCloseTo(replacementTop.y, 5);
+    expect(target.z).toBeCloseTo(replacementTop.z, 5);
+    reconciler.dispose();
+    const afterDispose = target.clone();
+    expect(reconciler.getTop('plot-0', target)).toBe(false); expect(target.equals(afterDispose)).toBe(true);
+  });
+
   it('reuses rigs for repeated frozen snapshots and interpolates clamped endpoints', () => {
     const { anchors, reconciler } = setup();
     const before = snap(100, [plant(1, 0.2)]), after = snap(200, [plant(1, 0.8)]);

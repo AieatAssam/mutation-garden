@@ -30,5 +30,11 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120_000,
     },
+    {
+      command: 'npx vite --host 127.0.0.1 --port 42741 --strictPort',
+      url: 'http://127.0.0.1:42741/mutation-garden/tests/e2e/fixtures/plot-status.html',
+      reuseExistingServer: false,
+      timeout: 120_000,
+    },
   ],
 });

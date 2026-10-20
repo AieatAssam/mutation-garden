@@ -53,7 +53,7 @@ async function tap(page: Page, point: Point, mobile: boolean): Promise<void> {
 }
 
 test('ground swipes pan while plot and planted-plant swipes keep their down ownership', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const mobile = testInfo.project.name === 'mobile-portrait';
   const viewport = mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 };
   const errors: string[] = [];

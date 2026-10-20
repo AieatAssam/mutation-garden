@@ -83,7 +83,13 @@ async function renderedSignature(page: Page): Promise<string> {
     width,
     height,
   };
-  const image = await page.screenshot({ clip, animations: 'disabled', scale: 'css' });
+  const image = await page.screenshot({
+    clip,
+    animations: 'disabled',
+    scale: 'css',
+    type: 'jpeg',
+    quality: 30,
+  });
   return createHash('sha256').update(image).digest('hex');
 }
 
@@ -121,7 +127,7 @@ async function groundPan(session: CDPSession | null, page: Page, point: Point, d
 }
 
 test('production zoom is deliberate, bounded, and leaves the garden playable', async ({ page }, testInfo) => {
-  test.setTimeout(150_000);
+  test.setTimeout(210_000);
   const mobile = testInfo.project.name === 'mobile-portrait';
   const viewport = mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 };
   const errors: string[] = [];

@@ -17,6 +17,7 @@ export interface PlotStatusSpecies {
 export interface StampPickDescriptor {
   readonly plotId: PlotId;
   readonly center: Vector3;
+  readonly opacity: number;
   readonly visibleDiameter: number;
   /** Larger values are drawn later; ties in depth are broken by plot ID. */
   readonly drawOrder: number;
@@ -249,8 +250,9 @@ export function createPlotStatusLifecycle(options: PlotStatusLifecycleOptions): 
             stamps.push({
               plotId: plot.id,
               center: center.clone(),
+              opacity,
               // Eligibility remains stable while the visual stamp animates into place.
-              visibleDiameter: PLOT_STATUS_STAMP_DIAMETER,
+              visibleDiameter: PLOT_STATUS_STAMP_DIAMETER * scale,
               drawOrder: 0,
             });
           }

@@ -73,8 +73,11 @@ describe('plot status snapshot reconciliation', () => {
     const h = harness();
     const previous = snapshot(100, { 'plot-0': plant('Growing', 0.9, 'sunny-sprout', 10), 'plot-1': null });
     const replacement = snapshot(120, { 'plot-0': plant('Harvestable', 0.25, 'twistroot', 11), 'plot-1': null });
-    h.lifecycle.update(replacement, previous, 0);
+    h.lifecycle.update(previous, previous, 1, undefined, 100, false);
+    h.lifecycle.update(replacement, previous, 0, undefined, 120, false);
     expect(h.dial()?.progress).toBe(1);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+    expect(h.stamp()?.scale).toBe(0);
     expect(h.dial()?.color).toBe('green');
     expect(h.dial()?.stageFractions).toEqual([0.12, 0.4, 0.88]);
     expect(h.stamp()?.color).toBe('green');
@@ -101,7 +104,7 @@ describe('plot status snapshot reconciliation', () => {
     expect(h.lifecycle.getStampPickDescriptors()).toHaveLength(1);
     h.lifecycle.update(snapshot(110, { 'plot-0': null, 'plot-1': null }), ready, 1);
     expect(h.lifecycle.getStampPickDescriptors()).toEqual([]);
-    expect(h.rendered().every((descriptor) => descriptor.plotId !== 'plot-0')).toBe(true);
+    expect(h.rendered().find((descriptor) => descriptor.plotId === 'plot-0')?.stamp?.opacity).toBe(1);
     h.lifecycle.update(ready, ready, 1);
     h.lifecycle.update(snapshot(120, {}), ready, 1);
     expect(h.lifecycle.getStampPickDescriptors()).toEqual([]);
@@ -157,5 +160,152 @@ describe('plot status snapshot reconciliation', () => {
     lifecycle.update(ready, ready, 1);
     expect(resources.update).toHaveBeenCalledWith([]);
     expect(lifecycle.getStampPickDescriptors()).toEqual([]);
+  });
+
+  it('springs the ready dial and stamp to their exact scales over the specified intervals', () => {
+    const h = harness();
+    const mature = snapshot(0, { 'plot-0': plant('Mature', 0.99), 'plot-1': null });
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(mature, mature, 1, undefined, 0, false);
+    h.lifecycle.update(ready, mature, 1, undefined, 1, false);
+    expect(h.stamp()?.scale).toBe(0);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+
+    h.lifecycle.update(ready, mature, 1, undefined, 100, false);
+    expect(h.stamp()?.scale).toBeGreaterThan(1);
+    expect(h.stamp()?.scale).toBeLessThanOrEqual(1.15);
+    expect(h.rendered()[0]?.dialScale).toBeGreaterThan(1);
+    expect(h.lifecycle.getStampPickDescriptors()[0]?.visibleDiameter).toBeCloseTo(0.62);
+
+    h.lifecycle.update(ready, mature, 1, undefined, 161, false);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+    h.lifecycle.update(ready, mature, 1, undefined, 221, false);
+    expect(h.stamp()?.scale).toBe(1);
+  });
+
+  it('animates after skipped stages and treats an already-ready plant as settled', () => {
+    const h = harness();
+    const empty = snapshot(0, { 'plot-0': null, 'plot-1': null });
+    const skipped = snapshot(1000, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(skipped, empty, 1, undefined, 1000, false);
+    expect(h.stamp()?.scale).toBe(0);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+
+    const attached = harness();
+    const alreadyReady = snapshot(2000, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    attached.lifecycle.update(alreadyReady, alreadyReady, 1, undefined, 2000, false);
+    expect(attached.stamp()?.scale).toBe(1);
+    expect(attached.rendered()[0]?.dialScale).toBe(1);
+  });
+
+  it('starts the ready arrival when ripe snapshots were skipped by the renderer', () => {
+    const h = harness();
+    const mature = snapshot(0, { 'plot-0': plant('Mature', 0.99), 'plot-1': null });
+    const ripe = snapshot(100, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(mature, mature, 1, undefined, 0, false);
+    // Both simulation snapshots are ripe, but the last presented frame was Mature.
+    h.lifecycle.update(ripe, ripe, 1, undefined, 100, false);
+    expect(h.stamp()?.scale).toBe(0);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+  });
+
+  it('uses a reduced-motion fade and never replays a settled arrival when motion is restored', () => {
+    const h = harness();
+    const mature = snapshot(0, { 'plot-0': plant('Mature', 0.99), 'plot-1': null });
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(ready, mature, 1, undefined, 1, true);
+    expect(h.stamp()?.scale).toBe(1);
+    expect(h.stamp()?.opacity).toBe(0);
+    h.lifecycle.update(ready, mature, 1, undefined, 61, true);
+    expect(h.stamp()?.opacity).toBeCloseTo(0.5);
+    h.lifecycle.update(ready, mature, 1, undefined, 121, true);
+    expect(h.stamp()?.opacity).toBe(1);
+    h.lifecycle.update(ready, mature, 1, undefined, 122, false);
+    expect(h.stamp()?.scale).toBe(1);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+  });
+
+  it('removes scale overshoot immediately when reduced motion is enabled mid-pop', () => {
+    const h = harness();
+    const mature = snapshot(0, { 'plot-0': plant('Mature', 0.99), 'plot-1': null });
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(ready, mature, 1, undefined, 1, false);
+    h.lifecycle.update(ready, mature, 1, undefined, 100, false);
+    expect(h.stamp()?.scale).toBeGreaterThan(1);
+    expect(h.rendered()[0]?.dialScale).toBeGreaterThan(1);
+    h.lifecycle.update(ready, mature, 1, undefined, 100, true);
+    expect(h.stamp()?.scale).toBe(1);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+    expect(h.lifecycle.getStampPickDescriptors()).toHaveLength(1);
+  });
+
+  it('keeps the arrival settled when reduced motion is later turned off', () => {
+    const h = harness();
+    const mature = snapshot(0, { 'plot-0': plant('Mature', 0.99), 'plot-1': null });
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(ready, mature, 1, undefined, 1, false);
+    h.lifecycle.update(ready, mature, 1, undefined, 30, true);
+    expect(h.stamp()?.scale).toBe(1);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+    h.lifecycle.update(ready, mature, 1, undefined, 40, false);
+    expect(h.stamp()?.scale).toBe(1);
+    expect(h.rendered()[0]?.dialScale).toBe(1);
+  });
+
+  it('fades a harvested stamp from its last presented center, scale, and opacity and removes picking first', () => {
+    const h = harness();
+    const mature = snapshot(0, { 'plot-0': plant('Mature', 0.99), 'plot-1': null });
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(ready, mature, 1, undefined, 1, false);
+    h.lifecycle.update(ready, mature, 1, undefined, 100, false);
+    const presented = h.stamp()!;
+    const presentedScale = presented.scale ?? 1;
+    const presentedOpacity = presented.opacity ?? 1;
+    const harvested = snapshot(100, { 'plot-0': null, 'plot-1': null });
+    h.lifecycle.update(harvested, ready, 1, undefined, 100, false);
+    expect(h.lifecycle.getStampPickDescriptors()).toEqual([]);
+    expect(h.stamp()?.center).toEqual(presented.center);
+    expect(h.stamp()?.scale).toBe(presentedScale);
+    expect(h.stamp()?.opacity).toBe(presentedOpacity);
+    h.lifecycle.update(snapshot(160, { 'plot-0': null, 'plot-1': null }), harvested, 1, undefined, 160, false);
+    expect(h.stamp()?.scale).toBe(presentedScale);
+    expect(h.stamp()?.opacity).toBeCloseTo(presentedOpacity * 0.5);
+    h.lifecycle.update(snapshot(221, { 'plot-0': null, 'plot-1': null }), harvested, 1, undefined, 221, false);
+    expect(h.rendered()).toEqual([]);
+  });
+
+  it('fades a harvested stamp when both snapshots are empty after skipped simulation ticks', () => {
+    const h = harness();
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(ready, ready, 1, undefined, 1, false);
+    const empty = snapshot(100, { 'plot-0': null, 'plot-1': null });
+    h.lifecycle.update(empty, empty, 1, undefined, 100, false);
+    expect(h.lifecycle.getStampPickDescriptors()).toEqual([]);
+    expect(h.stamp()?.opacity).toBe(1);
+    h.lifecycle.update(snapshot(160, { 'plot-0': null, 'plot-1': null }), empty, 1, undefined, 160, false);
+    expect(h.stamp()?.opacity).toBeCloseTo(0.5);
+  });
+
+  it('continues harvest fade from the current reduced-motion fade opacity', () => {
+    const h = harness();
+    const mature = snapshot(0, { 'plot-0': plant('Mature', 0.99), 'plot-1': null });
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(ready, mature, 1, undefined, 1, true);
+    h.lifecycle.update(ready, mature, 1, undefined, 61, true);
+    const harvested = snapshot(61, { 'plot-0': null, 'plot-1': null });
+    h.lifecycle.update(harvested, ready, 1, undefined, 61, true);
+    expect(h.stamp()?.opacity).toBeCloseTo(0.5);
+    h.lifecycle.update(snapshot(121, { 'plot-0': null, 'plot-1': null }), harvested, 1, undefined, 121, true);
+    expect(h.stamp()?.opacity).toBeCloseTo(0.25);
+  });
+
+  it('clears a harvested fade when its plot is removed before it is readded', () => {
+    const h = harness();
+    const ready = snapshot(1, { 'plot-0': plant('Harvestable', 1), 'plot-1': null });
+    h.lifecycle.update(ready, ready, 1, undefined, 1, false);
+    h.lifecycle.update(snapshot(2, { 'plot-0': null, 'plot-1': null }), ready, 1, undefined, 2, false);
+    h.lifecycle.update(snapshot(3, {}), snapshot(2, { 'plot-0': null, 'plot-1': null }), 1, undefined, 3, false);
+    h.lifecycle.update(snapshot(22, { 'plot-0': null }), snapshot(3, {}), 1, undefined, 22, false);
+    expect(h.rendered()).toEqual([]);
   });
 });

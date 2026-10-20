@@ -1,4 +1,4 @@
-import { InstancedMesh, Vector3 } from 'three';
+import { InstancedMesh, Matrix4, Quaternion, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPlotStatusResources, MAX_STATUS_PLOTS, PLOT_STATUS_DRAW_CALLS, type PlotStatusDescriptor } from './plot-status';
 import { palette } from './palette';
@@ -82,6 +82,27 @@ describe('plot status render resources', () => {
 
     status.update([]);
     expect(stamp.count).toBe(0);
+  });
+
+  it('applies the caller-supplied billboard orientation to both status faces', () => {
+    const status = create();
+    const facing = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 3);
+    const base = descriptor('0', 0.5);
+    status.update([{
+      ...base,
+      dial: { ...base.dial!, facing },
+      stamp: { ...base.stamp!, facing },
+    }]);
+    const rotationOf = (name: string) => {
+      const mesh = meshes(status).find((candidate) => candidate.name === name)!;
+      const matrix = new Matrix4();
+      const rotation = new Quaternion();
+      mesh.getMatrixAt(0, matrix);
+      matrix.decompose(new Vector3(), rotation, new Vector3());
+      return rotation;
+    };
+    expect(rotationOf('plot-status-dial-face').angleTo(facing)).toBeCloseTo(0);
+    expect(rotationOf('plot-status-stamp-face').angleTo(facing)).toBeCloseTo(0);
   });
 
   it('keeps six plots within the five-pass draw-call budget', () => {

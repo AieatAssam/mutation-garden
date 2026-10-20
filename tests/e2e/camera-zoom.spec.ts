@@ -300,6 +300,12 @@ test('production zoom is deliberate, bounded, and leaves the garden playable', a
   await groundPan(touchSession, page, panStart, panDelta, mobile);
   panGardenCamera(camera, effectivePan.x, effectivePan.y, rect.width, rect.height);
 
+  // Close the low-level CDP gesture session before using Playwright's regular
+  // trusted touch input for planting and harvesting. All camera gesture
+  // assertions have completed, and leaving both input channels attached can
+  // make the final real touch intermittently stall on mobile Chromium.
+  await touchSession?.detach();
+
   // Exercise camera reconciliation across a real viewport resize, then restore
   // the required project size before planting and harvesting.
   const resizedViewport = mobile ? { width: 400, height: 844 } : { width: 1270, height: 800 };
@@ -338,5 +344,4 @@ test('production zoom is deliberate, bounded, and leaves the garden playable', a
   await expect(coins).toHaveText('13');
   expect(await pageScrollY(page)).toBe(startingScrollY);
   expect(errors).toEqual([]);
-  await touchSession?.detach();
 });

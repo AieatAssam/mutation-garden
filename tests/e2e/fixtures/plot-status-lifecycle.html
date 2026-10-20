@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Plot status lifecycle fixture</title>
+    <style>
+      html, body, canvas { margin: 0; width: 100%; height: 100%; overflow: hidden; display: block; }
+      body { font: 600 12px/1.2 system-ui, sans-serif; color: #242126; }
+      #labels { position: fixed; inset: 12px 0 auto; display: grid; grid-template-columns: repeat(3, 1fr); text-align: center; }
+      #labels span { padding: 6px 2px; }
+    </style>
+  </head>
+  <body>
+    <canvas id="stage" aria-label="Plot status lifecycle render"></canvas>
+    <div id="labels" aria-hidden="true"><span>Peak</span><span>Settled</span><span>Reduced motion fade</span></div>
+    <script type="module" src="./plot-status-lifecycle.ts"></script>
+  </body>
+</html>

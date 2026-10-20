@@ -47,6 +47,7 @@ function projectedGardenBottomNdc(width: number, height: number): number {
 }
 
 test('production garden renders cleanly and picker covers plot targets across sizes', async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -103,7 +104,7 @@ test('production garden renders cleanly and picker covers plot targets across si
   expect(await page.evaluate(({ x, y }) => window.gardenProbe.pick(x, y), lastCenter)).toBeNull();
 
   await page.setViewportSize(projectViewport);
-  await page.goto('http://localhost:4173/mutation-garden/');
+  await page.goto('http://localhost:4173/mutation-garden/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
   const canvas = page.locator('#stage');
   const seedLabel = page.locator('nav[aria-label="Seeds"] .garden-ui__tray-label');

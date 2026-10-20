@@ -8,6 +8,7 @@ import {
   InstancedMesh,
   Matrix4,
   MeshBasicMaterial,
+  Quaternion,
   Sphere,
   Vector3,
 } from 'three';
@@ -18,6 +19,7 @@ export const MAX_STATUS_PLOTS = 6;
 export const PLOT_STATUS_DRAW_CALLS = 5;
 const DIAL_RADIUS = 0.2;
 const STAMP_RADIUS = 0.31;
+export const PLOT_STATUS_STAMP_DIAMETER = STAMP_RADIUS * 2;
 
 export interface PlotStatusDescriptor {
   readonly plotId: string;
@@ -26,10 +28,12 @@ export interface PlotStatusDescriptor {
     readonly progress: number;
     readonly color: ColorRepresentation;
     readonly stageFractions: readonly [number, number, number];
+    readonly facing?: Quaternion;
   };
   readonly stamp?: {
     readonly center: Vector3;
     readonly color: ColorRepresentation;
+    readonly facing?: Quaternion;
   };
 }
 
@@ -233,8 +237,8 @@ function createTickMaterial(): MeshBasicMaterial {
   return value;
 }
 
-function setDiscTransform(mesh: InstancedMesh, slot: number, center: Vector3, radius: number): void {
-  mesh.setMatrixAt(slot, new Matrix4().makeScale(radius, radius, radius).setPosition(center));
+function setDiscTransform(mesh: InstancedMesh, slot: number, center: Vector3, radius: number, facing?: Quaternion): void {
+  mesh.setMatrixAt(slot, new Matrix4().compose(center, facing ?? new Quaternion(), new Vector3(radius, radius, radius)));
 }
 
 export function createPlotStatusResources(): PlotStatusResources {
@@ -285,9 +289,11 @@ export function createPlotStatusResources(): PlotStatusResources {
           const slot = dialCount++;
           const center = descriptor.dial.center;
           const fill = Math.max(0, Math.min(1, descriptor.dial.progress));
-          setDiscTransform(dial, slot, center, DIAL_RADIUS);
-          setDiscTransform(pie, slot, new Vector3(center.x, center.y, center.z + 0.01), DIAL_RADIUS * 0.82);
-          setDiscTransform(ticks, slot, new Vector3(center.x, center.y, center.z + 0.012), DIAL_RADIUS);
+          const facing = descriptor.dial.facing;
+          const normal = new Vector3(0, 0, 1).applyQuaternion(facing ?? new Quaternion());
+          setDiscTransform(dial, slot, center, DIAL_RADIUS, facing);
+          setDiscTransform(pie, slot, center.clone().addScaledVector(normal, 0.01), DIAL_RADIUS * 0.82, facing);
+          setDiscTransform(ticks, slot, center.clone().addScaledVector(normal, 0.012), DIAL_RADIUS, facing);
           progress.setX(slot, fill);
           stages.setXYZ(slot, ...descriptor.dial.stageFractions.map((fraction) => Math.max(0, Math.min(1, fraction))) as [number, number, number]);
           pie.setColorAt(slot, new Color(descriptor.dial.color));
@@ -295,8 +301,13 @@ export function createPlotStatusResources(): PlotStatusResources {
         if (descriptor.stamp) {
           const slot = stampCount++;
           const center = descriptor.stamp.center;
-          setDiscTransform(stampShadow, slot, new Vector3(center.x + 0.04, center.y - 0.04, center.z), STAMP_RADIUS);
-          setDiscTransform(stampFace, slot, new Vector3(center.x, center.y, center.z + 0.003), STAMP_RADIUS);
+          const facing = descriptor.stamp.facing;
+          const right = new Vector3(1, 0, 0).applyQuaternion(facing ?? new Quaternion());
+          const down = new Vector3(0, -1, 0).applyQuaternion(facing ?? new Quaternion());
+          const normal = new Vector3(0, 0, 1).applyQuaternion(facing ?? new Quaternion());
+          const shadowCenter = center.clone().addScaledVector(right, 0.04).addScaledVector(down, 0.04);
+          setDiscTransform(stampShadow, slot, shadowCenter, STAMP_RADIUS, facing);
+          setDiscTransform(stampFace, slot, center.clone().addScaledVector(normal, 0.003), STAMP_RADIUS, facing);
           stampFace.setColorAt(slot, new Color(descriptor.stamp.color));
         }
       }

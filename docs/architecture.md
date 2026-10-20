@@ -1,6 +1,6 @@
 # Architecture
 
-Status: v0.5, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADRs 0004, 0006 and 0007. Changes to this document need an ADR.
+Status: v0.6, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADRs 0004, 0006, 0007 and 0008. Changes to this document need an ADR.
 
 ## Stack (brief section 13)
 
@@ -123,6 +123,24 @@ interface GardenSnapshot { readonly coins: number; readonly nowMs: number;
 App owns selection and the command queue. UI emits a selected species ID; input emits `{ type: 'ActivatePlot', plotId }` or `{ type: 'HarvestPlots', plotIds }`. App uses its latest snapshot to turn activation into Plant for an empty plot or Harvest for an occupied plot; eligibility is always revalidated by sim. Swipe emits one batch at gesture end, deduplicated; a plot that was occupied when the gesture began never becomes an automatic replant target.
 
 For picking, app injects `pick(clientX, clientY): { kind: 'plot'; plotId: PlotId } | { kind: 'ground' } | null` into input, delegating to render's proxy raycast. Input captures ownership on pointerdown: plot gestures can tap/harvest, ground gestures can pan, misses do neither. Gesture cancellation and pointercancel never activate or harvest a plot. A deliberate two-pointer pinch cancels pending taps/swipes; lifted pointers cannot generate a trailing tap. Input emits plain camera deltas; app forwards them to render. All CSS palette values are supplied by app. No Three.js object, mutable state reference or adapter import crosses these callbacks.
+
+### Plot status adapter
+
+[ADR 0008](decisions/0008-plot-status-and-ready-stamp-picking.md) defines M1-08d's renderer options:
+
+```ts
+interface RenderSpecies {
+  readonly id: SpeciesId;
+  // Sprout, Growing, Mature; startsAtMs / growthDurationMs.
+  readonly stageFractions: readonly [number, number, number];
+}
+interface RendererOptions { readonly species: readonly RenderSpecies[] }
+// createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer
+```
+
+App derives these readonly descriptors from the existing species data. Render continues to import sim types only. Dials display interpolated snapshot progress; ready stamps use the current snapshot's Harvestable stage, never an eligibility calculation in render.
+
+Status resources live outside plant roots. The reconciler's render-internal `getTop(plotId, target: Vector3): boolean` writes the current world-space plant top, excluding outlines, shadows and halos. Renderer updates status after rigs and refreshes camera-facing transforms before draws, including pan/zoom/resize. Status supplies explicit eligible-stamp pick descriptors; actual stamp hits precede existing plant and plot targets, while supplemental 48 CSS-pixel stamp targets follow those existing targets. ADR 0008 specifies overlap order and immediate removal of harvested stamps from picking. All hits retain the existing plot/ground/null result, with unchanged input ownership and sim validation.
 
 ### Swipe harvest
 

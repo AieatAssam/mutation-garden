@@ -1,5 +1,5 @@
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
-import type { Group } from 'three';
+import { Box3, Vector3, type Group, type Mesh, type Object3D } from 'three';
 import type { MaterialLibrary } from '../materials';
 import { createBubbleBerry } from './bubble-berry';
 import { createTwistroot } from './twistroot';
@@ -8,7 +8,48 @@ import { createSunnySprout, type PlantRig } from './sunny-sprout';
 interface Entry { readonly speciesId: PlantSnapshot['speciesId']; readonly plantedAt: number; readonly rig: PlantRig }
 export interface PlantReconciler {
   update(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
+  /** Writes the highest visible semantic plant surface in world space. */
+  getTop(plotId: PlotId, target: Vector3): boolean;
   dispose(): void;
+}
+
+const semanticBounds = new Box3();
+const semanticTop = new Vector3();
+
+function visibleThroughParents(object: Object3D): boolean {
+  let current: Object3D | null = object;
+  while (current) {
+    if (!current.visible) return false;
+    current = current.parent;
+  }
+  return true;
+}
+
+function getSemanticTop(root: Group, target: Vector3): boolean {
+  root.updateWorldMatrix(true, true);
+  let found = false;
+  let highestY = -Infinity;
+  root.traverse((object) => {
+    const mesh = object as Mesh;
+    const part = mesh.userData.part;
+    if (!mesh.isMesh || typeof part !== 'string' || part === 'halo' || part === 'ripe-halo' || part === 'blob'
+      || part.endsWith('-outline')
+      || !visibleThroughParents(mesh) || !mesh.geometry) return;
+    mesh.geometry.computeBoundingBox();
+    if (!mesh.geometry.boundingBox) return;
+    semanticBounds.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
+    if (!Number.isFinite(semanticBounds.max.y) || semanticBounds.max.y <= highestY) return;
+    highestY = semanticBounds.max.y;
+    semanticTop.set(
+      (semanticBounds.min.x + semanticBounds.max.x) * 0.5,
+      semanticBounds.max.y,
+      (semanticBounds.min.z + semanticBounds.max.z) * 0.5,
+    );
+    found = true;
+  });
+  if (!found) return false;
+  target.copy(semanticTop);
+  return true;
 }
 
 function phase(plotId: PlotId): number {
@@ -21,6 +62,7 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
   const anchors = new Map(plots.filter((plot): plot is Group & { readonly plotId: PlotId } => Boolean(plot.plotId)).map((plot) => [plot.plotId, plot]));
   const entries = new Map<PlotId, Entry>();
   let disposed = false;
+  let currentPlants = new Set<PlotId>();
   const remove = (plotId: PlotId) => {
     const entry = entries.get(plotId);
     if (!entry) return;
@@ -57,10 +99,18 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
         entry.rig.update({ ...plant, progress }, now, reducedMotion);
       }
       for (const plotId of entries.keys()) if (!seen.has(plotId)) remove(plotId);
+      currentPlants = new Set([...entries.keys()]);
+    },
+    getTop(plotId, target) {
+      if (disposed || !currentPlants.has(plotId)) return false;
+      const entry = entries.get(plotId);
+      if (!entry) return false;
+      return getSemanticTop(entry.rig.root, target);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      currentPlants.clear();
       for (const plotId of [...entries.keys()]) remove(plotId);
     },
   };

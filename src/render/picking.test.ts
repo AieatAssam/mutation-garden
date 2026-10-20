@@ -5,6 +5,7 @@ import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCame
 import { createGarden, type Garden } from './garden';
 import { createMaterialLibrary } from './materials';
 import { createGardenPicker } from './picking';
+import type { StampPickDescriptor } from './plot-status-lifecycle';
 import { createPlantReconciler, type PlantReconciler } from './plants/reconcile';
 
 const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
@@ -16,12 +17,12 @@ afterEach(() => {
   libraries.splice(0).forEach((library) => library.dispose());
 });
 
-function setup(width = 390, height = 844) {
+function setup(width = 390, height = 844, getStamps?: () => readonly StampPickDescriptor[]) {
   const library = createMaterialLibrary(); libraries.push(library);
   const garden = createGarden(library); gardens.push(garden);
   const camera = createGardenCamera(); resizeGardenCamera(camera, width, height);
   const rect = { left: 0, top: 0, width, height };
-  const picker = createGardenPicker({ getBoundingClientRect: () => rect as DOMRect }, camera, garden);
+  const picker = createGardenPicker({ getBoundingClientRect: () => rect as DOMRect }, camera, garden, getStamps);
   const screen = (point: Vector3) => {
     camera.updateMatrixWorld(true); garden.updateMatrixWorld(true);
     const p = point.clone().project(camera);
@@ -215,6 +216,151 @@ describe('garden picker', () => {
       picker.dispose();
     },
   );
+
+  it('preserves the old signature and lets an actual borrowed stamp disc win over a semantic plant', () => {
+    const { picker, camera, garden, screen } = setup();
+    addSunnyPlant(garden, 'Growing', 0.6);
+    const stem = partCenter(garden, 'stem');
+    const point = screen(stem);
+    expect(picker.pick(...point)).toEqual({ kind: 'plot', plotId: 'plot-0' });
+
+    const borrowed: StampPickDescriptor = {
+      plotId: 'plot-1', center: stem.clone(), visibleDiameter: 0.5, opacity: 1, drawOrder: 0,
+    };
+    const pickerWithStamp = createGardenPicker(
+      { getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }) as DOMRect },
+      camera,
+      garden,
+      () => [borrowed],
+    );
+    expect(pickerWithStamp.pick(...point)).toEqual({ kind: 'plot', plotId: 'plot-1' });
+    pickerWithStamp.dispose();
+
+    const discDiameter = 0.12;
+    const radiusX = discDiameter * camera.zoom * 390 / (camera.right - camera.left) / 2;
+    const radiusY = discDiameter * camera.zoom * 844 / (camera.top - camera.bottom) / 2;
+    const ellipseStamp = { ...borrowed, visibleDiameter: discDiameter };
+    const ellipsePicker = createGardenPicker(
+      { getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }) as DOMRect },
+      camera,
+      garden,
+      () => [ellipseStamp],
+    );
+    expect(ellipsePicker.pick(point[0] + radiusX * 0.8, point[1] + radiusY * 0.3))
+      .toEqual({ kind: 'plot', plotId: 'plot-1' });
+    expect(ellipsePicker.pick(point[0] + radiusX * 0.8, point[1] + radiusY * 0.8))
+      .toEqual({ kind: 'plot', plotId: 'plot-0' });
+    ellipsePicker.dispose();
+
+    const transparentSupplement = createGardenPicker(
+      { getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }) as DOMRect },
+      camera,
+      garden,
+      () => [{ ...borrowed, opacity: 0 }],
+    );
+    expect(transparentSupplement.pick(...point)).toEqual({ kind: 'plot', plotId: 'plot-0' });
+    transparentSupplement.dispose();
+    picker.dispose();
+  });
+
+  it('keeps the existing plot target ahead of a supplemental stamp square', () => {
+    let stamps: readonly StampPickDescriptor[] = [];
+    const { picker, garden, anchorScreen } = setup(390, 844, () => stamps);
+    const center = garden.plots[0]!.getWorldPosition(new Vector3());
+    stamps = [{ plotId: 'plot-1', center, visibleDiameter: 0, opacity: 1, drawOrder: 0 }];
+    expect(picker.pick(...anchorScreen(0))).toEqual({ kind: 'plot', plotId: 'plot-0' });
+    picker.dispose();
+
+    const camera = createGardenCamera(); resizeGardenCamera(camera, 390, 844);
+    const visibleDisc = createGardenPicker(
+      { getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }) as DOMRect },
+      camera,
+      garden,
+      () => [{ plotId: 'plot-1', center, visibleDiameter: 0.5, opacity: 1, drawOrder: 0 }],
+    );
+    expect(visibleDisc.pick(...anchorScreen(0))).toEqual({ kind: 'plot', plotId: 'plot-1' });
+    visibleDisc.dispose();
+  });
+
+  it('uses last-drawn order for actual discs and nearest centre then draw order for supplements', () => {
+    let stamps: readonly StampPickDescriptor[] = [];
+    const { picker, screen } = setup(390, 844, () => stamps);
+    const center = new Vector3(2.25, 0.79, 0);
+    const descriptor = (plotId: string, x: number, diameter: number, drawOrder: number): StampPickDescriptor => ({
+      plotId: plotId as StampPickDescriptor['plotId'],
+      center: new Vector3(x, center.y, center.z),
+      visibleDiameter: diameter,
+      opacity: 1,
+      drawOrder,
+    });
+
+    stamps = [descriptor('plot-1', center.x, 0.8, 1), descriptor('plot-0', center.x, 0.8, 0)];
+    expect(picker.pick(...screen(center))).toEqual({ kind: 'plot', plotId: 'plot-1' });
+
+    stamps = [descriptor('plot-0', center.x - 0.1, 0, 2), descriptor('plot-1', center.x + 0.1, 0, 5)];
+    const [centerX, centerY] = screen(center);
+    const [nearLeftX] = screen(new Vector3(center.x - 0.06, center.y, center.z));
+    expect(picker.pick(nearLeftX, centerY)).toEqual({ kind: 'plot', plotId: 'plot-0' });
+    expect(picker.pick(centerX, centerY)).toEqual({ kind: 'plot', plotId: 'plot-1' });
+
+    stamps = [descriptor('plot-0', center.x, 0, 6), descriptor('plot-1', center.x, 0, 7)];
+    expect(picker.pick(centerX, centerY)).toEqual({ kind: 'plot', plotId: 'plot-1' });
+    picker.dispose();
+  });
+
+  it('uses square 48px and projected large-stamp supplemental bounds', () => {
+    let stamps: readonly StampPickDescriptor[] = [];
+    const { picker, camera, rect, screen } = setup(390, 844, () => stamps);
+    const center = new Vector3(2.25, 0.79, 0);
+    stamps = [{ plotId: 'plot-4', center, visibleDiameter: 0, opacity: 0, drawOrder: 0 }];
+    const [x, y] = screen(center);
+    expect(picker.pick(x + 24 - 0.1, y)).toEqual({ kind: 'plot', plotId: 'plot-4' });
+    expect(picker.pick(x + 24 + 0.1, y)).not.toEqual({ kind: 'plot', plotId: 'plot-4' });
+
+    const largeDiameter = 1.2;
+    const diameterX = largeDiameter * camera.zoom * rect.width / (camera.right - camera.left);
+    const diameterY = largeDiameter * camera.zoom * rect.height / (camera.top - camera.bottom);
+    const side = Math.max(48, diameterX, diameterY);
+    expect(side).toBeGreaterThan(48);
+    stamps = [{ plotId: 'plot-5', center, visibleDiameter: largeDiameter, opacity: 0, drawOrder: 0 }];
+    expect(picker.pick(x, y + side / 2 - 0.1)).toEqual({ kind: 'plot', plotId: 'plot-5' });
+    expect(picker.pick(x, y + side / 2 + 0.1)).not.toEqual({ kind: 'plot', plotId: 'plot-5' });
+    picker.dispose();
+  });
+
+  it('keeps supplemental targets square under nonuniform CSS projection', () => {
+    let stamps: readonly StampPickDescriptor[] = [];
+    const { picker, rect, screen } = setup(390, 844, () => stamps);
+    Object.assign(rect, { width: 1560 });
+    const center = new Vector3(2.25, 0.79, 0);
+    const diameter = 0.4;
+    stamps = [{ plotId: 'plot-3', center, visibleDiameter: diameter, opacity: 0, drawOrder: 0 }];
+    const [x, y] = screen(center);
+    expect(picker.pick(x, y + 30)).toEqual({ kind: 'plot', plotId: 'plot-3' });
+    expect(picker.pick(x, y + 55)).not.toEqual({ kind: 'plot', plotId: 'plot-3' });
+    picker.dispose();
+  });
+
+  it('refreshes stamp projection and descriptors per pick across zoom, resize and offset rect changes', () => {
+    let stamps: readonly StampPickDescriptor[] = [];
+    let providerCalls = 0;
+    const { picker, camera, rect, screen } = setup(390, 844, () => { providerCalls += 1; return stamps; });
+    const center = new Vector3(0.25, 1.3, 0.15);
+    stamps = [{ plotId: 'plot-4', center, visibleDiameter: 0, opacity: 0, drawOrder: 0 }];
+    const before = screen(center);
+    expect(picker.pick(...before)).toEqual({ kind: 'plot', plotId: 'plot-4' });
+
+    zoomGardenCamera(camera, 1.25);
+    resizeGardenCamera(camera, 360, 800);
+    Object.assign(rect, { left: 29, top: 41, width: 360, height: 800 });
+    const after = screen(center);
+    expect(after).not.toEqual(before);
+    expect(picker.pick(...after)).toEqual({ kind: 'plot', plotId: 'plot-4' });
+    stamps = [];
+    expect(picker.pick(...after)).not.toEqual({ kind: 'plot', plotId: 'plot-4' });
+    expect(providerCalls).toBe(3);
+    picker.dispose();
+  });
 
   it('rejects nonfinite, outside and empty-rect coordinates', () => {
     const { picker, rect } = setup();

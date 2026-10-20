@@ -14,6 +14,7 @@ import {
 import type { PlotId } from '../sim';
 import { GROUND_SURFACE, type Garden } from './garden';
 import { palette } from './palette';
+import type { StampPickDescriptor } from './plot-status-lifecycle';
 
 export type PickResult = { readonly kind: 'plot'; readonly plotId: PlotId } | { readonly kind: 'ground' } | null;
 
@@ -38,6 +39,7 @@ export function createGardenPicker(
   canvas: Pick<HTMLCanvasElement, 'getBoundingClientRect'>,
   camera: OrthographicCamera,
   garden: Garden,
+  getStamps?: () => readonly StampPickDescriptor[],
 ): { pick(clientX: number, clientY: number): PickResult; dispose(): void } {
   const plotGeometry = new PlaneGeometry(1, 1);
   const groundGeometry = new CircleGeometry(1, 48);
@@ -102,6 +104,35 @@ export function createGardenPicker(
       );
       raycaster.setFromCamera(pointer, camera);
 
+      const stamps = getStamps?.() ?? [];
+      const projectedStamps = stamps.flatMap((stamp) => {
+        const diameter = stamp.visibleDiameter;
+        if (!Number.isFinite(diameter) || diameter < 0 || !Number.isFinite(stamp.drawOrder)) return [];
+        const projected = stamp.center.clone().project(camera);
+        if (!Number.isFinite(projected.x) || !Number.isFinite(projected.y) || !Number.isFinite(projected.z)
+          || projected.z < -1 || projected.z > 1) return [];
+        const cssX = rect.left + (projected.x + 1) * rect.width / 2;
+        const cssY = rect.top + (1 - projected.y) * rect.height / 2;
+        const pixelDiameterX = diameter * camera.zoom * rect.width / viewWidth;
+        const pixelDiameterY = diameter * camera.zoom * rect.height / viewHeight;
+        if (![cssX, cssY, pixelDiameterX, pixelDiameterY].every(Number.isFinite)) return [];
+        return [{
+          stamp,
+          cssX,
+          cssY,
+          radiusX: pixelDiameterX / 2,
+          radiusY: pixelDiameterY / 2,
+          supplementalRadius: Math.max(48, pixelDiameterX, pixelDiameterY) / 2,
+        }];
+      });
+
+      const actualStamp = projectedStamps
+        .filter(({ stamp, cssX, cssY, radiusX, radiusY }) => (stamp.opacity ?? 1) > 0
+          && radiusX > 0 && radiusY > 0
+          && ((clientX - cssX) / radiusX) ** 2 + ((clientY - cssY) / radiusY) ** 2 <= 1)
+        .sort((a, b) => b.stamp.drawOrder - a.stamp.drawOrder)[0];
+      if (actualStamp) return { kind: 'plot', plotId: actualStamp.stamp.plotId };
+
       const plantTargets = garden.plots.flatMap((anchor) => anchor.children.map((root) => ({ anchor, root })));
       const plantHits = raycaster.intersectObjects(plantTargets.map(({ root }) => root), true);
       for (const hit of plantHits) {
@@ -116,6 +147,16 @@ export function createGardenPicker(
         const index = plotTargets.indexOf(plotHit.object as typeof plotTargets[number]);
         return index < 0 ? null : { kind: 'plot', plotId: garden.plots[index]!.plotId };
       }
+
+      const supplementalStamp = projectedStamps
+        .filter(({ cssX, cssY, supplementalRadius }) => Math.abs(clientX - cssX) <= supplementalRadius
+          && Math.abs(clientY - cssY) <= supplementalRadius)
+        .sort((a, b) => {
+          const distanceA = (clientX - a.cssX) ** 2 + (clientY - a.cssY) ** 2;
+          const distanceB = (clientX - b.cssX) ** 2 + (clientY - b.cssY) ** 2;
+          return distanceA - distanceB || b.stamp.drawOrder - a.stamp.drawOrder;
+        })[0];
+      if (supplementalStamp) return { kind: 'plot', plotId: supplementalStamp.stamp.plotId };
       return raycaster.intersectObject(groundTarget, false).length > 0 ? { kind: 'ground' } : null;
     },
     dispose() {

@@ -84,7 +84,7 @@ describe('plot status snapshot reconciliation', () => {
     expect(h.stamp()?.center.y).toBeCloseTo(1.22);
     expect(h.rendered()).toHaveLength(1);
     expect(h.lifecycle.getStampPickDescriptors()).toEqual([
-      expect.objectContaining({ plotId: 'plot-0', visibleDiameter: expect.any(Number), drawOrder: 0 }),
+      expect.objectContaining({ plotId: 'plot-0', visibleDiameter: 0, opacity: 1, drawOrder: 0 }),
     ]);
   });
 
@@ -171,11 +171,16 @@ describe('plot status snapshot reconciliation', () => {
     expect(h.stamp()?.scale).toBe(0);
     expect(h.rendered()[0]?.dialScale).toBe(1);
 
-    h.lifecycle.update(ready, mature, 1, undefined, 100, false);
+    h.lifecycle.update(ready, mature, 1, undefined, 129, false);
     expect(h.stamp()?.scale).toBeGreaterThan(1);
     expect(h.stamp()?.scale).toBeLessThanOrEqual(1.15);
     expect(h.rendered()[0]?.dialScale).toBeGreaterThan(1);
-    expect(h.lifecycle.getStampPickDescriptors()[0]?.visibleDiameter).toBeCloseTo(0.62);
+    const peakStamp = h.stamp();
+    const peakPick = h.lifecycle.getStampPickDescriptors()[0];
+    if (!peakStamp || peakStamp.scale === undefined || !peakPick) {
+      throw new Error('Expected a ready stamp at its spring peak');
+    }
+    expect(peakPick.visibleDiameter).toBeCloseTo(0.62 * peakStamp.scale, 8);
 
     h.lifecycle.update(ready, mature, 1, undefined, 161, false);
     expect(h.rendered()[0]?.dialScale).toBe(1);
@@ -216,8 +221,10 @@ describe('plot status snapshot reconciliation', () => {
     h.lifecycle.update(ready, mature, 1, undefined, 1, true);
     expect(h.stamp()?.scale).toBe(1);
     expect(h.stamp()?.opacity).toBe(0);
+    expect(h.lifecycle.getStampPickDescriptors()[0]).toMatchObject({ visibleDiameter: 0.62, opacity: 0 });
     h.lifecycle.update(ready, mature, 1, undefined, 61, true);
     expect(h.stamp()?.opacity).toBeCloseTo(0.5);
+    expect(h.lifecycle.getStampPickDescriptors()[0]?.opacity).toBeCloseTo(0.5);
     h.lifecycle.update(ready, mature, 1, undefined, 121, true);
     expect(h.stamp()?.opacity).toBe(1);
     h.lifecycle.update(ready, mature, 1, undefined, 122, false);

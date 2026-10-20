@@ -1,4 +1,4 @@
-import { InstancedMesh, Matrix4, Quaternion, Vector3 } from 'three';
+import { InstancedMesh, Matrix4, MeshBasicMaterial, Quaternion, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPlotStatusResources, MAX_STATUS_PLOTS, PLOT_STATUS_DRAW_CALLS, type PlotStatusDescriptor } from './plot-status';
 import { palette } from './palette';
@@ -51,12 +51,16 @@ describe('plot status render resources', () => {
   it('builds the outlined paper ring and leaf-tick glyph in stamp face geometry', () => {
     const status = create();
     const stamp = meshes(status).find((mesh) => mesh.name === 'plot-status-stamp-face')!;
-    const part = stamp.geometry.getAttribute('statusStampPart');
-    const parts = new Set(Array.from({ length: part.count }, (_, index) => part.getX(index)));
-    expect(parts).toEqual(new Set([0, 1, 2]));
-    expect(part.count).toBe(stamp.geometry.getAttribute('position').count);
+    expect(stamp.geometry.getAttribute('uv').count).toBe(stamp.geometry.getAttribute('position').count);
+    expect(stamp.geometry.getAttribute('instanceStatusOpacity').count).toBe(MAX_STATUS_PLOTS);
+    expect(stamp.geometry.getAttribute('statusStampPart')).toBeUndefined();
     expect(stamp.material).toMatchObject({ customProgramCacheKey: expect.any(Function) });
     expect((stamp.material as { customProgramCacheKey: () => string }).customProgramCacheKey()).toBe('plot-status-stamp-v1');
+    const shader = { uniforms: {}, vertexShader: '#include <common>\n#include <begin_vertex>', fragmentShader: '#include <common>\n#include <color_fragment>' };
+    const compileShader = (stamp.material as MeshBasicMaterial).onBeforeCompile as unknown as (program: typeof shader) => void;
+    compileShader(shader);
+    expect(shader.fragmentShader.match(/diffuseColor\.a \*= vStatusStampOpacity/g)).toHaveLength(1);
+    expect(shader.fragmentShader).toContain('stampLeafContains(vStatusStampPoint)');
   });
 
   it('draws stamp passes over the scene without depth testing or writes', () => {
@@ -103,6 +107,32 @@ describe('plot status render resources', () => {
     };
     expect(rotationOf('plot-status-dial-face').angleTo(facing)).toBeCloseTo(0);
     expect(rotationOf('plot-status-stamp-face').angleTo(facing)).toBeCloseTo(0);
+  });
+
+  it('applies transition scale and stamp opacity through bounded instance attributes', () => {
+    const status = create();
+    const base = descriptor('0', 1);
+    status.update([{
+      ...base,
+      dialScale: 1.15,
+      stamp: { ...base.stamp!, scale: 0.8, opacity: 0.4 },
+    }]);
+    const mesh = (name: string) => meshes(status).find((candidate) => candidate.name === name)!;
+    const getScale = (name: string) => {
+      const matrix = new Matrix4();
+      const scale = new Vector3();
+      mesh(name).getMatrixAt(0, matrix);
+      matrix.decompose(new Vector3(), new Quaternion(), scale);
+      return scale.x;
+    };
+    expect(getScale('plot-status-dial-face')).toBeCloseTo(0.2 * 1.15);
+    expect(getScale('plot-status-stamp-face')).toBeCloseTo(0.31 * 0.8);
+    const stamp = mesh('plot-status-stamp-face');
+    const shadow = mesh('plot-status-stamp-shadow');
+    expect(stamp.geometry.getAttribute('instanceStatusOpacity').getX(0)).toBeCloseTo(0.4);
+    expect(shadow.geometry.getAttribute('instanceStatusOpacity').getX(0)).toBeCloseTo(0.4);
+    expect(stamp.material).toMatchObject({ transparent: true, depthTest: false, depthWrite: false });
+    expect(shadow.material).toMatchObject({ transparent: true, depthTest: false, depthWrite: false });
   });
 
   it('keeps six plots within the five-pass draw-call budget', () => {

@@ -204,15 +204,11 @@ describe('garden picker', () => {
   });
 
   it.each([[390, 844], [1280, 800]] as const)(
-    'ignores the transparent ripe Twistroot halo outside the plot target at %ix%i', (width, height) => {
-      const { picker, garden, screen, anchorScreen } = setup(width, height);
+    'keeps ripe Twistroot halo-free while its plot target remains pickable at %ix%i', (width, height) => {
+      const { picker, garden, anchorScreen } = setup(width, height);
       addRipeTwistroot(garden);
-      const halo = garden.plots[0]!.getObjectByName('ripe-halo');
-      expect(halo).toBeDefined();
-      const [x, y] = screen(halo!.localToWorld(new Vector3(0.45, 0.45, 0)));
-      const [anchorX, anchorY] = anchorScreen(0);
-      expect(Math.max(Math.abs(x - anchorX), Math.abs(y - anchorY))).toBeGreaterThan(24);
-      expect(picker.pick(x, y)).toEqual({ kind: 'ground' });
+      expect(garden.plots[0]!.getObjectByName('ripe-halo')).toBeUndefined();
+      expect(picker.pick(...anchorScreen(0))).toEqual({ kind: 'plot', plotId: 'plot-0' });
       picker.dispose();
     },
   );

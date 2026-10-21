@@ -23,14 +23,15 @@ test('renders all Twistroot stages, a readable 48px silhouette, and stable reduc
   await expect(status).toHaveAttribute('data-reduced-motion-stable', 'true');
   await expect(status).toHaveText('Ready');
   await expect(page.locator('#stage-strip span')).toHaveText(['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable']);
+  const silhouette = page.locator('#silhouette');
   const stageHeights = JSON.parse((await status.getAttribute('data-stage-heights'))!) as number[];
   expect(stageHeights).toHaveLength(5);
   expect(stageHeights[1]).toBeGreaterThan(stageHeights[0]!);
   expect(stageHeights[2]).toBeGreaterThan(stageHeights[1]!);
   expect(stageHeights[3]).toBeGreaterThan(stageHeights[2]!);
-  expect(stageHeights[4]).toBeGreaterThanOrEqual(stageHeights[3]!);
+  const changedBodyPixels = Number(await silhouette.getAttribute('data-stage-body-pixel-difference'));
+  expect(changedBodyPixels).toBeGreaterThan(24);
 
-  const silhouette = page.locator('#silhouette');
   await expect(silhouette).toHaveAttribute('aria-label', 'Twistroot silhouette');
   await expect(silhouette).toHaveCSS('width', '48px');
   await expect(silhouette).toHaveCSS('height', '48px');

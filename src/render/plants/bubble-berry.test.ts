@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Box3, Color, Mesh, type Material } from 'three';
+import { Box3, Color, Mesh, MeshToonMaterial, Vector3, type Material } from 'three';
 import type { PlantSnapshot } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { palette } from '../palette';
@@ -13,9 +13,13 @@ const meshes = (rig: ReturnType<typeof createBubbleBerry>) => {
   const result: Mesh[] = []; rig.root.traverse((object) => { if (object instanceof Mesh) result.push(object); }); return result;
 };
 const part = (rig: ReturnType<typeof createBubbleBerry>, name: string) => meshes(rig).find((mesh) => mesh.userData.part === name)!;
-const pose = (rig: ReturnType<typeof createBubbleBerry>) => {
+const plantBounds = (rig: ReturnType<typeof createBubbleBerry>) => {
   rig.root.updateMatrixWorld(true);
-  return meshes(rig).flatMap((mesh) => mesh.matrixWorld.toArray());
+  return meshes(rig).filter((mesh) => mesh.userData.part !== 'blob' && !String(mesh.userData.part).endsWith('outline'))
+    .reduce((bounds, mesh) => {
+      mesh.geometry.computeBoundingBox();
+      return bounds.union(new Box3().copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld));
+    }, new Box3());
 };
 
 describe('createBubbleBerry', () => {
@@ -28,7 +32,7 @@ describe('createBubbleBerry', () => {
       const leafBounds = new Box3().setFromObject(leaves);
       return {
         domeSize: dome.scale.x,
-        berrySize: berryCluster.scale.x,
+        berrySize: berryCluster.scale.y,
         leafScale: leaves.scale.toArray(),
         domeMatrix: dome.matrixWorld.toArray(),
         leafDomeGap: leafBounds.min.y - domeBounds.max.y,
@@ -97,35 +101,70 @@ describe('createBubbleBerry', () => {
     expect(berries.material).toHaveProperty('color', new Color(palette.plants['bubble-berry'].fruit[1]));
     expect(highlights.material).toHaveProperty('color', new Color(palette.plants['bubble-berry'].accent.highlight));
     expect(all.filter((mesh) => mesh.userData.part === 'blob')).toHaveLength(1);
-    expect(all.filter((mesh) => mesh.userData.part === 'halo')).toHaveLength(1);
+    expect(all.filter((mesh) => mesh.userData.part === 'halo')).toHaveLength(0);
     expect(berries.userData.berryCount).toBeGreaterThanOrEqual(4);
     expect(berries.userData.berryCount).toBeLessThanOrEqual(6);
     expect(highlights.userData.highlightCount).toBeGreaterThanOrEqual(berries.userData.berryCount);
     rig.dispose();
   });
 
-  it('shows a ripe halo only at harvestable stage and keeps the signal in reduced motion', () => {
-    const { rig } = setup(); const halo = part(rig, 'halo'); const berries = part(rig, 'berries');
-    (['Seed', 'Sprout', 'Growing', 'Mature'] as const).forEach((stage) => {
-      rig.update(plant(stage, 0.6), 800, false); expect(halo.visible).toBe(false);
-    });
-    rig.update(plant('Harvestable', 1), 0, false); expect(halo.visible).toBe(true); const rest = berries.rotation.z;
-    rig.update(plant('Harvestable', 1), 600, false); expect(berries.rotation.z).not.toBe(rest);
-    rig.update(plant('Harvestable', 1), 600, true); const still = pose(rig);
-    rig.update(plant('Harvestable', 1), 60_000, true); expect(pose(rig)).toEqual(still); expect(halo.visible).toBe(true);
+  it('warms fruit in linear space and changes the ripe silhouette by at least eight percent', () => {
+    const { rig } = setup(); const berries = part(rig, 'berries');
+    rig.update(plant('Growing', 0.4), 0, true);
+    expect((berries.material as MeshToonMaterial).color).toEqual(new Color(palette.plants['bubble-berry'].fruit[3]));
+    rig.update(plant('Mature', 0.95), 0, true); const mature = plantBounds(rig).getSize(new Vector3());
+    rig.update(plant('Harvestable', 1), 0, true);
+    expect((berries.material as MeshToonMaterial).color).toEqual(new Color(palette.plants['bubble-berry'].fruit[1]));
+    const ripe = plantBounds(rig).getSize(new Vector3());
+    expect(Math.max((ripe.x - mature.x) / mature.x, (ripe.y - mature.y) / mature.y)).toBeGreaterThanOrEqual(0.08);
     rig.dispose();
   });
 
-  it('disposes owned geometry and halo material once while preserving borrowed materials and blob resources', () => {
+  it('rotates each leaf 15 degrees outward and keeps the shared rim hook and ripe shader state', () => {
+    const { rig } = setup(); const leaves = part(rig, 'leaves'); const berries = part(rig, 'berries');
+    const positions = leaves.geometry.getAttribute('position'); const verticesPerLeaf = positions.count / 8;
+    rig.update(plant('Mature', 0.95), 0, true);
+    const original = Float32Array.from(positions.array);
+    const leafSamples = Array.from({ length: 8 }, (_, leaf) => {
+      const azimuth = leaf * Math.PI * 2 / 8;
+      const hingeX = Math.sin(azimuth) * 0.23; const hingeZ = Math.cos(azimuth) * 0.23;
+      const radial = (x: number, z: number) => (x - hingeX) * Math.sin(azimuth) + (z - hingeZ) * Math.cos(azimuth);
+      let outermost = leaf * verticesPerLeaf; let largestRadius = -Infinity;
+      for (let vertex = leaf * verticesPerLeaf; vertex < (leaf + 1) * verticesPerLeaf; vertex += 1) {
+        const offset = vertex * 3;
+        const radius = radial(original[offset]!, original[offset + 2]!);
+        if (radius > largestRadius) { largestRadius = radius; outermost = vertex; }
+      }
+      const initial = Math.atan2(original[outermost * 3 + 1]! - 0.065, largestRadius);
+      return { outermost, initial, radial };
+    });
+    rig.update(plant('Harvestable', 1), 0, true);
+    leafSamples.forEach(({ outermost, initial, radial }) => {
+      const opened = Math.atan2(positions.getY(outermost) - 0.065,
+        radial(positions.getX(outermost), positions.getZ(outermost)));
+      expect(opened - initial).toBeCloseTo(Math.PI / 12, 5);
+    });
+
+    const material = berries.material as MeshToonMaterial;
+    const shader: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string } = {
+      uniforms: {}, vertexShader: '', fragmentShader: '#include <common>\n#include <opaque_fragment>',
+    };
+    material.onBeforeCompile(shader as never, {} as never);
+    expect(shader.uniforms).toHaveProperty('seedPacketRimColor');
+    expect(shader.uniforms.seedPacketRipe).toEqual({ value: 1 });
+    rig.dispose();
+  });
+
+  it('disposes owned geometry and fruit material once while preserving borrowed materials and blob resources', () => {
     const { rig } = setup(); const all = meshes(rig);
     const geometries = [...new Set(all.filter((mesh) => mesh.userData.part !== 'blob').map((mesh) => mesh.geometry))]
       .map((geometry) => vi.spyOn(geometry, 'dispose'));
-    const halo = part(rig, 'halo').material; const haloDispose = vi.spyOn(halo as Material, 'dispose');
+    const fruitMaterial = part(rig, 'berries').material; const fruitDispose = vi.spyOn(fruitMaterial as Material, 'dispose');
     const blobGeometry = vi.spyOn(part(rig, 'blob').geometry, 'dispose');
     const borrowed = [...new Set(all.flatMap((mesh) => Array.isArray(mesh.material) ? mesh.material : [mesh.material]))]
-      .filter((material) => material !== halo).map((material) => vi.spyOn(material, 'dispose'));
+      .filter((material) => material !== fruitMaterial).map((material) => vi.spyOn(material, 'dispose'));
     rig.dispose(); rig.dispose(); geometries.forEach((spy) => expect(spy).toHaveBeenCalledTimes(1));
-    expect(haloDispose).toHaveBeenCalledTimes(1); expect(blobGeometry).not.toHaveBeenCalled();
+    expect(fruitDispose).toHaveBeenCalledTimes(1); expect(blobGeometry).not.toHaveBeenCalled();
     borrowed.forEach((spy) => expect(spy).not.toHaveBeenCalled());
   });
 });

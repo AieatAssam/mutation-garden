@@ -15,7 +15,6 @@ const meshes = (rig: ReturnType<typeof createTwistroot>) => {
 const part = (rig: ReturnType<typeof createTwistroot>, name: string) => meshes(rig).find((mesh) => mesh.userData.part === name)!;
 const positions = (rig: ReturnType<typeof createTwistroot>) => Array.from(part(rig, 'root-body').geometry.getAttribute('position').array);
 const maxDelta = (left: readonly number[], right: readonly number[]) => Math.max(...left.map((value, index) => Math.abs(value - right[index]!)));
-
 function measuredTurns(rig: ReturnType<typeof createTwistroot>): number {
   const attribute = part(rig, 'root-body').geometry.getAttribute('position');
   const ringCount = attribute.count / 10;
@@ -158,13 +157,80 @@ describe('createTwistroot', () => {
     };
     rig.update(plant('Harvestable', 1), 0, true); const still = pose();
     rig.update(plant('Harvestable', 1), 60_000, true); expect(pose()).toEqual(still);
-    const halo = part(rig, 'ripe-halo');
+    const ring = part(rig, 'growth-ring');
     for (const stage of ['Seed', 'Sprout', 'Growing', 'Mature'] as const) {
       rig.update(plant(stage, 1), 60_000, true);
-      expect(halo.visible).toBe(false);
+      expect(ring.visible).toBe(false);
     }
     rig.update(plant('Harvestable', 1), 60_000, true);
-    expect(halo.visible).toBe(true);
+    expect(ring.visible).toBe(true);
+    rig.dispose();
+  });
+
+  it('warms the root body and applies the specified ripe emergence above the grounded soil', () => {
+    const { rig } = setup(); const body = part(rig, 'root-body'); const soil = part(rig, 'soil-bulge');
+    const tuft = rig.root.getObjectByName('tuft')!; const ring = part(rig, 'growth-ring');
+    rig.update(plant('Growing', 0.4), 0, true);
+    expect((body.material as MeshToonMaterial).color).toEqual(new Color(palette.plants.twistroot.fruit[3]));
+    rig.update(plant('Growing', 0.75), 0, true);
+    expect((body.material as MeshToonMaterial).color).toEqual(
+      new Color(palette.plants.twistroot.fruit[3]).lerp(new Color(palette.plants.twistroot.fruit[1]), 0.5),
+    );
+    rig.update(plant('Mature', 0.95), 0, true);
+    const matureTuftY = tuft.position.y;
+    rig.root.updateMatrixWorld(true);
+    const matureSoilTop = new Box3().setFromObject(soil).max.y;
+    expect(body.position.y).toBe(0);
+    rig.update(plant('Harvestable', 1), 0, true);
+    expect((body.material as MeshToonMaterial).color).toEqual(new Color(palette.plants.twistroot.fruit[1]));
+    rig.root.updateMatrixWorld(true);
+    expect(body.position.y).toBeCloseTo(0.08, 6);
+    expect(new Box3().setFromObject(soil).max.y).toBeCloseTo(matureSoilTop, 6);
+    expect(tuft.position.y - matureTuftY).toBeGreaterThanOrEqual(0.08);
+    expect(ring.visible).toBe(true);
+    expect(ring.getWorldPosition(new Vector3()).y).toBeCloseTo(matureSoilTop + 0.03, 6);
+    rig.dispose();
+  });
+
+  it('splays every tuft blade outward by the specified angle and keeps the shader and growth-ring centres aligned', () => {
+    const { rig } = setup(); const leaves = part(rig, 'tuft-leaf'); const body = part(rig, 'root-body');
+    const attribute = leaves.geometry.getAttribute('position'); const verticesPerLeaf = attribute.count / 7;
+    const before = Float32Array.from(attribute.array);
+    rig.update(plant('Mature', 0.95), 0, true);
+    const closedTopIndices = Array.from({ length: 7 }, (_, leaf) => {
+      let top = leaf * verticesPerLeaf;
+      for (let vertex = top + 1; vertex < (leaf + 1) * verticesPerLeaf; vertex += 1) {
+        if (before[vertex * 3 + 1]! > before[top * 3 + 1]!) top = vertex;
+      }
+      return top;
+    });
+    rig.update(plant('Harvestable', 1), 0, true);
+    for (let leaf = 0; leaf < 7; leaf += 1) {
+      const index = closedTopIndices[leaf]!;
+      const azimuth = leaf * Math.PI * 2 / 7;
+      const radial = (x: number, z: number) => x * Math.cos(azimuth) + z * Math.sin(azimuth);
+      const initialAngle = Math.atan2(radial(before[index * 3]!, before[index * 3 + 2]!), before[index * 3 + 1]! - 0.12);
+      const ripeAngle = Math.atan2(radial(attribute.getX(index), attribute.getZ(index)), attribute.getY(index) - 0.12);
+      expect(ripeAngle - initialAngle).toBeCloseTo(Math.PI / 9, 5);
+    }
+
+    const material = body.material as MeshToonMaterial;
+    const shader: { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string } = {
+      uniforms: {}, vertexShader: '', fragmentShader: '#include <common>\n#include <opaque_fragment>',
+    };
+    material.onBeforeCompile(shader as never, {} as never);
+    expect(shader.uniforms).toHaveProperty('seedPacketRimColor');
+    expect(shader.uniforms.seedPacketRipe).toEqual({ value: 1 });
+
+    const ring = part(rig, 'growth-ring'); const outline = part(rig, 'growth-ring-outline');
+    expect((ring.geometry as import('three').TorusGeometry).parameters).toMatchObject({ radius: 0.3, tube: 0.025 });
+    expect(ring.position.toArray()).toEqual([0, 0.13, 0]);
+    expect(outline.userData.outlineThickness).toBe(0.01);
+    expect((ring.material as MeshToonMaterial).depthTest).toBe(true);
+    expect((outline.material as Material).depthTest).toBe(true);
+    rig.root.updateMatrixWorld(true);
+    expect(ring.getWorldPosition(new Vector3()).distanceTo(outline.getWorldPosition(new Vector3()))).toBeLessThan(1e-9);
+    expect(ring.getWorldPosition(new Vector3()).y).toBeCloseTo(0.13, 6);
     rig.dispose();
   });
 
@@ -176,14 +242,14 @@ describe('createTwistroot', () => {
     const ownedGeometries = [...new Set(all.filter((mesh) => mesh.userData.part !== 'blob' && mesh.userData.part !== 'root-outline').map((mesh) => mesh.geometry))];
     const ownedDisposals = ownedGeometries.map((geometry) => vi.spyOn(geometry, 'dispose'));
     const blob = part(rig, 'blob'); const blobGeometryDispose = vi.spyOn(blob.geometry, 'dispose');
-    const haloMaterial = part(rig, 'ripe-halo').material as Material;
-    const haloMaterialDispose = vi.spyOn(haloMaterial, 'dispose');
+    const rootMaterial = part(rig, 'root-body').material as Material;
+    const rootMaterialDispose = vi.spyOn(rootMaterial, 'dispose');
     const borrowedMaterials = [...new Set(all.flatMap((mesh) => Array.isArray(mesh.material) ? mesh.material : [mesh.material]))]
-      .filter((material) => material !== haloMaterial).map((material) => vi.spyOn(material, 'dispose'));
+      .filter((material) => material !== rootMaterial).map((material) => vi.spyOn(material, 'dispose'));
     rig.dispose(); rig.dispose();
     ownedDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
     expect(geometryDispose).toHaveBeenCalledTimes(1);
-    expect(haloMaterialDispose).toHaveBeenCalledTimes(1);
+    expect(rootMaterialDispose).toHaveBeenCalledTimes(1);
     expect(blobGeometryDispose).not.toHaveBeenCalled();
     borrowedMaterials.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
   });

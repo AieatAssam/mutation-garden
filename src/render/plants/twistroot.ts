@@ -3,14 +3,12 @@ import {
   BufferGeometry,
   Color,
   ConeGeometry,
-  DoubleSide,
   Group,
   Matrix4,
   Mesh,
-  PlaneGeometry,
   Quaternion,
-  ShaderMaterial,
   SphereGeometry,
+  TorusGeometry,
   Vector3,
 } from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
@@ -111,18 +109,33 @@ function makeTuftGeometry(): BufferGeometry {
   return merged;
 }
 
-function makeHaloMaterial(): ShaderMaterial {
-  return new ShaderMaterial({
-    uniforms: {
-      tint: { value: new Color(palette.plants.twistroot.fruit[0]) },
-      strength: { value: 0.38 },
-    },
-    vertexShader: 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}',
-    fragmentShader: 'uniform vec3 tint; uniform float strength; varying vec2 vUv; void main(){float d=length(vUv-0.5)*2.0;float a=smoothstep(0.28,0.44,d)*(1.0-smoothstep(0.82,1.0,d))*strength;gl_FragColor=vec4(tint,a);\n#include <colorspace_fragment>\n}',
-    transparent: true,
-    depthWrite: false,
-    side: DoubleSide,
-  });
+function updateTuftSplay(geometry: BufferGeometry, original: Float32Array, splayed: boolean): void {
+  const positions = geometry.getAttribute('position');
+  const verticesPerLeaf = positions.count / TUFT_LEAVES;
+  const angle = splayed ? Math.PI / 9 : 0;
+  const cosine = Math.cos(angle);
+  const sine = Math.sin(angle);
+  for (let leaf = 0; leaf < TUFT_LEAVES; leaf += 1) {
+    const azimuth = (leaf / TUFT_LEAVES) * Math.PI * 2;
+    const radialX = Math.cos(azimuth);
+    const radialZ = Math.sin(azimuth);
+    for (let vertex = leaf * verticesPerLeaf; vertex < (leaf + 1) * verticesPerLeaf; vertex += 1) {
+      const offset = vertex * 3;
+      const x = original[offset]!;
+      const y = original[offset + 1]! - 0.12;
+      const z = original[offset + 2]!;
+      const radial = x * radialX + z * radialZ;
+      const tangentX = x - radial * radialX;
+      const tangentZ = z - radial * radialZ;
+      const openedRadial = radial * cosine + y * sine;
+      const openedY = -radial * sine + y * cosine;
+      positions.setXYZ(vertex, tangentX + openedRadial * radialX, 0.12 + openedY,
+        tangentZ + openedRadial * radialZ);
+    }
+  }
+  positions.needsUpdate = true;
+  geometry.computeVertexNormals();
+  geometry.computeBoundingSphere();
 }
 
 export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): PlantRig {
@@ -132,9 +145,10 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
   const rootGeometry = makeRootGeometry();
   const soilGeometry = new SphereGeometry(1, 18, 12);
   const tuftGeometry = makeTuftGeometry();
-  const haloGeometry = new PlaneGeometry(0.9, 0.9);
-  const ownedGeometries = [rootGeometry, soilGeometry, tuftGeometry, haloGeometry];
-  const haloMaterial = makeHaloMaterial();
+  const originalTuftPositions = Float32Array.from(tuftGeometry.getAttribute('position').array);
+  const growthRingGeometry = new TorusGeometry(0.3, 0.025, 6, 32);
+  growthRingGeometry.rotateX(Math.PI / 2);
+  const ownedGeometries = [rootGeometry, soilGeometry, tuftGeometry, growthRingGeometry];
 
   const soilBulge = new Mesh(soilGeometry, materials.toon(palette.environment.soil[1]));
   soilBulge.name = 'soil-bulge';
@@ -151,7 +165,29 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
   soilOutline.renderOrder = 2;
   root.add(soilOutline);
 
-  const rootBody = new Mesh(rootGeometry, materials.toon(palette.plants.twistroot.fruit[1]));
+  const fruitRamp = palette.plants.twistroot.fruit;
+  const toonRootMaterial = materials.toon(fruitRamp[1]);
+  const baseCompile = toonRootMaterial.onBeforeCompile;
+  const baseProgramKey = toonRootMaterial.customProgramCacheKey();
+  const rootMaterial = toonRootMaterial.clone();
+  rootMaterial.customProgramCacheKey = () => `${baseProgramKey}-twistroot-ripe-ramp-v1`;
+  let isRipe = false;
+  let tuftIsSplayed = false;
+  let ripeUniform: { value: number } | undefined;
+  rootMaterial.onBeforeCompile = (shader, renderer) => {
+    baseCompile.call(rootMaterial, shader, renderer);
+    shader.uniforms.seedPacketStepOne = { value: new Color(fruitRamp[0]) };
+    shader.uniforms.seedPacketRipe = { value: isRipe ? 1 : 0 };
+    ripeUniform = shader.uniforms.seedPacketRipe as { value: number };
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
+      '#include <common>\nuniform vec3 seedPacketStepOne;\nuniform float seedPacketRipe;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>',
+      'float seedPacketBaseLight = max(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0001);\n'
+        + 'float seedPacketBand = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722)) / seedPacketBaseLight;\n'
+        + 'outgoingLight = mix(outgoingLight, seedPacketStepOne, step(0.92, seedPacketBand) * seedPacketRipe);\n'
+        + '#include <opaque_fragment>');
+  };
+  const rootBody = new Mesh(rootGeometry, rootMaterial);
   rootBody.name = 'root-body';
   rootBody.userData.part = 'root-body';
   rootBody.renderOrder = 3;
@@ -177,13 +213,18 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
   leavesOutline.renderOrder = 2;
   leaves.add(leavesOutline);
 
-  const halo = new Mesh(haloGeometry, haloMaterial);
-  halo.name = 'ripe-halo';
-  halo.userData.part = 'ripe-halo';
-  halo.rotation.x = -Math.PI / 2;
-  halo.renderOrder = 1;
-  halo.visible = false;
-  root.add(halo);
+  const growthRing = new Mesh(growthRingGeometry, materials.toon(palette.plants.twistroot.accent['growth-ring']));
+  growthRing.name = 'growth-ring';
+  growthRing.userData.part = 'growth-ring';
+  growthRing.position.set(0, 0.13, 0);
+  growthRing.renderOrder = 4;
+  growthRing.visible = false;
+  root.add(growthRing);
+  const growthRingOutline = materials.outline(growthRingGeometry, 0.01);
+  growthRingOutline.name = 'growth-ring-outline';
+  growthRingOutline.userData.part = 'growth-ring-outline';
+  growthRingOutline.renderOrder = 3;
+  growthRing.add(growthRingOutline);
 
   const blob = materials.blob();
   blob.name = 'blob';
@@ -197,35 +238,51 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
   return {
     root,
     update(plant: PlantSnapshot, presentationNowMs: number, reducedMotion: boolean) {
-      const progress = smoothstep(plant.progress);
+      const rawProgress = Math.min(1, Math.max(0, plant.progress));
+      const progress = smoothstep(rawProgress);
       const rootGrowth = SEED_ROOT_GROWTH + (1 - SEED_ROOT_GROWTH) * progress;
       updateRootGeometry(rootGeometry, rootGrowth);
+      const ripe = plant.stage === 'Harvestable';
+      isRipe = ripe;
+      if (progress <= 0.5) rootMaterial.color.set(fruitRamp[3]);
+      else if (progress >= 1) rootMaterial.color.set(fruitRamp[1]);
+      else {
+        const warm = smoothstep((rawProgress - 0.5) / 0.5);
+        rootMaterial.color.copy(new Color(fruitRamp[3]).lerp(new Color(fruitRamp[1]), warm));
+      }
+      if (ripeUniform) ripeUniform.value = ripe ? 1 : 0;
 
-      const tipY = 0.085 + ROOT_HEIGHT * rootGrowth;
+      const tipY = 0.085 + ROOT_HEIGHT * rootGrowth + (ripe ? 0.08 : 0);
+      rootBody.position.y = ripe ? 0.08 : 0;
       const tipAngle = ROOT_TURNS * rootGrowth * Math.PI * 2;
       tuft.position.set(ROOT_CENTER_RADIUS * Math.cos(tipAngle), tipY - 0.015, ROOT_CENTER_RADIUS * Math.sin(tipAngle));
       tuft.rotation.y = tipAngle;
       const tuftGrowth = 0.08 + 0.92 * smoothstep((plant.progress - 0.2) / 0.64);
       tuft.scale.setScalar(tuftGrowth);
+      if (ripe !== tuftIsSplayed) {
+        updateTuftSplay(tuftGeometry, originalTuftPositions, ripe);
+        tuftIsSplayed = ripe;
+      }
       soilBulge.scale.set(0.29 + progress * 0.05, 0.055, 0.29 + progress * 0.05);
       soilOutline.scale.copy(soilBulge.scale);
 
-      const ripe = plant.stage === 'Harvestable';
-      halo.visible = ripe;
-      halo.position.set(0, 0.015, 0);
-      halo.scale.setScalar(0.7 + progress * 0.3);
+      growthRing.visible = ripe;
       root.rotation.z = ripe && !reducedMotion
         ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.035
         : 0;
       root.scale.y = reducedMotion
         ? 1
         : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
+      blob.position.y = 0.008 / root.scale.y;
+      soilBulge.position.y = 0.045 / root.scale.y;
+      soilOutline.position.copy(soilBulge.position);
+      growthRing.position.set(0, 0.13 / root.scale.y, 0);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       for (const geometry of ownedGeometries) geometry.dispose();
-      haloMaterial.dispose();
+      rootMaterial.dispose();
       root.clear();
     },
   };

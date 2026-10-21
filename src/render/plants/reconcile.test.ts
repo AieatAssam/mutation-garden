@@ -95,17 +95,26 @@ describe('plant reconciliation', () => {
     const rig = anchors[0]!.children[0]!;
     const berries = part(rig, 'berries');
     const outline = part(rig, 'berries-outline');
-    const halo = part(rig, 'halo');
     const blob = part(rig, 'blob');
     berries.visible = false;
     outline.position.y = 100;
-    halo.position.y = 100;
     blob.position.y = 100;
+    expect(rig.getObjectByName('halo')).toBeUndefined();
     const expected = semanticWorldTop(anchors[0]!);
     expect(reconciler.getTop('plot-0', target)).toBe(true);
     expect(target.x).toBeCloseTo(expected.x, 5);
     expect(target.y).toBeCloseTo(expected.y, 5);
     expect(target.z).toBeCloseTo(expected.z, 5);
+    expect(target.y).toBeLessThan(100);
+
+    const sunny = plant(2, 1, 'Harvestable', 'sunny-sprout');
+    reconciler.update(snap(100, [bubble]), snap(101, [sunny]), 1, true);
+    const sunnyRig = anchors[0]!.children[0]!;
+    const sunnyHalo = part(sunnyRig, 'halo');
+    sunnyHalo.position.y = 100;
+    const sunnyExpected = semanticWorldTop(anchors[0]!);
+    expect(reconciler.getTop('plot-0', target)).toBe(true);
+    expect(target.y).toBeCloseTo(sunnyExpected.y, 5);
     expect(target.y).toBeLessThan(100);
 
     const visibleTarget = target.clone();
@@ -160,10 +169,14 @@ describe('plant reconciliation', () => {
     root.traverse((node) => { if (node instanceof Mesh) meshes.push(node); });
     const geometries = [...new Set(meshes.filter((mesh) => mesh.userData.part !== 'blob').map((mesh) => mesh.geometry))].map((g) => vi.spyOn(g, 'dispose'));
     const halo = vi.spyOn(part(root, 'halo').material as Material, 'dispose');
-    const borrowed = [...new Set(meshes.flatMap((mesh) => Array.isArray(mesh.material) ? mesh.material : [mesh.material]))].filter((material) => material !== part(root, 'halo').material).map((m) => vi.spyOn(m, 'dispose'));
+    const fruit = vi.spyOn(part(root, 'fruit').material as Material, 'dispose');
+    const borrowed = [...new Set(meshes.flatMap((mesh) => Array.isArray(mesh.material) ? mesh.material : [mesh.material]))]
+      .filter((material) => material !== part(root, 'halo').material && material !== part(root, 'fruit').material)
+      .map((m) => vi.spyOn(m, 'dispose'));
     reconciler.update(snap(1, [plant(1, 0.5)]), snap(2, [null]), 0, true);
     expect(anchors[0]!.children).toHaveLength(0); geometries.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
-    expect(halo).toHaveBeenCalledTimes(1); borrowed.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
+    expect(halo).toHaveBeenCalledTimes(1); expect(fruit).toHaveBeenCalledTimes(1);
+    borrowed.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     reconciler.update(snap(2, [null]), snap(3, [plant(3, 0.2, 'Sprout')]), 0, true);
     const replanted = anchors[0]!.children[0]!; expect(replanted).not.toBe(root);
     const unsupported = { ...plant(4, 0.3, 'Sprout'), speciesId: 'unsupported' } as unknown as PlantSnapshot;
@@ -184,11 +197,11 @@ describe('plant reconciliation', () => {
     reconciler.update(snap(101, [sunny]), snap(102, [bubble]), 1, true);
     const bubbleRig = anchors[0]!.children[0]!;
     expect(bubbleRig).not.toBe(sunnyRig); expect(anchors[0]!.children).toHaveLength(1);
-    expect(part(bubbleRig, 'berries')).toBeDefined(); expect(part(bubbleRig, 'halo').visible).toBe(false);
+    expect(part(bubbleRig, 'berries')).toBeDefined(); expect(bubbleRig.getObjectByName('halo')).toBeUndefined();
 
     const ripe: PlantSnapshot = { ...bubble, progress: 1, stage: 'Harvestable' };
     reconciler.update(snap(102, [bubble]), snap(103, [ripe]), 1, true);
-    expect(part(bubbleRig, 'halo').visible).toBe(true);
+    expect(bubbleRig.getObjectByName('halo')).toBeUndefined();
     reconciler.update(snap(103, [ripe]), snap(104, [null]), 1, true);
     expect(anchors[0]!.children).toHaveLength(0);
     reconciler.update(snap(104, [null]), snap(105, [{ ...bubble, plantedAt: 105, progress: 0.12, stage: 'Sprout' }]), 1, true);
@@ -207,7 +220,7 @@ describe('plant reconciliation', () => {
     const rootRig = anchors[0]!.children[0]!;
     expect(rootRig).not.toBe(sunnyRig);
     expect(part(rootRig, 'root-body')).toBeDefined();
-    expect(part(rootRig, 'ripe-halo').visible).toBe(false);
+    expect(rootRig.getObjectByName('ripe-halo')).toBeUndefined();
 
     const growing: PlantSnapshot = { ...twistroot, progress: 0.88, stage: 'Mature' };
     reconciler.update(snap(102, [twistroot]), snap(103, [growing]), 1, true);
@@ -217,7 +230,7 @@ describe('plant reconciliation', () => {
     const ripe: PlantSnapshot = { ...twistroot, progress: 1, stage: 'Harvestable' };
     reconciler.update(snap(103, [growing]), snap(104, [ripe]), 1, true);
     expect(anchors[0]!.children[0]).toBe(rootRig);
-    expect(part(rootRig, 'ripe-halo').visible).toBe(true);
+    expect(rootRig.getObjectByName('ripe-halo')).toBeUndefined();
 
     reconciler.update(snap(104, [ripe]), snap(105, [null]), 1, true);
     expect(anchors[0]!.children).toHaveLength(0);

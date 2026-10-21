@@ -56,9 +56,30 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
     fragmentShader: 'uniform vec3 tint; uniform float strength; varying vec2 vUv; void main(){float d=length(vUv-0.5)*2.0;float a=smoothstep(0.32,0.48,d)*(1.0-smoothstep(0.85,1.0,d))*strength;gl_FragColor=vec4(tint,a);\n#include <colorspace_fragment>\n}',
     transparent: true, depthWrite: false, side: DoubleSide });
   const ownedGeometries: BufferGeometry[] = [stemGeometry, leafGeometry, fruitGeometry, haloGeometry];
+  const fruitRamp = palette.plants['sunny-sprout'].fruit;
+  const toonFruitMaterial = materials.toon(fruitRamp[1]);
+  const baseCompile = toonFruitMaterial.onBeforeCompile;
+  const baseProgramKey = toonFruitMaterial.customProgramCacheKey();
+  const fruitMaterial = toonFruitMaterial.clone();
+  fruitMaterial.customProgramCacheKey = () => `${baseProgramKey}-sunny-ripe-ramp-v1`;
+  let isRipe = false;
+  let ripeUniform: { value: number } | undefined;
+  fruitMaterial.onBeforeCompile = (shader, renderer) => {
+    baseCompile.call(fruitMaterial, shader, renderer);
+    shader.uniforms.seedPacketStepOne = { value: new Color(fruitRamp[0]) };
+    shader.uniforms.seedPacketRipe = { value: isRipe ? 1 : 0 };
+    ripeUniform = shader.uniforms.seedPacketRipe as { value: number };
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>',
+      '#include <common>\nuniform vec3 seedPacketStepOne;\nuniform float seedPacketRipe;');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <opaque_fragment>',
+      'float seedPacketBaseLight = max(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722)), 0.0001);\n'
+        + 'float seedPacketBand = dot(outgoingLight, vec3(0.2126, 0.7152, 0.0722)) / seedPacketBaseLight;\n'
+        + 'outgoingLight = mix(outgoingLight, seedPacketStepOne, step(0.92, seedPacketBand) * seedPacketRipe);\n'
+        + '#include <opaque_fragment>');
+  };
 
-  function part(geometry: BufferGeometry, color: string, name: string, parent = root): Mesh {
-    const mesh = new Mesh(geometry, materials.toon(color));
+  function part(geometry: BufferGeometry, color: string, name: string, parent = root, material = materials.toon(color)): Mesh {
+    const mesh = new Mesh(geometry, material);
     mesh.name = name;
     mesh.userData.part = name;
     mesh.renderOrder = 3;
@@ -75,7 +96,7 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
   const fruitRig = new Group();
   fruitRig.userData.part = 'fruit';
   root.add(fruitRig);
-  part(fruitGeometry, palette.plants['sunny-sprout'].fruit[1], 'fruit', fruitRig);
+  part(fruitGeometry, fruitRamp[1], 'fruit', fruitRig, fruitMaterial);
   const halo = new Mesh(haloGeometry, haloMaterial);
   halo.name = 'halo';
   halo.userData.part = 'halo';
@@ -107,26 +128,37 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
       rightLeaf.position.set(0.21 * unfurl, Math.min(length * 0.38, 0.28), 0);
       leftLeaf.scale.set(0.78 * unfurl, 0.62 * unfurl, 0.86 * unfurl);
       rightLeaf.scale.copy(leftLeaf.scale);
-      leftLeaf.rotation.z = 0.42;
-      rightLeaf.rotation.z = -0.42;
+      const ripe = plant.stage === 'Harvestable';
+      isRipe = ripe;
+      const leafLift = ripe ? Math.PI / 15 : 0;
+      leftLeaf.rotation.z = 0.42 + leafLift;
+      rightLeaf.rotation.z = -0.42 - leafLift;
 
       const fruitScale = 0.08 + 0.92 * eased;
       fruitRig.position.set(0, length + FRUIT_RADIUS * fruitScale, 0);
-      fruitRig.scale.setScalar(fruitScale);
-      const ripe = plant.stage === 'Harvestable';
+      fruitRig.scale.setScalar(fruitScale * (ripe ? 1.12 : 1));
+      const warm = Math.max(0, Math.min(1, (progress - 0.5) / 0.5));
+      const easedWarm = warm * warm * (3 - 2 * warm);
+      if (progress <= 0.5) fruitMaterial.color.set(fruitRamp[3]);
+      else if (progress >= 1) fruitMaterial.color.set(fruitRamp[1]);
+      else fruitMaterial.color.copy(new Color(fruitRamp[3]).lerp(new Color(fruitRamp[1]), easedWarm));
+      if (ripeUniform) ripeUniform.value = ripe ? 1 : 0;
       halo.visible = ripe;
       fruitRig.rotation.z = ripe && !reducedMotion
         ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.075
         : 0;
-      root.scale.y = reducedMotion
+      const breathing = reducedMotion
         ? 1
         : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
+      root.scale.y = breathing * (ripe ? 1.08 : 1);
+      blob.position.y = 0.008 / root.scale.y;
     },
     dispose() {
       if (disposed) return;
       disposed = true;
       for (const geometry of ownedGeometries) geometry.dispose();
       haloMaterial.dispose();
+      fruitMaterial.dispose();
       root.clear();
     },
   };

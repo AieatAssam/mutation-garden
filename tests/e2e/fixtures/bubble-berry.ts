@@ -36,24 +36,70 @@ function renderSilhouette() {
   const camera = new OrthographicCamera(-0.9, 0.9, 0.9, -0.9, 0.1, 20);
   camera.position.set(0, 2.5, 5); camera.lookAt(0, 0.3, 0);
   const silhouetteMaterial = new MeshToonMaterial({ color: palette.ink['press-ink'], toneMapped: false });
-  const rig = makeRig({
+  const materialLibrary = {
     toon: () => silhouetteMaterial,
     outline: () => { const mesh = new Mesh(); mesh.visible = false; return mesh; },
     blob: () => { const mesh = new Mesh(); mesh.visible = false; return mesh; },
     dispose() {},
-  });
+  };
+  const rig = makeRig(materialLibrary);
   rig.update({ speciesId, plantedAt: 0, progress: 1, stage: 'Harvestable' }, 0, true);
   rig.root.traverse((object) => {
     if (object instanceof Mesh && (String(object.userData.part).endsWith('-outline')
-      || object.userData.part === 'halo' || object.userData.part === 'blob')) object.visible = false;
+      || ['halo', 'blob', 'growth-ring'].includes(String(object.userData.part)))) object.visible = false;
   });
   rig.root.updateMatrixWorld(true);
+  if (speciesId === 'twistroot') {
+    const matureRig = makeRig(materialLibrary);
+    matureRig.update({ speciesId, plantedAt: 0, progress: progress[3]!, stage: 'Mature' }, 0, true);
+    const bodyBounds = (target: typeof rig) => {
+      target.root.updateMatrixWorld(true);
+      const bounds = new Box3();
+      target.root.traverse((object) => {
+        if (object instanceof Mesh && ['root-body', 'tuft-leaf'].includes(String(object.userData.part))) bounds.expandByObject(object);
+      });
+      return bounds;
+    };
+    const matureBounds = bodyBounds(matureRig);
+    const ripeBounds = bodyBounds(rig);
+    const frameBounds = matureBounds.clone().union(ripeBounds);
+    const frameSize = Math.max(frameBounds.max.x - frameBounds.min.x, frameBounds.max.y - frameBounds.min.y) * 48 / 46;
+    camera.left = -frameSize / 2; camera.right = frameSize / 2;
+    camera.top = frameSize / 2; camera.bottom = -frameSize / 2;
+    camera.position.set(0, 0, frameSize * 3); camera.lookAt(0, 0, 0); camera.updateProjectionMatrix();
+    scene.add(new AmbientLight(palette.lighting.day['fill-sky'], 1));
+    const readBodySilhouette = (target: typeof rig, bounds: Box3) => {
+      target.root.position.sub(bounds.getCenter(new Vector3()));
+      target.root.updateMatrixWorld(true);
+      scene.add(target.root);
+      silhouetteRenderer.render(scene, camera);
+      const gl = silhouetteRenderer.getContext();
+      gl.finish();
+      const pixels = new Uint8Array(48 * 48 * 4);
+      gl.readPixels(0, 0, 48, 48, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      scene.remove(target.root);
+      return pixels;
+    };
+    const maturePixels = readBodySilhouette(matureRig, matureBounds);
+    const ripePixels = readBodySilhouette(rig, ripeBounds);
+    let changedBodyPixels = 0;
+    for (let index = 0; index < maturePixels.length; index += 4) {
+      if ((maturePixels[index + 3]! > 10) !== (ripePixels[index + 3]! > 10)) changedBodyPixels += 1;
+    }
+    silhouetteCanvas.dataset.stageBodyPixelDifference = String(changedBodyPixels);
+    const height = ripeBounds.max.y - ripeBounds.min.y;
+    silhouetteCanvas.dataset.projectedHeight = String(height / frameSize * 48);
+    rig.root.updateMatrixWorld(true);
+    scene.add(rig.root); silhouetteRenderer.render(scene, camera);
+    cleanup.push(() => { matureRig.dispose(); rig.dispose(); silhouetteMaterial.dispose(); silhouetteRenderer.dispose(); });
+    return;
+  }
   const bounds = new Box3().setFromObject(rig.root);
   const center = bounds.getCenter(new Vector3());
   const width = bounds.max.x - bounds.min.x;
   const height = bounds.max.y - bounds.min.y;
   rig.root.position.sub(center);
-  const silhouetteMargin = speciesId === 'twistroot' ? 48 / 46 : 1.3;
+  const silhouetteMargin = 1.3;
   const frameSize = Math.max(width, height) * silhouetteMargin;
   camera.left = -frameSize / 2; camera.right = frameSize / 2;
   camera.top = frameSize / 2; camera.bottom = -frameSize / 2;
@@ -72,6 +118,7 @@ function renderLineup() {
   const camera = new OrthographicCamera(-4, 4, 4, -4, 0.1, 50);
   camera.position.set(0, 3, 12); camera.lookAt(0, 0, 0);
   const portrait = innerHeight > innerWidth;
+  const portraitRowCenters = [26, 201, 376, 551, 751];
   const rigs = stages.map((stage, index) => {
     const holder = new Group();
     holder.scale.setScalar(1.55); scene.add(holder);
@@ -80,9 +127,9 @@ function renderLineup() {
     rig.root.updateMatrixWorld(true);
     const bounds = new Box3().setFromObject(rig.root);
     const centerY = portrait
-      ? 4.4 - (112 + index * 155) / innerHeight * 8.8
-      : -3.05 - bounds.min.y * 1.55;
-    holder.position.set(portrait ? 0 : (index - 2) * 1.92, centerY - bounds.getCenter(new Vector3()).y * 1.55, 0);
+      ? 4.4 - portraitRowCenters[index]! / innerHeight * 8.8
+      : -2.55 - bounds.min.y * 1.55;
+    holder.position.set(portrait ? -0.45 : (index - 2) * 1.92, centerY - bounds.getCenter(new Vector3()).y * 1.55, 0);
     holder.add(rig.root); return rig;
   });
   status.dataset.stageHeights = JSON.stringify(rigs.map((rig) => {
@@ -150,12 +197,8 @@ function renderSixRipeGarden() {
   renderer.render(scene, camera);
   status.dataset.drawCalls = String(renderer.info.render.calls);
   status.dataset.plants = String(garden.plots.length);
-  const ripeSignal = speciesId === 'twistroot' ? 'ripe-halo' : 'halo';
-  status.dataset.ripe = String(garden.plots.filter((plot) => {
-    let visible = false;
-    plot.traverse((object) => { if (object instanceof Mesh && object.userData.part === ripeSignal && object.visible) visible = true; });
-    return visible;
-  }).length);
+  status.dataset.ripe = String(snapshot.plots.filter((plot, index) => plot.plant?.stage === 'Harvestable'
+    && garden.plots[index]?.children.some((rig) => rig.name === speciesId)).length);
   const resize = () => { renderer.setSize(innerWidth, innerHeight, false); resizeGardenCamera(camera, innerWidth, innerHeight); renderer.render(scene, camera); };
   window.addEventListener('resize', resize);
   cleanup.push(() => { window.removeEventListener('resize', resize); plants.dispose(); garden.dispose(); materials.dispose(); renderer.dispose(); });

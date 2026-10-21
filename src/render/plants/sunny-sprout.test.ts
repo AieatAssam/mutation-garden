@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Box3, Color, CylinderGeometry, Mesh, PlaneGeometry, ShaderMaterial, Vector3, type Material } from 'three';
+import { Box3, Color, CylinderGeometry, Mesh, MeshToonMaterial, PlaneGeometry, ShaderMaterial, Vector3, type Material } from 'three';
 import type { PlantSnapshot } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { palette } from '../palette';
@@ -15,6 +15,14 @@ const meshes = (rig: ReturnType<typeof createSunnySprout>) => {
 const pose = (rig: ReturnType<typeof createSunnySprout>) => [rig.root.scale.y, ...meshes(rig).flatMap((mesh) => [
   ...mesh.position.toArray(), ...mesh.quaternion.toArray(), ...mesh.scale.toArray(), mesh.parent?.rotation.z ?? 0,
 ])];
+const plantBounds = (rig: ReturnType<typeof createSunnySprout>) => {
+  rig.root.updateMatrixWorld(true);
+  return meshes(rig).filter((mesh) => !['blob', 'halo'].includes(String(mesh.userData.part))
+    && !String(mesh.userData.part).endsWith('outline')).reduce((bounds, mesh) => {
+    mesh.geometry.computeBoundingBox();
+    return bounds.union(new Box3().copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld));
+  }, new Box3());
+};
 
 describe('createSunnySprout', () => {
   it('keeps mesh and geometry identities and continuous transforms across all five growth stages', () => {
@@ -27,7 +35,7 @@ describe('createSunnySprout', () => {
       const current = meshes(rig); current.forEach((mesh, i) => { expect(mesh).toBe(original[i]); expect(mesh.geometry).toBe(original[i]!.geometry); });
       const stem = current.find((mesh) => mesh.userData.part === 'stem')!;
       expect(stem.scale.y).toBeGreaterThan(priorStem); priorStem = stem.scale.y;
-      if (index < 4) {
+      if (index < 3) {
         const edge = boundaries[index]!; rig.update(plant(stage, edge - 1e-5), 0, true); const before = pose(rig);
         rig.update(plant(stages[index + 1]!, edge), 0, true);
         pose(rig).forEach((n, i) => expect(Math.abs(n - before[i]!)).toBeLessThan(0.001));
@@ -45,12 +53,46 @@ describe('createSunnySprout', () => {
     rig.update(plant('Harvestable', 1), 600, false); expect(fruit.parent!.rotation.z).not.toBe(atRest); rig.dispose();
   });
 
+  it('warms fruit in linear space and changes the ripe silhouette by at least eight percent', () => {
+    const { rig } = setup(); const fruit = meshes(rig).find((mesh) => mesh.userData.part === 'fruit')!;
+    rig.update(plant('Growing', 0.4), 0, true);
+    expect((fruit.material as MeshToonMaterial).color).toEqual(new Color(palette.plants['sunny-sprout'].fruit[3]));
+    rig.update(plant('Mature', 0.95), 0, true); const mature = plantBounds(rig).getSize(new Vector3());
+    rig.update(plant('Harvestable', 1), 0, true);
+    expect((fruit.material as MeshToonMaterial).color).toEqual(new Color(palette.plants['sunny-sprout'].fruit[1]));
+    const ripe = plantBounds(rig).getSize(new Vector3());
+    expect(Math.max((ripe.x - mature.x) / mature.x, (ripe.y - mature.y) / mature.y)).toBeGreaterThanOrEqual(0.08);
+    rig.dispose();
+  });
+
   it('uses the fruit step 1 colour with enough strength to read as a ripe signal', () => {
     const { rig } = setup(); const halo = meshes(rig).find((mesh) => mesh.userData.part === 'halo')!;
     expect(halo.material).toBeInstanceOf(ShaderMaterial);
     const material = halo.material as ShaderMaterial;
     expect(material.uniforms.tint!.value).toEqual(new Color(palette.plants['sunny-sprout'].fruit[0]));
     expect(material.uniforms.strength!.value).toBeGreaterThanOrEqual(0.45);
+    rig.dispose();
+  });
+
+  it('keeps the shared rim shader hook and initializes the ripe band before first compilation', () => {
+    const { rig } = setup();
+    const fruit = meshes(rig).find((mesh) => mesh.userData.part === 'fruit')!;
+    const material = fruit.material as MeshToonMaterial;
+    const makeShader = (): { uniforms: Record<string, { value: unknown }>; vertexShader: string; fragmentShader: string } => ({
+      uniforms: {}, vertexShader: '', fragmentShader: '#include <common>\n#include <opaque_fragment>',
+    });
+    const firstShader = makeShader();
+    material.onBeforeCompile(firstShader as never, {} as never);
+    expect(firstShader.uniforms).toHaveProperty('seedPacketRimColor');
+    expect(firstShader.fragmentShader).toContain('seedPacketRim');
+    rig.update(plant('Harvestable', 1), 0, true);
+    expect(firstShader.uniforms.seedPacketRipe).toEqual({ value: 1 });
+    const ripeShader = makeShader();
+    material.onBeforeCompile(ripeShader as never, {} as never);
+    expect(ripeShader.uniforms).toHaveProperty('seedPacketStepOne');
+    expect(ripeShader.uniforms.seedPacketRipe).toEqual({ value: 1 });
+    expect(ripeShader.fragmentShader).toContain('seedPacketStepOne');
+    expect(material.customProgramCacheKey()).not.toBe('seed-packet-toon-rim-v1');
     rig.dispose();
   });
 
@@ -150,11 +192,13 @@ describe('createSunnySprout', () => {
       .map((geometry) => vi.spyOn(geometry, 'dispose'));
     const owned = allMeshes.find((mesh) => mesh.userData.part === 'halo')!.material;
     const ownedDispose = vi.spyOn(owned as Material, 'dispose');
+    const fruitMaterial = allMeshes.find((mesh) => mesh.userData.part === 'fruit')!.material;
+    const fruitDispose = vi.spyOn(fruitMaterial as Material, 'dispose');
     const blobGeometry = vi.spyOn(allMeshes.find((mesh) => mesh.userData.part === 'blob')!.geometry, 'dispose');
     const borrowed = [...new Set(allMeshes.flatMap((mesh) => Array.isArray(mesh.material) ? mesh.material : [mesh.material]))]
-      .filter((material) => material !== owned).map((material) => vi.spyOn(material, 'dispose'));
+      .filter((material) => material !== owned && material !== fruitMaterial).map((material) => vi.spyOn(material, 'dispose'));
     rig.dispose(); rig.dispose(); geometries.forEach((spy) => expect(spy).toHaveBeenCalledTimes(1));
-    expect(ownedDispose).toHaveBeenCalledTimes(1); expect(blobGeometry).not.toHaveBeenCalled();
+    expect(ownedDispose).toHaveBeenCalledTimes(1); expect(fruitDispose).toHaveBeenCalledTimes(1); expect(blobGeometry).not.toHaveBeenCalled();
     borrowed.forEach((spy) => expect(spy).not.toHaveBeenCalled());
   });
 });

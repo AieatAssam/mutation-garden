@@ -1,4 +1,4 @@
-import { InstancedMesh, Matrix4, MeshBasicMaterial, Quaternion, Vector3 } from 'three';
+import { Color, InstancedMesh, Matrix4, MeshBasicMaterial, Quaternion, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createPlotStatusResources, MAX_STATUS_PLOTS, PLOT_STATUS_DRAW_CALLS, type PlotStatusDescriptor } from './plot-status';
 import { palette } from './palette';
@@ -30,7 +30,7 @@ function descriptor(plotId: string, progress: number): PlotStatusDescriptor {
 }
 
 describe('plot status render resources', () => {
-  it('starts empty and exposes separate instanced passes outside plant roots', () => {
+  it('starts empty and exposes five instanced status passes outside plant roots', () => {
     const status = create();
     expect(status.group.name).toBe('plot-status');
     expect(status.group.children).toHaveLength(5);
@@ -88,7 +88,7 @@ describe('plot status render resources', () => {
     expect(stamp.count).toBe(0);
   });
 
-  it('applies the caller-supplied billboard orientation to both status faces', () => {
+  it('keeps the dial peg vertical, pitches the dial face, and keeps the stamp billboarded', () => {
     const status = create();
     const facing = new Quaternion().setFromAxisAngle(new Vector3(0, 1, 0), Math.PI / 3);
     const base = descriptor('0', 0.5);
@@ -105,8 +105,37 @@ describe('plot status render resources', () => {
       matrix.decompose(new Vector3(), rotation, new Vector3());
       return rotation;
     };
-    expect(rotationOf('plot-status-dial-face').angleTo(facing)).toBeCloseTo(0);
+    const dialFacing = new Quaternion().multiplyQuaternions(
+      facing,
+      new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -35 * Math.PI / 180),
+    );
+    expect(rotationOf('plot-status-dial-face').angleTo(dialFacing)).toBeCloseTo(0);
     expect(rotationOf('plot-status-stamp-face').angleTo(facing)).toBeCloseTo(0);
+
+    const dial = meshes(status).find((candidate) => candidate.name === 'plot-status-dial-face')!;
+    const colors = dial.geometry.getAttribute('color');
+    const positions = dial.geometry.getAttribute('position');
+    const wood = palette.environment['wood-crate'].map((color) => new Color(color));
+    const instanceMatrix = new Matrix4();
+    dial.getMatrixAt(0, instanceMatrix);
+    const pegPoints: Vector3[] = [];
+    for (let index = 0; index < positions.count; index += 1) {
+      const color = new Color(colors.getX(index), colors.getY(index), colors.getZ(index));
+      const isWood = wood.some((woodColor) => Math.max(
+        Math.abs(woodColor.r - color.r), Math.abs(woodColor.g - color.g), Math.abs(woodColor.b - color.b),
+      ) < 1e-4);
+      if (!isWood) continue;
+      pegPoints.push(new Vector3(positions.getX(index), positions.getY(index), positions.getZ(index)).applyMatrix4(instanceMatrix));
+    }
+    const min = new Vector3(Infinity, Infinity, Infinity);
+    const max = new Vector3(-Infinity, -Infinity, -Infinity);
+    pegPoints.forEach((point) => { min.min(point); max.max(point); });
+    expect(max.x - min.x).toBeCloseTo(0.07, 2);
+    expect(max.y - min.y).toBeCloseTo(0.12, 2);
+    expect(max.z - min.z).toBeCloseTo(0.07, 2);
+    const pegCenter = min.clone().add(max).multiplyScalar(0.5);
+    const dialLowerEdge = base.dial!.center.clone().add(new Vector3(0, -0.2, 0).applyQuaternion(dialFacing));
+    expect(pegCenter.y).toBeCloseTo(dialLowerEdge.y - 0.06);
   });
 
   it('applies transition scale and stamp opacity through bounded instance attributes', () => {

@@ -60,7 +60,16 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   };
 
   try {
-    const r = createRenderer(canvas);
+    const r = createRenderer(canvas, {
+      species: SPECIES.map((species) => ({
+        id: species.id,
+        stageFractions: [
+          species.stages.find(({ stage }) => stage === 'Sprout')!.startsAtMs / species.growthDurationMs,
+          species.stages.find(({ stage }) => stage === 'Growing')!.startsAtMs / species.growthDurationMs,
+          species.stages.find(({ stage }) => stage === 'Mature')!.startsAtMs / species.growthDurationMs,
+        ] as const,
+      })),
+    });
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
     const onResize = () => r.resize(window.innerWidth, window.innerHeight);
     window.addEventListener('resize', onResize);

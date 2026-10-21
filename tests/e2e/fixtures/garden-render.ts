@@ -5,6 +5,7 @@ import { createMaterialLibrary } from '../../../src/render/materials';
 import type { PickResult } from '../../../src/render/picking';
 import { createInitialState, getSnapshot, step } from '../../../src/sim';
 import { Vector3 } from 'three';
+import { renderOptions } from './render-options';
 
 interface GardenProbe {
   inspect(): {
@@ -24,7 +25,7 @@ const canvas = document.querySelector<HTMLCanvasElement>('#stage');
 if (!canvas) throw new Error('Garden fixture canvas is missing');
 const stage = canvas as HTMLCanvasElement;
 const probeWindow = window as unknown as Window & { gardenProbe: GardenProbe };
-const renderer = createRenderer(stage);
+const renderer = createRenderer(stage, renderOptions);
 const probeMaterials = createMaterialLibrary();
 const probeGarden = createGarden(probeMaterials);
 probeGarden.updateMatrixWorld(true);

@@ -2,6 +2,7 @@ import {
   CircleGeometry,
   Color,
   BufferGeometry,
+  CylinderGeometry,
   Float32BufferAttribute,
   Group,
   InstancedBufferAttribute,
@@ -18,6 +19,8 @@ import { palette } from './palette';
 export const MAX_STATUS_PLOTS = 6;
 export const PLOT_STATUS_DRAW_CALLS = 5;
 const DIAL_RADIUS = 0.2;
+const DIAL_PEG_HEIGHT = 0.12;
+const DIAL_TILT_RADIANS = -35 * Math.PI / 180;
 const STAMP_RADIUS = 0.31;
 export const PLOT_STATUS_STAMP_DIAMETER = STAMP_RADIUS * 2;
 
@@ -81,7 +84,13 @@ function createPieMaterial(): MeshBasicMaterial {
   return value;
 }
 
-function createDialFaceGeometry(): BufferGeometry {
+interface DialFaceGeometry {
+  readonly geometry: BufferGeometry;
+  readonly pegVertexStart: number;
+  readonly pegPositions: Float32Array;
+}
+
+function createDialFaceGeometry(): DialFaceGeometry {
   const geometry = new BufferGeometry();
   const positions: number[] = [];
   const colors: number[] = [];
@@ -98,10 +107,32 @@ function createDialFaceGeometry(): BufferGeometry {
   }
   disc(1, 0, ink);
   disc(0.88, 0.006, paper);
+
+  const pegSource = new CylinderGeometry(0.035, 0.035, DIAL_PEG_HEIGHT, 8);
+  const pegGeometry = pegSource.toNonIndexed();
+  pegSource.dispose();
+  const pegAttribute = pegGeometry.getAttribute('position');
+  const pegNormals = pegGeometry.getAttribute('normal');
+  const pegStart = positions.length / 3;
+  const pegBasePositions = new Float32Array(pegAttribute.count * 3);
+  const pegLight = new Vector3(0.4, 0.8, 0.4).normalize();
+  const woodRamp = palette.environment['wood-crate'].map((color) => new Color(color));
+  for (let index = 0; index < pegAttribute.count; index += 1) {
+    const x = pegAttribute.getX(index);
+    const y = pegAttribute.getY(index);
+    const z = pegAttribute.getZ(index);
+    pegBasePositions.set([x, y, z], index * 3);
+    positions.push(x / DIAL_RADIUS, y / DIAL_RADIUS, z / DIAL_RADIUS);
+    const light = new Vector3(pegNormals.getX(index), pegNormals.getY(index), pegNormals.getZ(index)).dot(pegLight);
+    const shade = light > 0.35 ? 0 : light > -0.3 ? 1 : 2;
+    const wood = woodRamp[shade]!;
+    colors.push(wood.r, wood.g, wood.b);
+  }
+  pegGeometry.dispose();
   geometry.setAttribute('position', new Float32BufferAttribute(positions, 3));
   geometry.setAttribute('color', new Float32BufferAttribute(colors, 3));
   geometry.computeVertexNormals();
-  return geometry;
+  return { geometry, pegVertexStart: pegStart, pegPositions: pegBasePositions };
 }
 
 function createStampFaceGeometry(): BufferGeometry {
@@ -175,11 +206,17 @@ function setDiscTransform(mesh: InstancedMesh, slot: number, center: Vector3, ra
   mesh.setMatrixAt(slot, new Matrix4().compose(center, facing ?? new Quaternion(), new Vector3(radius, radius, radius)));
 }
 
+export function getPlotStatusDialFacing(facing?: Quaternion): Quaternion {
+  return (facing ?? new Quaternion()).clone()
+    .multiply(new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), DIAL_TILT_RADIANS));
+}
+
 export function createPlotStatusResources(): PlotStatusResources {
   const group = new Group();
   group.name = 'plot-status';
 
-  const dialGeometry = createDialFaceGeometry();
+  const dialFace = createDialFaceGeometry();
+  const dialGeometry = dialFace.geometry;
   const pieGeometry = createPieGeometry();
   const tickGeometry = createTickGeometry();
   const stampGeometry = createStampFaceGeometry();
@@ -246,8 +283,28 @@ export function createPlotStatusResources(): PlotStatusResources {
           const center = descriptor.dial.center;
           const fill = Math.max(0, Math.min(1, descriptor.dial.progress));
           const dialScale = Math.max(0, descriptor.dialScale ?? 1);
-          const facing = descriptor.dial.facing;
-          const normal = new Vector3(0, 0, 1).applyQuaternion(facing ?? new Quaternion());
+          const facing = getPlotStatusDialFacing(descriptor.dial.facing);
+          const normal = new Vector3(0, 0, 1).applyQuaternion(facing);
+          if (slot === 0) {
+            const inverseFacing = facing.clone().invert();
+            const positions = dialGeometry.getAttribute('position') as Float32BufferAttribute;
+            const pegOffset = dialFace.pegVertexStart;
+            const dialUp = new Vector3(0, 1, 0).applyQuaternion(facing);
+            // The peg runs vertically from the bed rim to the dial's lower edge.
+            const pegCenter = dialUp.multiplyScalar(-DIAL_RADIUS);
+            pegCenter.y -= DIAL_PEG_HEIGHT / 2;
+            for (let vertex = 0; vertex < dialFace.pegPositions.length / 3; vertex += 1) {
+              const base = vertex * 3;
+              const world = new Vector3(
+                dialFace.pegPositions[base]!,
+                dialFace.pegPositions[base + 1]!,
+                dialFace.pegPositions[base + 2]!,
+              ).add(pegCenter);
+              const local = world.applyQuaternion(inverseFacing).multiplyScalar(1 / DIAL_RADIUS);
+              positions.setXYZ(pegOffset + vertex, local.x, local.y, local.z);
+            }
+            positions.needsUpdate = true;
+          }
           setDiscTransform(dial, slot, center, DIAL_RADIUS * dialScale, facing);
           setDiscTransform(pie, slot, center.clone().addScaledVector(normal, 0.01), DIAL_RADIUS * 0.82 * dialScale, facing);
           setDiscTransform(ticks, slot, center.clone().addScaledVector(normal, 0.012), DIAL_RADIUS * dialScale, facing);
@@ -274,6 +331,8 @@ export function createPlotStatusResources(): PlotStatusResources {
       }
       dial.count = pie.count = ticks.count = dialCount;
       stampShadow.count = stampFace.count = stampCount;
+      dialGeometry.computeVertexNormals();
+      dialGeometry.computeBoundingSphere();
       for (const mesh of [dial, pie, ticks, stampShadow, stampFace]) mesh.computeBoundingSphere();
       dial.instanceMatrix.needsUpdate = true;
       pie.instanceMatrix.needsUpdate = true;

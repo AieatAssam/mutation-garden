@@ -6,11 +6,12 @@ import { createGarden } from '../../../src/render/garden';
 import { createMaterialLibrary } from '../../../src/render/materials';
 import { createPlantReconciler } from '../../../src/render/plants/reconcile';
 import { createInitialState, getSnapshot, step } from '../../../src/sim';
+import { renderOptions } from './render-options';
 
 const canvas = document.querySelector<HTMLCanvasElement>('#stage');
 if (!canvas) throw new Error('Plant picker fixture canvas is missing');
 const stage = canvas;
-const renderer = createRenderer(stage);
+const renderer = createRenderer(stage, renderOptions);
 const seedState = createInitialState(1, 0);
 const plantedState = step(seedState, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
 const ripeState = step(plantedState, [], 8_000).state;

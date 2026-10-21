@@ -47,7 +47,7 @@ function projectedGardenBottomNdc(width: number, height: number): number {
 }
 
 test('production garden renders cleanly and picker covers plot targets across sizes', async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(90_000);
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });

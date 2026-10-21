@@ -16,5 +16,7 @@ For each visual change, check:
 - Motion follows section 8, including reduced motion.
 - Nothing slides towards generic candy-pastel mobile style: glossy plastic on ordinary objects, gradients in UI, glassmorphism, neon, emoji icons.
 
-Ask for screenshots at 390x844 and 1280x800 if they are missing. Reply APPROVE or CHANGES REQUESTED with concrete, numbered fixes.
+- Richness: compare the 390x844 shot with docs/art/prototype/shots/proto-phone-day.png and the targets in docs/art/m1-liveliness.md. Bare or primitive-looking scenes are CHANGES REQUESTED even if every rule above passes.
+
+Ask for screenshots at 390x844 and 1280x800 if they are missing. Review once per slice. Reply APPROVE or CHANGES REQUESTED with concrete, numbered fixes.
 """

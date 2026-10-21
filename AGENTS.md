@@ -29,9 +29,11 @@ Codex works as a small team. Role files live in `.codex/agents/`; models are set
 | Reviewer | `reviewer` | Sol 6.1 (`gpt-6.1-sol`) | Reviews every diff before it is done. Read-only. |
 | Art advisor | `art_advisor` | Sol 6.1 (`gpt-6.1-sol`) | Reviews every visual change against the style guide. Read-only. |
 
-Use one architect pass per milestone and revisit architecture only when a task changes an interface. The default is one PR per M1 task; split only when the task is expected to exceed about 400 changed lines or crosses two modules. Use an implementer for code and a test writer when the test work is substantial. Keep only one implementer per module active at a time.
+**Work in vertical slices** (see the slice list in the active milestone doc and [ADR 0009](docs/decisions/0009-authored-models-and-slices.md)). A slice ends with the game visibly better on a phone. One PR per slice, typically 400–1500 changed lines across whatever modules it needs. Do not split a slice into "rig", "wiring" and "browser proof" PRs. Do not open PRs whose only content is tests, evidence or screenshots.
 
-Run `npm run check` locally before opening or updating a PR. The reviewer reviews every PR: medium effort for render-only or test-only changes, high effort for sim, save or input changes. The art advisor reviews only changes that alter what players see. Put required screenshots in the PR body; commit only the final art-approved shot for each visual milestone. Fix review findings, wait for first-run green CI with zero retries, then squash-merge and update M1.md.
+**The visual bar.** Before a visual slice is done, put its 390×844 screenshot beside `docs/art/prototype/shots/proto-phone-day.png`. If the game does not look at least as good, the slice is not done. Polish beats proof.
+
+Run `npm run check` locally before opening or updating a PR. The reviewer reviews each slice PR once at medium effort (high for sim or save changes) and lists only real defects. The art advisor reviews each visual slice once, from the screenshots in the PR body. Do not commit evidence PNGs; commit only the final approved shot per milestone. Fix review findings, wait for green CI with zero retries, then squash-merge and update the milestone doc.
 
 Use fresh subagent contexts so each role's model and instructions apply. Before ending a work session, add a short stopping-point note at the top of the active milestone file with what is done, what is in flight and the next task.
 
@@ -65,6 +67,7 @@ Ask both agents to report actionable findings with severity, screenshot evidence
 - `docs/art/style-guide.md` and `docs/art/palette.json` are binding. When code and the guide disagree, the guide wins, or you change the guide with the art advisor's approval.
 - **Colours come only from `src/render/palette.ts`.** It is generated from `docs/art/palette.json` with `npm run palette`; never edit it by hand. ESLint and `tests/unit/no-raw-hex.test.ts` reject hex colours anywhere else in `src/` (tests are exempt). A new colour is a palette.json change.
 - The world is printed (toon, ink outline, blob shadows). Mutations are real (physically based materials). Don't put glossy materials on ordinary objects.
+- **Models are authored in Blender**, exported to `public/models/*.glb`, with their build scripts in `tools/blender/`. Name every Blender material after a palette path (`environment.grass.1`); the loader swaps it for the shared toon material. Growth uses shape keys or bones, never model swaps. Don't build scenery from three.js primitives in TypeScript.
 
 ## Mobile-first rules
 
@@ -94,6 +97,8 @@ npm run e2e             # playwright: mobile-portrait and desktop projects
 
 **CI must be green with no retries.** Retries are 0 in Vitest, Playwright and CI. Never add retries, `test.skip`, `.only`, or weaker assertions to get green. A flaky test is a bug; find the cause.
 
+**What to test.** Unit-test sim rules, saves and pure helpers. Use Playwright for gameplay flows a player does: plant, harvest, swipe, pan, zoom, refresh. Do not write browser specs that pin pixel positions or geometry details of art; they block art changes and prove nothing a screenshot doesn't. When art is replaced, delete specs that only described the old art.
+
 ## Copy
 
 Player-facing text, docs and PR descriptions are plain, short and clear.
@@ -105,9 +110,9 @@ Player-facing text, docs and PR descriptions are plain, short and clear.
 
 ## Commits and PRs
 
-- Branch per task: `m1/01-sim-foundations`, `fix/swipe-harvest-edge`.
+- Branch per slice: `m1/s2-plants`, `fix/swipe-harvest-edge`.
 - Conventional commit subjects: `feat(sim): plant command validation`, `fix(input): …`, `test(e2e): …`, `docs: …`, `art(render): …`, `chore: …`. Imperative, under 72 characters.
-- Default to one task per PR; split only if the task exceeds about 400 changed lines or crosses two modules. Title: `M1-03: Plant command with validation`. Link the milestone doc and the task's issue.
+- One slice per PR. Title: `M1-S2: Authored plants with smooth growth`. Branch: `salvage/s2-plants` or `m1/s2-plants`. Link the milestone doc and the task's issue.
 - The PR description says what changed, how it was tested (the gate commands and results), and includes screenshots for anything visual.
 - Squash-merge only after the reviewer approves (and the art advisor, when the change is visual) and CI is green with no retries.
 - Labels: `M1`–`M5`, `feat`, `bug`, `art`, `perf`, `needs-review`.

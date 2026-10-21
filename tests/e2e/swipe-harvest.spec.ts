@@ -6,6 +6,24 @@ import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera'
 
 type Point = { x: number; y: number };
 
+async function freezeGrowthClock(page: Page): Promise<void> {
+  await page.evaluate(() => {
+    let nowMs = Date.now();
+    Date.now = () => nowMs;
+    Object.defineProperty(window, '__gardenSwipeClock', {
+      configurable: false,
+      value: { advance: (deltaMs: number) => { nowMs += deltaMs; } },
+    });
+  });
+}
+
+async function advanceGrowthClock(page: Page, deltaMs: number): Promise<void> {
+  await page.evaluate((delta) => {
+    (window as unknown as Window & { __gardenSwipeClock: { advance(deltaMs: number): void } })
+      .__gardenSwipeClock.advance(delta);
+  }, deltaMs);
+}
+
 function plotCenter(plotId: number, rect: { x: number; y: number; width: number; height: number }): Point {
   const camera = createGardenCamera();
   resizeGardenCamera(camera, rect.width, rect.height);
@@ -122,6 +140,9 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   if (mobile) await page.touchscreen.tap(plots[1]!.x, plots[1]!.y);
   else await page.mouse.click(plots[1]!.x, plots[1]!.y);
   await expect(coins).toHaveText('6');
+  // Keep the newly planted Bubble Berry unripe while the desktop trace/screenshot runs.
+  // Sunnys have already grown against the real clock; only the guard-boundary check below advances this clock.
+  await freezeGrowthClock(page);
   const beforeHarvest = await plotSignature(page, untouchedPlot);
 
   // A fresh swipe crosses three ripe plants, reverses over one, and commits one batch.
@@ -134,6 +155,7 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   // Repeating the same harvest cannot pay again or turn its release into planting.
   await swipe(page, [plots[0]!, plots[2]!, plots[3]!], mobile);
   await expect(coins).toHaveText('12');
+  await advanceGrowthClock(page, PLOT_ACTIVATION_GUARD_MS);
   await expect.poll(() => page.evaluate(() => Date.now()), {
     intervals: [10, 25, 50], timeout: 5_000,
   }).toBeGreaterThanOrEqual(harvestAt + PLOT_ACTIVATION_GUARD_MS);

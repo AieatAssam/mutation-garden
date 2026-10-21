@@ -1,4 +1,4 @@
-import { chromium, devices, expect, test, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 type Probe = {
   inspect(): { canvasRect: { left: number; top: number; width: number; height: number }; plots: { plotId: string; x: number; y: number }[]; ground: { x: number; y: number }; sky: { x: number; y: number } };
@@ -20,18 +20,13 @@ const offsets: [number, number][] = [[0, 0], [-24, 0], [24, 0], [0, -24], [0, 24
 
 async function inspect(page: Page) { return page.evaluate(() => window.gardenProbe.inspect()); }
 
-test('garden picker covers plot targets across sizes', async ({ browserName }, testInfo) => {
+test('garden picker covers plot targets across sizes', async ({ browserName, page }, testInfo) => {
   test.setTimeout(90_000);
   expect(browserName).toBe('chromium');
   const desktop = testInfo.project.name === 'desktop';
   const projectViewport = desktop ? { width: 1280, height: 800 } : { width: 390, height: 844 };
-  const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
-  try {
-    const context = await browser.newContext({
-      ...(desktop ? devices['Desktop Chrome'] : devices['Pixel 7']),
-      viewport: projectViewport,
-    });
-    const page = await context.newPage();
+  await page.setViewportSize(projectViewport);
+  {
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -85,7 +80,5 @@ test('garden picker covers plot targets across sizes', async ({ browserName }, t
     expect(await page.evaluate(({ x, y }) => window.gardenProbe.pick(x, y), lastCenter)).toBeNull();
 
     expect(errors).toEqual([]);
-  } finally {
-    await browser.close();
   }
 });

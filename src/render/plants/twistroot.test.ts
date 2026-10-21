@@ -7,7 +7,7 @@ import { createTwistroot } from './twistroot';
 
 const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
 afterEach(() => libraries.splice(0).forEach((library) => library.dispose()));
-const setup = () => { const library = createMaterialLibrary(); libraries.push(library); return { library, rig: createTwistroot(library) }; };
+const setup = (hopPhaseOffsetMs = 0) => { const library = createMaterialLibrary(); libraries.push(library); return { library, rig: createTwistroot(library, 0, hopPhaseOffsetMs) }; };
 const plant = (stage: PlantSnapshot['stage'], progress: number): PlantSnapshot => ({ speciesId: 'twistroot', plantedAt: 0, stage, progress });
 const meshes = (rig: ReturnType<typeof createTwistroot>) => {
   const result: Mesh[] = []; rig.root.traverse((object) => { if (object instanceof Mesh) result.push(object); }); return result;
@@ -189,6 +189,29 @@ describe('createTwistroot', () => {
     expect(tuft.position.y - matureTuftY).toBeGreaterThanOrEqual(0.08);
     expect(ring.visible).toBe(true);
     expect(ring.getWorldPosition(new Vector3()).y).toBeCloseTo(matureSoilTop + 0.03, 6);
+    rig.dispose();
+  });
+
+  it('hops the root and tuft while the soil bulge and blob remain grounded', () => {
+    const { rig } = setup(500);
+    const body = rig.root.getObjectByName('plant-body')!;
+    const soil = part(rig, 'soil-bulge'); const blob = part(rig, 'blob'); const ring = part(rig, 'growth-ring');
+    rig.update(plant('Harvestable', 1), 2860, false);
+    expect(body.position.y).toBeCloseTo(0.05, 6);
+    expect(body.scale.y).toBeCloseTo(1.04, 6);
+    expect(blob.scale.x).toBeCloseTo(0.92 * 0.75, 6);
+    rig.root.updateMatrixWorld(true);
+    const soilY = soil.getWorldPosition(new Vector3()).y;
+    const blobY = blob.getWorldPosition(new Vector3()).y;
+    const ringY = ring.getWorldPosition(new Vector3()).y;
+    expect(ringY).toBeCloseTo(0.13, 6);
+    rig.update(plant('Harvestable', 1), 3100, false);
+    rig.root.updateMatrixWorld(true);
+    expect(body.position.y).toBe(0);
+    expect(soil.getWorldPosition(new Vector3()).y).toBeCloseTo(soilY, 6);
+    expect(blob.getWorldPosition(new Vector3()).y).toBeCloseTo(blobY, 6);
+    expect(ring.getWorldPosition(new Vector3()).y).toBeCloseTo(ringY, 6);
+    expect(blob.scale.x).toBeCloseTo(0.92, 6);
     rig.dispose();
   });
 

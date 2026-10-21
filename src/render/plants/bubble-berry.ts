@@ -2,6 +2,7 @@ import {
   BufferGeometry,
   Color,
   Group,
+  InstancedMesh,
   Matrix4,
   Mesh,
   Quaternion,
@@ -11,8 +12,8 @@ import {
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { PlantSnapshot } from '../../sim/state/types';
 import { palette } from '../palette';
-import type { MaterialLibrary } from '../materials';
-import type { PlantRig } from './sunny-sprout';
+import { DEFAULT_OUTLINE_THICKNESS, type MaterialLibrary } from '../materials';
+import { ripeHopPose, springProgress, type PlantRig } from './sunny-sprout';
 
 const FRUIT_COLOR = palette.plants['bubble-berry'].fruit[1];
 const LEAF_COLOR = palette.plants['bubble-berry'].leaf[1];
@@ -121,33 +122,16 @@ function updateLeafOpening(geometry: BufferGeometry, original: Float32Array, ope
   geometry.computeBoundingSphere();
 }
 
-function makeBerries(): BufferGeometry {
-  return mergeSpheres(BERRIES.map(({ x, y, z, radius }) => ({
-    x, y, z,
-    scaleX: radius,
-    scaleY: radius,
-    scaleZ: radius,
-  })), 20, 16);
-}
-
-function makeHighlights(): BufferGeometry {
-  return mergeSpheres(BERRIES.map(({ x, y, z, radius }) => ({
-    x: x - radius * 0.28,
-    y: y + radius * 0.37,
-    z: z + radius * 0.78,
-    scaleX: 0.026,
-    scaleY: 0.026,
-    scaleZ: 0.026,
-  })), 8, 6);
-}
-
-export function createBubbleBerry(materials: MaterialLibrary, phaseOffsetMs = 0): PlantRig {
+export function createBubbleBerry(materials: MaterialLibrary, phaseOffsetMs = 0, hopPhaseOffsetMs = 0): PlantRig {
   const root = new Group();
   root.name = 'bubble-berry';
+  const plantBody = new Group();
+  plantBody.name = 'plant-body';
+  root.add(plantBody);
   const domeGeometry = makeDome();
   const leafGeometry = makeLeaves();
-  const berryGeometry = makeBerries();
-  const highlightGeometry = makeHighlights();
+  const berryGeometry = new SphereGeometry(1, 20, 16);
+  const highlightGeometry = new SphereGeometry(1, 8, 6);
   const ownedGeometries = [domeGeometry, leafGeometry, berryGeometry, highlightGeometry];
   const berryCluster = new Group();
   berryCluster.name = 'berry-cluster';
@@ -179,7 +163,7 @@ export function createBubbleBerry(materials: MaterialLibrary, phaseOffsetMs = 0)
     mesh.name = name;
     mesh.userData.part = name;
     mesh.renderOrder = 3;
-    root.add(mesh);
+    plantBody.add(mesh);
     if (outlined) {
       const outline = materials.outline(geometry);
       outline.name = `${name}-outline`;
@@ -194,25 +178,53 @@ export function createBubbleBerry(materials: MaterialLibrary, phaseOffsetMs = 0)
   const leaves = addPart(leafGeometry, LEAF_COLOR, 'leaves', true);
   const originalLeafPositions = Float32Array.from(leafGeometry.getAttribute('position').array);
   leaves.userData.leafCount = LEAF_COUNT;
-  root.add(berryCluster);
-  const berries = new Mesh(berryGeometry, berryMaterial);
+  plantBody.add(berryCluster);
+  const berries = new InstancedMesh(berryGeometry, berryMaterial, BERRIES.length);
   berries.name = 'berries';
   berries.userData.part = 'berries';
   berries.userData.berryCount = BERRIES.length;
   berries.renderOrder = 3;
   berryCluster.add(berries);
-  const berryOutline = materials.outline(berryGeometry);
-  berryOutline.name = 'berries-outline';
-  berryOutline.userData.part = 'berries-outline';
-  berryOutline.renderOrder = 2;
-  berries.add(berryOutline);
-
-  const highlights = new Mesh(highlightGeometry, materials.toon(HIGHLIGHT_COLOR));
+  const outlineTemplate = materials.outline(berryGeometry);
+  const configuredOutlineThickness = outlineTemplate.userData.outlineThickness;
+  const berryOutlineThickness = typeof configuredOutlineThickness === 'number' && Number.isFinite(configuredOutlineThickness)
+    ? configuredOutlineThickness
+    : DEFAULT_OUTLINE_THICKNESS;
+  const berryOutlines = new InstancedMesh(berryGeometry, outlineTemplate.material, BERRIES.length);
+  berryOutlines.name = 'berries-outline';
+  berryOutlines.userData.part = 'berries-outline';
+  berryOutlines.userData.outlineThickness = berryOutlineThickness;
+  berryOutlines.renderOrder = 2;
+  berryCluster.add(berryOutlines);
+  const highlights = new InstancedMesh(highlightGeometry, materials.toon(HIGHLIGHT_COLOR), BERRIES.length);
   highlights.name = 'highlights';
   highlights.userData.part = 'highlights';
   highlights.userData.highlightCount = BERRIES.length;
   highlights.renderOrder = 4;
   berryCluster.add(highlights);
+  const instanceMatrix = new Matrix4();
+  const instancePosition = new Vector3();
+  const instanceScale = new Vector3();
+  const instanceRotation = new Quaternion();
+  BERRIES.forEach(({ x, y, z, radius }, index) => {
+    instancePosition.set(x, y, z);
+    instanceScale.set(radius, radius, radius);
+    instanceMatrix.compose(instancePosition, instanceRotation, instanceScale);
+    berries.setMatrixAt(index, instanceMatrix);
+    const outlineScale = (radius + berryOutlineThickness) / (1 + berryOutlineThickness);
+    instanceScale.set(outlineScale, outlineScale, outlineScale);
+    instanceMatrix.compose(instancePosition, instanceRotation, instanceScale);
+    berryOutlines.setMatrixAt(index, instanceMatrix);
+    instancePosition.set(x - radius * 0.28, y + radius * 0.37, z + radius * 0.78);
+    instanceScale.set(0.026, 0.026, 0.026);
+    instanceMatrix.compose(instancePosition, instanceRotation, instanceScale);
+    highlights.setMatrixAt(index, instanceMatrix);
+  });
+  berries.instanceMatrix.needsUpdate = true;
+  berryOutlines.instanceMatrix.needsUpdate = true;
+  highlights.instanceMatrix.needsUpdate = true;
+  berryCluster.userData.berryCount = BERRIES.length;
+  berryCluster.userData.highlightCount = BERRIES.length;
 
   const blob = materials.blob();
   blob.name = 'blob';
@@ -251,21 +263,54 @@ export function createBubbleBerry(materials: MaterialLibrary, phaseOffsetMs = 0)
         leavesAreOpen = ripe;
       }
       leaves.position.y = domeSize * 0.15;
+      const hop = ripeHopPose(presentationNowMs, hopPhaseOffsetMs, ripe && !reducedMotion);
+      plantBody.position.y = hop.y;
+      plantBody.scale.y = hop.scaleY;
       root.scale.set(1, reducedMotion
         ? 1
         : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02, 1);
-
-      berries.rotation.z = ripe && !reducedMotion
-        ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.055
-        : 0;
-      berries.rotation.x = ripe && !reducedMotion
-        ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.025
-        : 0;
-      highlights.rotation.copy(berries.rotation);
+      blob.position.y = 0.008 / root.scale.y;
+      const hopElapsed = ((presentationNowMs + hopPhaseOffsetMs) % 3000 + 3000) % 3000;
+      BERRIES.forEach(({ x, y, z, radius }, index) => {
+        const jiggleElapsed = hopElapsed - (520 + index * 60);
+        let scaleY = 1;
+        if (ripe && !reducedMotion && jiggleElapsed >= 0 && jiggleElapsed < 180) {
+          if (jiggleElapsed < 30) scaleY = 1 - 0.08 * springProgress(jiggleElapsed / 30);
+          else if (jiggleElapsed < 90) scaleY = 0.92 + 0.14 * springProgress((jiggleElapsed - 30) / 60);
+          else scaleY = 1.06 - 0.06 * springProgress((jiggleElapsed - 90) / 90);
+        }
+        instancePosition.set(x, y, z);
+        instanceScale.set(radius, radius * scaleY, radius);
+        instanceMatrix.compose(instancePosition, instanceRotation, instanceScale);
+        berries.setMatrixAt(index, instanceMatrix);
+        const outlineScale = (radius + berryOutlineThickness) / (1 + berryOutlineThickness);
+        instanceScale.set(
+          outlineScale,
+          (radius * scaleY + berryOutlineThickness) / (1 + berryOutlineThickness),
+          outlineScale,
+        );
+        instanceMatrix.compose(instancePosition, instanceRotation, instanceScale);
+        berryOutlines.setMatrixAt(index, instanceMatrix);
+        instancePosition.set(x - radius * 0.28, y + radius * 0.37 * scaleY, z + radius * 0.78);
+        instanceScale.set(0.026, 0.026 * scaleY, 0.026);
+        instanceMatrix.compose(instancePosition, instanceRotation, instanceScale);
+        highlights.setMatrixAt(index, instanceMatrix);
+      });
+      berries.instanceMatrix.needsUpdate = true;
+      berryOutlines.instanceMatrix.needsUpdate = true;
+      highlights.instanceMatrix.needsUpdate = true;
+      berries.computeBoundingSphere();
+      berryOutlines.computeBoundingSphere();
+      highlights.computeBoundingSphere();
+      const shadowScale = 1 - 0.25 * Math.min(1, hop.y / 0.05);
+      blob.scale.set(0.92 * shadowScale, 0.6 * shadowScale, 1);
     },
     dispose() {
       if (disposed) return;
       disposed = true;
+      berries.dispose();
+      berryOutlines.dispose();
+      highlights.dispose();
       for (const geometry of ownedGeometries) geometry.dispose();
       berryMaterial.dispose();
       root.clear();

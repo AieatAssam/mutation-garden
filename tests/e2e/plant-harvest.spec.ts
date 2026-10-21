@@ -182,12 +182,8 @@ test('Bubble Berry costs three coins, matures in fifteen seconds and pays six', 
   await expect(bubble).toHaveAttribute('aria-pressed', 'true');
   await activatePlot(page, plot, mobile);
   await expect(coins).toHaveText('9');
-  const plantedAt = Date.now();
-
-  await expect.poll(() => Date.now(), {
-    intervals: [100, 250, 500],
-    timeout: 45_000,
-  }).toBeGreaterThanOrEqual(plantedAt + 15_000);
+  const plantedAt = await page.evaluate(() => Date.now());
+  await waitUntilTimestampIsRendered(page, plantedAt + 15_000);
 
   await activatePlot(page, plot, mobile);
   await page.waitForFunction(() =>

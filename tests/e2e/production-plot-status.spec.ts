@@ -1,7 +1,10 @@
-import { expect, test, type CDPSession, type Page } from '@playwright/test';
+import { devices, expect, test, type CDPSession, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
-import { Vector3 } from 'three';
+import { writeFile } from 'node:fs/promises';
+import { Quaternion, Vector3 } from 'three';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from '../../src/render/camera';
+import { getPlotStatusDialFacing } from '../../src/render/plot-status';
+import { captureVisibleBodyMasks } from './production-body-mask';
 import { palette } from '../../src/render/palette';
 import { SPECIES } from '../../src/sim';
 
@@ -507,6 +510,183 @@ async function countFruitRampPixels(page: Page, speciesId: SpeciesId, centers: r
   });
 }
 
+async function capturePlantCrop(page: Page, stage: Box, plotId: number, worldY = 1.65): Promise<{ image: Buffer; bounds: Box }> {
+  const center = projectPlotPoint(stage, plotId, worldY);
+  const x = Math.round(center.x - 60);
+  const y = Math.round(center.y - 60);
+  expect(x, '120px plant crop stays inside the production canvas horizontally').toBeGreaterThanOrEqual(stage.x);
+  expect(x + 120).toBeLessThanOrEqual(stage.x + stage.width);
+  expect(y, '120px plant crop stays inside the production canvas vertically').toBeGreaterThanOrEqual(stage.y);
+  expect(y + 120).toBeLessThanOrEqual(stage.y + stage.height);
+  return {
+    image: await page.screenshot({ clip: { x, y, width: 120, height: 120 }, scale: 'css' }),
+    bounds: { x, y, width: 120, height: 120 },
+  };
+}
+
+function projectWorldPoint(point: Vector3, camera: ReturnType<typeof createGardenCamera>, stage: Box): Point {
+  const projected = point.clone().project(camera);
+  return { x: stage.x + (projected.x + 1) * stage.width / 2, y: stage.y + (1 - projected.y) * stage.height / 2 };
+}
+
+function circlePolygon(center: Vector3, radius: number, facing: Quaternion, camera: ReturnType<typeof createGardenCamera>, stage: Box): Point[] {
+  const points: Point[] = [];
+  for (let index = 0; index < 24; index += 1) {
+    const angle = index * Math.PI * 2 / 24;
+    const local = new Vector3(Math.cos(angle) * radius, Math.sin(angle) * radius, 0).applyQuaternion(facing);
+    points.push(projectWorldPoint(center.clone().add(local), camera, stage));
+  }
+  return points;
+}
+
+function convexHull(points: Point[]): Point[] {
+  const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+  const cross = (o: Point, a: Point, b: Point) => (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
+  const lower: Point[] = [];
+  for (const point of sorted) {
+    while (lower.length > 1 && cross(lower[lower.length - 2]!, lower[lower.length - 1]!, point) <= 0) lower.pop();
+    lower.push(point);
+  }
+  const upper: Point[] = [];
+  for (const point of sorted.reverse()) {
+    while (upper.length > 1 && cross(upper[upper.length - 2]!, upper[upper.length - 1]!, point) <= 0) upper.pop();
+    upper.push(point);
+  }
+  return [...lower.slice(0, -1), ...upper.slice(0, -1)];
+}
+
+function projectDialPolygons(plotId: number, stage: Box, crop: Box): Point[][] {
+  const camera = createGardenCamera();
+  resizeGardenCamera(camera, stage.width, stage.height);
+  camera.updateMatrixWorld(true);
+  const facing = getPlotStatusDialFacing(camera.quaternion);
+  const up = new Vector3(0, 1, 0).applyQuaternion(facing);
+  const plotX = plotId % 2 === 0 ? -1.05 : 1.05;
+  const plotZ = [2, 0, -2][Math.floor(plotId / 2)]!;
+  const foot = new Vector3(plotX - 0.30 - 0.20 * up.x, 0.70, plotZ + 0.80);
+  const center = foot.clone().add(new Vector3(0, 0.12, 0)).addScaledVector(up, 0.20);
+  const toCrop = (point: Point): Point => ({ x: point.x - crop.x, y: point.y - crop.y });
+  const face = circlePolygon(center, 0.20, facing, camera, stage).map(toCrop);
+  const peg: Point[] = [];
+  for (const y of [0, 0.12]) for (let index = 0; index < 16; index += 1) {
+    const angle = index * Math.PI * 2 / 16;
+    const world = foot.clone().add(new Vector3(Math.cos(angle) * 0.035, y, Math.sin(angle) * 0.035));
+    peg.push(toCrop(projectWorldPoint(world, camera, stage)));
+  }
+  return [face, convexHull(peg)];
+}
+
+async function comparePlantBodyPixels(
+  page: Page,
+  baseline: Buffer,
+  mature: Buffer,
+  harvestable: Buffer,
+  stampBox: Box,
+  bodyMasks: { mature: Uint8Array; harvestable: Uint8Array },
+  masks: { polygons: Point[][] },
+): Promise<{
+  bodyPixels: number;
+  changedBodyPixels: number;
+  ratio: number;
+  cropPixels: number;
+  changedCropPixels: number;
+  cropRatio: number;
+  diagnostics: string;
+}> {
+  const encoded = [baseline, mature, harvestable].map((image) => image.toString('base64'));
+  return page.evaluate(async ({ captures, stampBox, bodyMasks, masks }) => {
+    const pointInPolygon = (point: { x: number; y: number }, polygon: { x: number; y: number }[]): boolean => {
+      let inside = false;
+      for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i, i += 1) {
+        const a = polygon[i]!;
+        const b = polygon[j]!;
+        if ((a.y > point.y) !== (b.y > point.y)
+          && point.x < ((b.x - a.x) * (point.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+      }
+      return inside;
+    };
+    const images = await Promise.all(captures.map(async (source) => {
+      const image = new Image();
+      image.src = `data:image/png;base64,${source}`;
+      await image.decode();
+      const canvas = document.createElement('canvas');
+      canvas.width = 120;
+      canvas.height = 120;
+      const context = canvas.getContext('2d', { willReadFrequently: true });
+      if (!context) throw new Error('Could not inspect the 120px production crop');
+      context.drawImage(image, 0, 0);
+      return context.getImageData(0, 0, 120, 120).data;
+    }));
+    const [, maturePixels, ready] = images as [Uint8ClampedArray, Uint8ClampedArray, Uint8ClampedArray];
+    let bodyPixels = 0;
+    let changedBodyPixels = 0;
+    let cropPixels = 0;
+    let changedCropPixels = 0;
+    const union = new Uint8Array(120 * 120);
+    const changed = new Uint8Array(120 * 120);
+    const excluded = new Uint8Array(120 * 120);
+    for (let y = 0; y < 120; y += 1) {
+      for (let x = 0; x < 120; x += 1) {
+        const stamp = stampBox;
+        const inStamp = x >= stamp.x - 3 && x < stamp.x + stamp.width + 3
+          && y >= stamp.y - 3 && y < stamp.y + stamp.height + 3;
+        const point = { x: x + 0.5, y: y + 0.5 };
+        const inDial = masks.polygons.some((polygon) => pointInPolygon(point, polygon));
+        const inExclusion = inStamp || inDial;
+        const pixel = y * 120 + x;
+        if (inExclusion) excluded[pixel] = 1;
+        if (!inStamp && !inDial) cropPixels += 1;
+        const offset = (y * 120 + x) * 4;
+        const changedPixel = Math.max(
+          Math.abs(maturePixels[offset]! - ready[offset]!),
+          Math.abs(maturePixels[offset + 1]! - ready[offset + 1]!),
+          Math.abs(maturePixels[offset + 2]! - ready[offset + 2]!),
+        ) > 20;
+        if (!inStamp && !inDial && changedPixel) changedCropPixels += 1;
+        if (!bodyMasks.mature[pixel] && !bodyMasks.harvestable[pixel]) continue;
+        if (inStamp || inDial) continue;
+        union[pixel] = 1;
+        bodyPixels += 1;
+        if (changedPixel) { changedBodyPixels += 1; changed[pixel] = 1; }
+      }
+    }
+    const diagnostics = (() => {
+      const canvas = document.createElement('canvas');
+      canvas.width = 360;
+      canvas.height = 120;
+      const context = canvas.getContext('2d');
+      if (!context) throw new Error('Could not create pixel mask diagnostic');
+      const output = context.createImageData(360, 120);
+      for (const [panel, mode] of ['union', 'change', 'masks'].entries()) for (let y = 0; y < 120; y += 1) for (let x = 0; x < 120; x += 1) {
+        const source = (y * 120 + x) * 4;
+        const target = (y * 360 + x + panel * 120) * 4;
+        output.data[target] = ready[source]!;
+        output.data[target + 1] = ready[source + 1]!;
+        output.data[target + 2] = ready[source + 2]!;
+        output.data[target + 3] = 255;
+        const set = (offset: number, r: number, g: number, b: number) => {
+          output.data[offset] = r; output.data[offset + 1] = g; output.data[offset + 2] = b; output.data[offset + 3] = 220;
+        };
+        if (mode === 'union' && union[y * 120 + x]) set(target, 30, 235, 80);
+        if (mode === 'change' && union[y * 120 + x]) set(target, 135, 135, 135);
+        if (mode === 'change' && changed[y * 120 + x]) set(target, 255, 20, 190);
+        if (mode === 'masks' && excluded[y * 120 + x]) set(target, 255, 190, 20);
+      }
+      context.putImageData(output, 0, 0);
+      return canvas.toDataURL('image/png');
+    })();
+    return {
+      bodyPixels,
+      changedBodyPixels,
+      ratio: bodyPixels ? changedBodyPixels / bodyPixels : 0,
+      cropPixels,
+      changedCropPixels,
+      cropRatio: cropPixels ? changedCropPixels / cropPixels : 0,
+      diagnostics,
+    };
+  }, { captures: encoded, stampBox, bodyMasks, masks });
+}
+
 async function plant(page: Page, speciesId: SpeciesId, plot: Point, mobile: boolean): Promise<void> {
   const seed = page.getByRole('navigation', { name: 'Seeds' })
     .getByRole('button', { name: speciesLabels[speciesId] });
@@ -860,4 +1040,90 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
   }));
   expect(calls).toBeGreaterThan(0);
   expect(calls).toBeLessThan(150);
+});
+
+test('production plant bodies differ between Mature 0.95 and Harvestable', async ({ browser }, info) => {
+  test.setTimeout(360_000);
+  const mobile = info.project.name === 'mobile-portrait';
+  const viewport = mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 };
+  const comparisons = [
+    { speciesId: 'sunny-sprout', plotId: 0, growthDurationMs: 8_000 },
+    { speciesId: 'bubble-berry', plotId: 2, growthDurationMs: 15_000 },
+    { speciesId: 'twistroot', plotId: 4, growthDurationMs: 25_000 },
+  ] as const;
+
+  for (const { speciesId, plotId, growthDurationMs } of comparisons) {
+    const context = await browser.newContext({
+      ...(mobile ? devices['Pixel 7'] : devices['Desktop Chrome']),
+      viewport,
+      reducedMotion: 'reduce',
+    });
+    const page = await context.newPage();
+    try {
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      const { plots } = await openGame(page, info.project.name);
+      const stage = await page.locator('#stage').boundingBox();
+      expect(stage, 'production garden canvas has a CSS viewport').not.toBeNull();
+      const cropStage = stage!;
+      const cropWorldY = !mobile && speciesId === 'bubble-berry' ? 0.9 : 1.65;
+      const baseline = await capturePlantCrop(page, cropStage, plotId, cropWorldY);
+      await plant(page, speciesId, plots[plotId]!, mobile);
+      await waitForCoins(page, 12 - SPECIES.find(({ id }) => id === speciesId)!.seedCost);
+
+      const matureAtMs = Math.round(growthDurationMs * 0.95);
+      await advanceGameClock(page, matureAtMs);
+      await settlePresentation(page);
+      const mature = await capturePlantCrop(page, cropStage, plotId, cropWorldY);
+      const matureSignature = createHash('sha256').update(mature.image).digest('hex');
+      expect(matureSignature, `${speciesId} at 0.95 has a rendered plant body`).not.toBe(
+        createHash('sha256').update(baseline.image).digest('hex'),
+      );
+
+      await advanceGameClock(page, growthDurationMs - matureAtMs);
+      await settlePresentation(page);
+      await waitForRenderedStamps(page, [speciesId]);
+      const harvestable = await capturePlantCrop(page, cropStage, plotId, cropWorldY);
+      const stamp = await readStamp(page, speciesId);
+      const masks = { polygons: projectDialPolygons(plotId, cropStage, harvestable.bounds) };
+      const stampBox = {
+          x: stamp.box.x - harvestable.bounds.x,
+          y: stamp.box.y - harvestable.bounds.y,
+          width: stamp.box.width,
+          height: stamp.box.height,
+      };
+      const bodyMasks = await captureVisibleBodyMasks(page, { speciesId, plotId, stage: cropStage, crop: harvestable.bounds });
+      const comparison = await comparePlantBodyPixels(page, baseline.image, mature.image, harvestable.image,
+        stampBox, bodyMasks, masks);
+      console.info(`${speciesId} ${info.project.name}: body ${comparison.changedBodyPixels}/${comparison.bodyPixels} ${(comparison.ratio * 100).toFixed(2)}%; masked-crop ${comparison.changedCropPixels}/${comparison.cropPixels} ${(comparison.cropRatio * 100).toFixed(2)}% against 15%`);
+      const evidenceName = `${speciesId}-${info.project.name}`;
+      for (const [state, image] of [['mature-0.95', mature], ['harvestable', harvestable]] as const) {
+        await writeFile(info.outputPath(`${evidenceName}-${state}.png`), image.image);
+        await info.attach(`${evidenceName}-${state}-120x120.png`, { body: image.image, contentType: 'image/png' });
+      }
+      const diagnosticPng = Buffer.from(comparison.diagnostics.split(',')[1]!, 'base64');
+      await writeFile(info.outputPath(`${evidenceName}-pixel-mask-overlay.png`), diagnosticPng);
+      await info.attach(`${evidenceName}-pixel-mask-overlay.png`, { body: diagnosticPng, contentType: 'image/png' });
+      const comparisonJson = Buffer.from(JSON.stringify({
+        speciesId,
+        viewport,
+        crop: harvestable.bounds,
+        bodyPixels: comparison.bodyPixels,
+        changedBodyPixels: comparison.changedBodyPixels,
+        bodyRatio: comparison.ratio,
+        unmaskedCropPixels: comparison.cropPixels,
+        changedCropPixels: comparison.changedCropPixels,
+        cropRatio: comparison.cropRatio,
+        masks,
+        stampBox,
+      }, null, 2));
+      await writeFile(info.outputPath(`${evidenceName}-pixel-comparison.json`), comparisonJson);
+      await info.attach(`${evidenceName}-pixel-comparison.json`, { body: comparisonJson, contentType: 'application/json' });
+      expect(comparison.bodyPixels, `${speciesId} crop contains plant-body pixels after status/shadow exclusions`).toBeGreaterThan(0);
+      expect(comparison.ratio,
+        `${speciesId} body pixels changed ${comparison.changedBodyPixels}/${comparison.bodyPixels} (${(comparison.ratio * 100).toFixed(1)}%) between Mature 0.95 and Harvestable; crop excludes the top stamp and bottom dial/peg/shadow area`,
+      ).toBeGreaterThanOrEqual(0.15);
+    } finally {
+      await context.close();
+    }
+  }
 });

@@ -87,7 +87,7 @@ No hop, no jiggle and no dial pop. The stamp fades in over 120 ms. Colour, silho
 
 - Rig unit tests: at Mature with progress 0.95 the stamp is hidden; at Harvestable it is visible. Sunny Sprout and Bubble Berry bounds change by at least 8% in height or width. For Twistroot, assert the authored +0.08-unit root emergence, grounded soil bulge, visible growth ring at the soil line, and 20° outward tuft splay. Outward splay can lower the tuft's highest point, so overall bounds size does not reliably measure this pose. Fruit colour equals step 4 at progress 0.4 and step 2 at Harvestable.
 - Browser test at 390×844, default zoom, reduced motion on, all three species ripe: each projected stamp is at least 26×26 CSS px, inside the viewport and above the seed tray. A tap on each stamp harvests that plot for the exact reward.
-- Browser pixel check, reduced motion on: a 120×120 CSS px crop around each plot differs in at least 15% of pixels between Mature (progress 0.95) and Harvestable.
+- Browser pixel check, reduced motion on: with the same camera and lighting, each 120×120 CSS px crop around a plot must show at least 15% of the union of Mature (progress 0.95) and Harvestable plant-body pixels changing. Exclude the stamp, dial, halo, blob shadow, soil and background from both the numerator and denominator so the check measures the plant itself.
 - The six-ripe-plant draw-call test stays under 150.
 - The art advisor gets a greyscale copy of the six-ripe capture and must be able to point out all ripe plots.
 

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Box3, Color, Mesh, MeshToonMaterial, Vector3, type Material } from 'three';
+import { Box3, Color, InstancedMesh, Matrix4, Mesh, MeshToonMaterial, Quaternion, Vector3, type Material } from 'three';
 import type { PlantSnapshot } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { palette } from '../palette';
@@ -7,26 +7,39 @@ import { createBubbleBerry } from './bubble-berry';
 
 const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
 afterEach(() => libraries.splice(0).forEach((library) => library.dispose()));
-const setup = () => { const library = createMaterialLibrary(); libraries.push(library); return { library, rig: createBubbleBerry(library) }; };
+const setup = (hopPhaseOffsetMs = 0) => { const library = createMaterialLibrary(); libraries.push(library); return { library, rig: createBubbleBerry(library, 0, hopPhaseOffsetMs) }; };
 const plant = (stage: PlantSnapshot['stage'], progress: number): PlantSnapshot => ({ speciesId: 'bubble-berry', plantedAt: 0, stage, progress });
 const meshes = (rig: ReturnType<typeof createBubbleBerry>) => {
   const result: Mesh[] = []; rig.root.traverse((object) => { if (object instanceof Mesh) result.push(object); }); return result;
 };
 const part = (rig: ReturnType<typeof createBubbleBerry>, name: string) => meshes(rig).find((mesh) => mesh.userData.part === name)!;
+const instanceScaleY = (mesh: InstancedMesh, index: number) => {
+  const matrix = new Matrix4(); const scale = new Vector3();
+  mesh.getMatrixAt(index, matrix); matrix.decompose(new Vector3(), new Quaternion(), scale);
+  return scale.y / scale.x;
+};
+const meshBounds = (mesh: Mesh) => {
+  mesh.geometry.computeBoundingBox();
+  const geometryBounds = mesh.geometry.boundingBox!;
+  if (!(mesh instanceof InstancedMesh)) return new Box3().copy(geometryBounds).applyMatrix4(mesh.matrixWorld);
+  const instanceMatrix = new Matrix4(); const worldMatrix = new Matrix4();
+  return Array.from({ length: mesh.count }, (_, index) => {
+    mesh.getMatrixAt(index, instanceMatrix);
+    worldMatrix.multiplyMatrices(mesh.matrixWorld, instanceMatrix);
+    return new Box3().copy(geometryBounds).applyMatrix4(worldMatrix);
+  }).reduce((bounds, instanceBounds) => bounds.union(instanceBounds), new Box3());
+};
 const plantBounds = (rig: ReturnType<typeof createBubbleBerry>) => {
   rig.root.updateMatrixWorld(true);
   return meshes(rig).filter((mesh) => mesh.userData.part !== 'blob' && !String(mesh.userData.part).endsWith('outline'))
-    .reduce((bounds, mesh) => {
-      mesh.geometry.computeBoundingBox();
-      return bounds.union(new Box3().copy(mesh.geometry.boundingBox!).applyMatrix4(mesh.matrixWorld));
-    }, new Box3());
+    .reduce((bounds, mesh) => bounds.union(meshBounds(mesh)), new Box3());
 };
 
 describe('createBubbleBerry', () => {
   it('grows the dome and berries and unfurls leaves smoothly through the stages', () => {
     const { rig } = setup(); const original = meshes(rig); const stages: PlantSnapshot['stage'][] = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'];
-    const berries = part(rig, 'berries'); const leaves = part(rig, 'leaves'); const dome = part(rig, 'dome');
-    const berryCluster = berries.parent!; const sample = (progress: number, stage: PlantSnapshot['stage'] = 'Growing') => {
+    const leaves = part(rig, 'leaves'); const dome = part(rig, 'dome');
+    const berryCluster = rig.root.getObjectByName('berry-cluster')!; const sample = (progress: number, stage: PlantSnapshot['stage'] = 'Growing') => {
       rig.update(plant(stage, progress), 0, true); rig.root.updateMatrixWorld(true);
       const domeBounds = new Box3().setFromObject(dome);
       const leafBounds = new Box3().setFromObject(leaves);
@@ -120,6 +133,94 @@ describe('createBubbleBerry', () => {
     rig.dispose();
   });
 
+  it('measures berry bounds from their instance matrices instead of the unscaled sphere template', () => {
+    const { rig } = setup(); rig.update(plant('Harvestable', 1), 0, true); rig.root.updateMatrixWorld(true);
+    const berries = part(rig, 'berries') as InstancedMesh;
+    const bounds = meshBounds(berries);
+    const expected = new Box3(); const geometryBounds = berries.geometry.boundingBox!;
+    const instance = new Matrix4(); const world = new Matrix4();
+    for (let index = 0; index < berries.count; index += 1) {
+      berries.getMatrixAt(index, instance);
+      world.multiplyMatrices(berries.matrixWorld, instance);
+      expected.union(new Box3().copy(geometryBounds).applyMatrix4(world));
+    }
+    expect(bounds.min.toArray()).toEqual(expected.min.toArray());
+    expect(bounds.max.toArray()).toEqual(expected.max.toArray());
+    expect(bounds.getSize(new Vector3()).x).toBeLessThan(1.5);
+    rig.dispose();
+  });
+
+  it('uses the authored default outline thickness when a material factory omits metadata', () => {
+    const library = createMaterialLibrary(); libraries.push(library);
+    const rig = createBubbleBerry({
+      ...library,
+      outline(geometry) {
+        const outline = library.outline(geometry);
+        delete outline.userData.outlineThickness;
+        return outline;
+      },
+    });
+    expect((part(rig, 'berries-outline') as InstancedMesh).userData.outlineThickness).toBe(0.035);
+    rig.dispose();
+  });
+
+  it('hops by plot phase and jiggles berries individually with synchronized outlines', () => {
+    const first = setup(0); const second = setup(500);
+    const firstBody = first.rig.root.getObjectByName('plant-body')!;
+    const secondBody = second.rig.root.getObjectByName('plant-body')!;
+    first.rig.update(plant('Harvestable', 1), 360, false);
+    second.rig.update(plant('Harvestable', 1), 2860, false);
+    expect(firstBody.position.y).toBeCloseTo(0.05, 6);
+    expect(secondBody.position.y).toBeCloseTo(0.05, 6);
+
+    const firstBerries = part(first.rig, 'berries') as InstancedMesh;
+    const firstOutlines = part(first.rig, 'berries-outline') as InstancedMesh;
+    const outlineThickness = firstOutlines.userData.outlineThickness as number;
+    expect(outlineThickness).toBe(0.035);
+    first.rig.update(plant('Harvestable', 1), 550, false);
+    expect(instanceScaleY(firstBerries, 0)).toBeCloseTo(0.92, 6);
+    expect(instanceScaleY(firstBerries, 1)).toBe(1);
+    first.rig.update(plant('Harvestable', 1), 610, false);
+    expect(instanceScaleY(firstBerries, 0)).toBeCloseTo(1.06, 6);
+    expect(instanceScaleY(firstBerries, 1)).toBeCloseTo(0.92, 6);
+    for (let index = 0; index < firstBerries.count; index += 1) {
+      const berryMatrix = new Matrix4(); const outlineMatrix = new Matrix4();
+      firstBerries.getMatrixAt(index, berryMatrix); firstOutlines.getMatrixAt(index, outlineMatrix);
+      const berryScale = new Vector3(); const outlineScale = new Vector3();
+      berryMatrix.decompose(new Vector3(), new Quaternion(), berryScale);
+      outlineMatrix.decompose(new Vector3(), new Quaternion(), outlineScale);
+      expect(outlineScale.x * (1 + outlineThickness)).toBeCloseTo(berryScale.x + outlineThickness, 6);
+      expect(outlineScale.y * (1 + outlineThickness)).toBeCloseTo(berryScale.y + outlineThickness, 6);
+    }
+    first.rig.dispose(); second.rig.dispose();
+  });
+
+  it('keeps breathing, the hop, and every berry jiggle still under reduced motion', () => {
+    const { rig } = setup(); const berries = part(rig, 'berries') as InstancedMesh;
+    rig.update(plant('Harvestable', 1), 550, true);
+    expect(rig.root.getObjectByName('plant-body')!.position.y).toBe(0);
+    expect(rig.root.getObjectByName('plant-body')!.scale.y).toBe(1);
+    expect(rig.root.scale.y).toBe(1);
+    const still = Array.from({ length: berries.count }, (_, index) => {
+      const matrix = new Matrix4(); berries.getMatrixAt(index, matrix); return matrix.toArray();
+    });
+    rig.update(plant('Harvestable', 1), 2500, true);
+    expect(Array.from({ length: berries.count }, (_, index) => {
+      const matrix = new Matrix4(); berries.getMatrixAt(index, matrix); return matrix.toArray();
+    })).toEqual(still);
+    rig.dispose();
+  });
+
+  it('shrinks and restores the grounded blob shadow through the hop', () => {
+    const { rig } = setup(); const blob = part(rig, 'blob');
+    rig.update(plant('Harvestable', 1), 360, false);
+    expect(blob.position.y * rig.root.scale.y).toBeCloseTo(0.008, 6);
+    expect(blob.scale.x).toBeCloseTo(0.92 * 0.75, 6);
+    rig.update(plant('Harvestable', 1), 520, false);
+    expect(blob.scale.x).toBeCloseTo(0.92, 6);
+    rig.dispose();
+  });
+
   it('rotates each leaf 15 degrees outward and keeps the shared rim hook and ripe shader state', () => {
     const { rig } = setup(); const leaves = part(rig, 'leaves'); const berries = part(rig, 'berries');
     const positions = leaves.geometry.getAttribute('position'); const verticesPerLeaf = positions.count / 8;
@@ -157,6 +258,8 @@ describe('createBubbleBerry', () => {
 
   it('disposes owned geometry and fruit material once while preserving borrowed materials and blob resources', () => {
     const { rig } = setup(); const all = meshes(rig);
+    const instances = all.filter((mesh): mesh is InstancedMesh => mesh instanceof InstancedMesh);
+    const instanceDisposals = instances.map((mesh) => vi.spyOn(mesh, 'dispose'));
     const geometries = [...new Set(all.filter((mesh) => mesh.userData.part !== 'blob').map((mesh) => mesh.geometry))]
       .map((geometry) => vi.spyOn(geometry, 'dispose'));
     const fruitMaterial = part(rig, 'berries').material; const fruitDispose = vi.spyOn(fruitMaterial as Material, 'dispose');
@@ -165,6 +268,7 @@ describe('createBubbleBerry', () => {
       .filter((material) => material !== fruitMaterial).map((material) => vi.spyOn(material, 'dispose'));
     rig.dispose(); rig.dispose(); geometries.forEach((spy) => expect(spy).toHaveBeenCalledTimes(1));
     expect(fruitDispose).toHaveBeenCalledTimes(1); expect(blobGeometry).not.toHaveBeenCalled();
+    instanceDisposals.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
     borrowed.forEach((spy) => expect(spy).not.toHaveBeenCalled());
   });
 });

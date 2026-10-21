@@ -1,5 +1,5 @@
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
-import { Box3, Vector3, type Group, type Mesh, type Object3D } from 'three';
+import { Box3, InstancedMesh, Matrix4, Vector3, type Group, type Mesh, type Object3D } from 'three';
 import type { MaterialLibrary } from '../materials';
 import { createBubbleBerry } from './bubble-berry';
 import { createTwistroot } from './twistroot';
@@ -15,6 +15,7 @@ export interface PlantReconciler {
 
 const semanticBounds = new Box3();
 const semanticTop = new Vector3();
+const semanticWorldMatrix = new Matrix4();
 
 function visibleThroughParents(object: Object3D): boolean {
   let current: Object3D | null = object;
@@ -37,15 +38,22 @@ function getSemanticTop(root: Group, target: Vector3): boolean {
       || !visibleThroughParents(mesh) || !mesh.geometry) return;
     mesh.geometry.computeBoundingBox();
     if (!mesh.geometry.boundingBox) return;
-    semanticBounds.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
-    if (!Number.isFinite(semanticBounds.max.y) || semanticBounds.max.y <= highestY) return;
-    highestY = semanticBounds.max.y;
-    semanticTop.set(
-      (semanticBounds.min.x + semanticBounds.max.x) * 0.5,
-      semanticBounds.max.y,
-      (semanticBounds.min.z + semanticBounds.max.z) * 0.5,
-    );
-    found = true;
+    const instanceCount = mesh instanceof InstancedMesh ? mesh.count : 1;
+    for (let index = 0; index < instanceCount; index += 1) {
+      if (mesh instanceof InstancedMesh) {
+        mesh.getMatrixAt(index, semanticWorldMatrix);
+        semanticWorldMatrix.premultiply(mesh.matrixWorld);
+      } else semanticWorldMatrix.copy(mesh.matrixWorld);
+      semanticBounds.copy(mesh.geometry.boundingBox).applyMatrix4(semanticWorldMatrix);
+      if (!Number.isFinite(semanticBounds.max.y) || semanticBounds.max.y <= highestY) continue;
+      highestY = semanticBounds.max.y;
+      semanticTop.set(
+        (semanticBounds.min.x + semanticBounds.max.x) * 0.5,
+        semanticBounds.max.y,
+        (semanticBounds.min.z + semanticBounds.max.z) * 0.5,
+      );
+      found = true;
+    }
   });
   if (!found) return false;
   target.copy(semanticTop);
@@ -60,6 +68,7 @@ function phase(plotId: PlotId): number {
 
 export function createPlantReconciler(plots: readonly (Group & { readonly plotId?: PlotId })[], materials: MaterialLibrary): PlantReconciler {
   const anchors = new Map(plots.filter((plot): plot is Group & { readonly plotId: PlotId } => Boolean(plot.plotId)).map((plot) => [plot.plotId, plot]));
+  const hopPhaseOffsets = new Map(plots.flatMap((plot, index) => plot.plotId ? [[plot.plotId, index * 500] as const] : []));
   const entries = new Map<PlotId, Entry>();
   let disposed = false;
   let currentPlants = new Set<PlotId>();
@@ -85,10 +94,10 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
         if (entry && (entry.speciesId !== plant.speciesId || entry.plantedAt !== plant.plantedAt)) { remove(plot.id); entry = undefined; }
         if (!entry) {
           const rig = plant.speciesId === 'sunny-sprout'
-            ? createSunnySprout(materials, phase(plot.id))
+            ? createSunnySprout(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
             : plant.speciesId === 'bubble-berry'
-              ? createBubbleBerry(materials, phase(plot.id))
-              : createTwistroot(materials, phase(plot.id));
+              ? createBubbleBerry(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
+              : createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0);
           entry = { speciesId: plant.speciesId, plantedAt: plant.plantedAt, rig };
           entries.set(plot.id, entry);
           anchors.get(plot.id)!.add(entry.rig.root);

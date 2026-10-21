@@ -20,6 +20,36 @@ export interface PlantRig {
   dispose(): void;
 }
 
+export interface HopPose {
+  readonly y: number;
+  readonly scaleY: number;
+}
+
+export function springProgress(value: number): number {
+  const t = Math.min(1, Math.max(0, value));
+  const response = (time: number) => 1 - Math.exp(-7 * time) * (Math.cos(10 * time) + (7 / 10) * Math.sin(10 * time));
+  const endValue = response(1);
+  const endSlope = Math.exp(-7) * (49 / 10 + 10) * Math.sin(10) / endValue;
+  const progress = response(t) / endValue + endSlope * t * t * (1 - t);
+  return Math.min(1, Math.max(0, progress));
+}
+
+export function ripeHopPose(presentationNowMs: number, phaseOffsetMs: number, active: boolean): HopPose {
+  if (!active || !Number.isFinite(presentationNowMs)) return { y: 0, scaleY: 1 };
+  const elapsed = ((presentationNowMs + phaseOffsetMs) % 3000 + 3000) % 3000;
+  if (elapsed < 120) return { y: 0, scaleY: 1 - 0.06 * springProgress(elapsed / 120) };
+  if (elapsed < 360) {
+    const progress = springProgress((elapsed - 120) / 240);
+    return { y: 0.05 * progress, scaleY: 0.94 + 0.10 * progress };
+  }
+  if (elapsed < 520) {
+    const progress = springProgress((elapsed - 360) / 160);
+    return { y: 0.05 * (1 - progress), scaleY: 1.04 - 0.09 * progress };
+  }
+  if (elapsed < 700) return { y: 0, scaleY: 0.95 + 0.05 * springProgress((elapsed - 520) / 180) };
+  return { y: 0, scaleY: 1 };
+}
+
 const FRUIT_RADIUS = 0.31;
 const STEM_LENGTH = 0.78;
 const LEAF_RADIUS = 0.19;
@@ -42,8 +72,12 @@ function ribbedFruit(): SphereGeometry {
   return geometry;
 }
 
-export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0): PlantRig {
+export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0, hopPhaseOffsetMs = 0): PlantRig {
   const root = new Group();
+  root.name = 'sunny-sprout';
+  const plantBody = new Group();
+  plantBody.name = 'plant-body';
+  root.add(plantBody);
   const stemGeometry = new CylinderGeometry(0.10, 0.11, 1, 10, 1);
   const leafGeometry = new SphereGeometry(LEAF_RADIUS, 16, 12);
   const fruitGeometry = ribbedFruit();
@@ -78,7 +112,7 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
         + '#include <opaque_fragment>');
   };
 
-  function part(geometry: BufferGeometry, color: string, name: string, parent = root, material = materials.toon(color)): Mesh {
+  function part(geometry: BufferGeometry, color: string, name: string, parent = plantBody, material = materials.toon(color)): Mesh {
     const mesh = new Mesh(geometry, material);
     mesh.name = name;
     mesh.userData.part = name;
@@ -95,7 +129,7 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
   const rightLeaf = part(leafGeometry, palette.plants['sunny-sprout'].leaf[1], 'right-leaf');
   const fruitRig = new Group();
   fruitRig.userData.part = 'fruit';
-  root.add(fruitRig);
+  plantBody.add(fruitRig);
   part(fruitGeometry, fruitRamp[1], 'fruit', fruitRig, fruitMaterial);
   const halo = new Mesh(haloGeometry, haloMaterial);
   halo.name = 'halo';
@@ -144,14 +178,16 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
       else fruitMaterial.color.copy(new Color(fruitRamp[3]).lerp(new Color(fruitRamp[1]), easedWarm));
       if (ripeUniform) ripeUniform.value = ripe ? 1 : 0;
       halo.visible = ripe;
-      fruitRig.rotation.z = ripe && !reducedMotion
-        ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.075
-        : 0;
+      const hop = ripeHopPose(presentationNowMs, hopPhaseOffsetMs, ripe && !reducedMotion);
+      plantBody.position.y = hop.y;
+      plantBody.scale.y = hop.scaleY;
       const breathing = reducedMotion
         ? 1
         : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
       root.scale.y = breathing * (ripe ? 1.08 : 1);
       blob.position.y = 0.008 / root.scale.y;
+      const shadowScale = 1 - 0.25 * Math.min(1, hop.y / 0.05);
+      blob.scale.set(0.92 * shadowScale, 0.6 * shadowScale, 1);
     },
     dispose() {
       if (disposed) return;

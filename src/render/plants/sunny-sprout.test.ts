@@ -3,11 +3,11 @@ import { Box3, Color, CylinderGeometry, Mesh, MeshToonMaterial, PlaneGeometry, S
 import type { PlantSnapshot } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { palette } from '../palette';
-import { createSunnySprout } from './sunny-sprout';
+import { createSunnySprout, ripeHopPose, springProgress } from './sunny-sprout';
 
 const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
 afterEach(() => libraries.splice(0).forEach((library) => library.dispose()));
-const setup = () => { const library = createMaterialLibrary(); libraries.push(library); return { library, rig: createSunnySprout(library) }; };
+const setup = (hopPhaseOffsetMs = 0) => { const library = createMaterialLibrary(); libraries.push(library); return { library, rig: createSunnySprout(library, 0, hopPhaseOffsetMs) }; };
 const plant = (stage: PlantSnapshot['stage'], progress: number): PlantSnapshot => ({ speciesId: 'sunny-sprout', plantedAt: 0, stage, progress });
 const meshes = (rig: ReturnType<typeof createSunnySprout>) => {
   const result: Mesh[] = []; rig.root.traverse((object) => { if (object instanceof Mesh) result.push(object); }); return result;
@@ -25,6 +25,12 @@ const plantBounds = (rig: ReturnType<typeof createSunnySprout>) => {
 };
 
 describe('createSunnySprout', () => {
+  it('names its root with the species identifier for reconciler and fixture inspection', () => {
+    const { rig } = setup();
+    expect(rig.root.name).toBe('sunny-sprout');
+    rig.dispose();
+  });
+
   it('keeps mesh and geometry identities and continuous transforms across all five growth stages', () => {
     const { rig } = setup(); const original = meshes(rig); const boundaries = [0.125, 0.375, 0.875, 1];
     const stages: PlantSnapshot['stage'][] = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'];
@@ -43,14 +49,61 @@ describe('createSunnySprout', () => {
     }); rig.dispose();
   });
 
-  it('shows a halo and wobble only when harvestable', () => {
+  it('shows the halo only when harvestable and hops through the authored timings', () => {
     const { rig } = setup(); const parts = meshes(rig); const halo = parts.find((mesh) => mesh.userData.part === 'halo')!;
-    const fruit = parts.find((mesh) => mesh.userData.part === 'fruit')!;
+    const body = rig.root.getObjectByName('plant-body')!;
     (['Seed', 'Sprout', 'Growing', 'Mature'] as const).forEach((stage) => {
-      rig.update(plant(stage, 0.5), 600, false); expect(halo.visible).toBe(false); expect(fruit.parent!.rotation.z).toBe(0);
+      rig.update(plant(stage, 0.5), 600, false); expect(halo.visible).toBe(false); expect(body.position.y).toBe(0);
     });
-    rig.update(plant('Harvestable', 1), 0, false); expect(halo.visible).toBe(true); const atRest = fruit.parent!.rotation.z;
-    rig.update(plant('Harvestable', 1), 600, false); expect(fruit.parent!.rotation.z).not.toBe(atRest); rig.dispose();
+    rig.update(plant('Harvestable', 1), 120, false); expect(halo.visible).toBe(true); expect(body.scale.y).toBeCloseTo(0.94, 6);
+    rig.update(plant('Harvestable', 1), 360, false);
+    expect(body.position.y).toBeCloseTo(0.05, 6);
+    expect(body.position.y).toBeGreaterThanOrEqual(0.05);
+    expect(body.scale.y).toBeCloseTo(1.04, 6);
+    rig.update(plant('Harvestable', 1), 600, false);
+    expect(body.scale.y).toBeLessThanOrEqual(1);
+    expect(body.scale.y).toBeGreaterThanOrEqual(0.95);
+    rig.update(plant('Harvestable', 1), 520, false); expect(body.position.y).toBe(0); expect(body.scale.y).toBeCloseTo(0.95, 6);
+    rig.update(plant('Harvestable', 1), 700, false); expect(body.position.y).toBe(0); expect(body.scale.y).toBe(1);
+    rig.dispose();
+  });
+
+  it('keeps the spring response, hop altitude, and resting shadow within bounds for the full cycle', () => {
+    for (let sample = 0; sample <= 100; sample += 1) {
+      const progress = springProgress(sample / 100);
+      expect(progress).toBeGreaterThanOrEqual(0);
+      expect(progress).toBeLessThanOrEqual(1);
+    }
+    const { rig } = setup(); const body = rig.root.getObjectByName('plant-body')!;
+    const blob = meshes(rig).find((mesh) => mesh.userData.part === 'blob')!;
+    for (let elapsed = 0; elapsed <= 700; elapsed += 1) {
+      const hop = ripeHopPose(elapsed, 0, true);
+      expect(hop.y).toBeGreaterThanOrEqual(0);
+      expect(hop.y).toBeLessThanOrEqual(0.05);
+      rig.update(plant('Harvestable', 1), elapsed, false);
+      expect(body.position.y).toBeGreaterThanOrEqual(0);
+      expect(blob.scale.x).toBeLessThanOrEqual(0.92);
+    }
+    rig.dispose();
+  });
+
+  it('offsets hop timing by the supplied plot phase and keeps the blob grounded', () => {
+    const first = setup(0); const second = setup(500);
+    const firstBody = first.rig.root.getObjectByName('plant-body')!;
+    const secondBody = second.rig.root.getObjectByName('plant-body')!;
+    first.rig.update(plant('Harvestable', 1), 360, false);
+    second.rig.update(plant('Harvestable', 1), 2860, false);
+    expect(firstBody.position.y).toBeCloseTo(0.05, 6);
+    expect(secondBody.position.y).toBeCloseTo(0.05, 6);
+    for (const rig of [first.rig, second.rig]) {
+      const blob = meshes(rig).find((mesh) => mesh.userData.part === 'blob')!;
+      rig.root.updateMatrixWorld(true);
+      expect(blob.scale.x).toBeCloseTo(0.92 * 0.75, 6);
+      expect(blob.getWorldPosition(new Vector3()).y).toBeCloseTo(0.008, 6);
+      rig.update(plant('Harvestable', 1), rig === first.rig ? 520 : 3020, false);
+      expect(blob.scale.x).toBeCloseTo(0.92, 6);
+      rig.dispose();
+    }
   });
 
   it('warms fruit in linear space and changes the ripe silhouette by at least eight percent', () => {
@@ -173,7 +226,10 @@ describe('createSunnySprout', () => {
     const { rig } = setup(); rig.update(plant('Sprout', 0.2), 0, true); const still = pose(rig);
     rig.update(plant('Sprout', 0.2), 60_000, true); expect(pose(rig)).toEqual(still);
     rig.update(plant('Growing', 0.6), 60_000, true); expect(pose(rig)).not.toEqual(still);
-    rig.update(plant('Harvestable', 1), 60_000, true);
+    rig.update(plant('Harvestable', 1), 60_360, true);
+    expect(rig.root.getObjectByName('plant-body')!.position.y).toBe(0);
+    expect(rig.root.getObjectByName('plant-body')!.scale.y).toBe(1);
+    expect(rig.root.scale.y).toBe(1.08);
     expect(meshes(rig).find((mesh) => mesh.userData.part === 'halo')!.visible).toBe(true); rig.dispose();
   });
 

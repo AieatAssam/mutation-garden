@@ -15,7 +15,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import type { PlantSnapshot } from '../../sim/state/types';
 import { palette } from '../palette';
 import type { MaterialLibrary } from '../materials';
-import type { PlantRig } from './sunny-sprout';
+import { ripeHopPose, type PlantRig } from './sunny-sprout';
 
 const ROOT_HEIGHT = 0.78;
 const ROOT_CENTER_RADIUS = 0.2;
@@ -138,9 +138,12 @@ function updateTuftSplay(geometry: BufferGeometry, original: Float32Array, splay
   geometry.computeBoundingSphere();
 }
 
-export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): PlantRig {
+export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0, hopPhaseOffsetMs = 0): PlantRig {
   const root = new Group();
   root.name = 'twistroot';
+  const plantBody = new Group();
+  plantBody.name = 'plant-body';
+  root.add(plantBody);
 
   const rootGeometry = makeRootGeometry();
   const soilGeometry = new SphereGeometry(1, 18, 12);
@@ -191,7 +194,7 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
   rootBody.name = 'root-body';
   rootBody.userData.part = 'root-body';
   rootBody.renderOrder = 3;
-  root.add(rootBody);
+  plantBody.add(rootBody);
   const rootOutline = materials.outline(rootGeometry);
   rootOutline.name = 'root-outline';
   rootOutline.userData.part = 'root-outline';
@@ -201,7 +204,7 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
   const tuft = new Group();
   tuft.name = 'tuft';
   tuft.userData.part = 'tuft';
-  root.add(tuft);
+  plantBody.add(tuft);
   const leaves = new Mesh(tuftGeometry, materials.toon(palette.plants.twistroot.leaf[1]));
   leaves.name = 'tuft-leaves';
   leaves.userData.part = 'tuft-leaf';
@@ -267,9 +270,9 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
       soilOutline.scale.copy(soilBulge.scale);
 
       growthRing.visible = ripe;
-      root.rotation.z = ripe && !reducedMotion
-        ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.035
-        : 0;
+      const hop = ripeHopPose(presentationNowMs, hopPhaseOffsetMs, ripe && !reducedMotion);
+      plantBody.position.y = hop.y;
+      plantBody.scale.y = hop.scaleY;
       root.scale.y = reducedMotion
         ? 1
         : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
@@ -277,6 +280,8 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
       soilBulge.position.y = 0.045 / root.scale.y;
       soilOutline.position.copy(soilBulge.position);
       growthRing.position.set(0, 0.13 / root.scale.y, 0);
+      const shadowScale = 1 - 0.25 * Math.min(1, hop.y / 0.05);
+      blob.scale.set(0.92 * shadowScale, 0.6 * shadowScale, 1);
     },
     dispose() {
       if (disposed) return;

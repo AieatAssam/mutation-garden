@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Box3, Group, Mesh, Vector3, type Material, type Object3D } from 'three';
+import { Box3, Group, InstancedMesh, Matrix4, Mesh, Vector3, type Material, type Object3D } from 'three';
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { createPlantReconciler } from './reconcile';
@@ -29,15 +29,71 @@ const semanticWorldTop = (anchor: Group) => {
     if (!visible) return;
     node.geometry.computeBoundingBox();
     if (!node.geometry.boundingBox) return;
-    bounds.copy(node.geometry.boundingBox).applyMatrix4(node.matrixWorld);
-    if (bounds.max.y > top.y) {
-      top.set((bounds.min.x + bounds.max.x) / 2, bounds.max.y, (bounds.min.z + bounds.max.z) / 2);
+    const count = node instanceof InstancedMesh ? node.count : 1;
+    for (let index = 0; index < count; index += 1) {
+      const world = new Matrix4();
+      if (node instanceof InstancedMesh) {
+        node.getMatrixAt(index, world);
+        world.premultiply(node.matrixWorld);
+      } else world.copy(node.matrixWorld);
+      bounds.copy(node.geometry.boundingBox).applyMatrix4(world);
+      if (bounds.max.y > top.y) {
+        top.set((bounds.min.x + bounds.max.x) / 2, bounds.max.y, (bounds.min.z + bounds.max.z) / 2);
+      }
     }
   });
   return top;
 };
 
 describe('plant reconciliation', () => {
+  it('offsets hop starts by stable plot anchor order in 500 ms steps', () => {
+    const { anchors, reconciler } = setup(['plot-0', 'plot-1', 'plot-2']);
+    const ripe = [plant(1, 1, 'Harvestable'), plant(2, 1, 'Harvestable'), plant(3, 1, 'Harvestable')];
+    const previous = snap(0, [null, null, null]);
+    reconciler.update(previous, snap(2860, ripe), 1, false);
+    const bodies = anchors.map((anchor) => anchor.getObjectByName('plant-body')!);
+    expect(bodies.map((body) => body.position.y)).toEqual([0, 0.05, 0]);
+    reconciler.update(snap(2860, ripe), snap(2860, ripe), 1, false);
+    expect(bodies.map((body) => body.position.y)).toEqual([0, 0.05, 0]);
+
+    reconciler.update(snap(2860, ripe), snap(2360, ripe), 1, false);
+    expect(bodies.map((body) => body.position.y)).toEqual([0, 0, 0.05]);
+    reconciler.dispose();
+  });
+
+  it('keeps anchor offsets with sparse, reordered snapshots and after a plot is replanted', () => {
+    const { anchors, reconciler } = setup(['plot-0', 'plot-1', 'plot-2']);
+    const plotTwo = plant(20, 1, 'Harvestable');
+    const plotZero = plant(10, 1, 'Harvestable');
+    reconciler.update(snap(0, [null, null, null]), snap(2360, [plotTwo, plotZero], ['plot-2', 'plot-0']), 1, false);
+    expect(anchors[2]!.getObjectByName('plant-body')!.position.y).toBeCloseTo(0.05, 6);
+    expect(anchors[0]!.getObjectByName('plant-body')!.position.y).toBe(0);
+
+    reconciler.update(snap(2360, [plotTwo], ['plot-2']), snap(2360, [null], ['plot-2']), 1, false);
+    expect(anchors[2]!.children).toHaveLength(0);
+    const replanted = plant(30, 1, 'Harvestable');
+    reconciler.update(snap(2360, [null], ['plot-2']), snap(2360, [replanted], ['plot-2']), 1, false);
+    expect(anchors[2]!.getObjectByName('plant-body')!.position.y).toBeCloseTo(0.05, 6);
+    reconciler.dispose();
+  });
+
+  it('uses Bubble Berry instance bounds for the ripe top and follows its jiggle', () => {
+    const { anchors, reconciler } = setup();
+    const ripe = plant(1, 1, 'Harvestable', 'bubble-berry');
+    reconciler.update(snap(0, [ripe]), snap(360, [ripe]), 1, true);
+    const target = new Vector3();
+    expect(reconciler.getTop('plot-0', target)).toBe(true);
+    expect(target.y).toBeCloseTo(semanticWorldTop(anchors[0]!).y, 6);
+    expect(target.y).toBeLessThan(1);
+
+    reconciler.update(snap(360, [ripe]), snap(550, [ripe]), 1, false);
+    const jiggleTop = new Vector3();
+    expect(reconciler.getTop('plot-0', jiggleTop)).toBe(true);
+    expect(jiggleTop.y).toBeLessThan(target.y);
+    expect(jiggleTop.y).toBeCloseTo(semanticWorldTop(anchors[0]!).y, 6);
+    reconciler.dispose();
+  });
+
   it('reports the visible semantic world-space top for every supported plant and follows live growth and animation', () => {
     const { anchors, reconciler } = setup(['plot-0', 'plot-1', 'plot-2']);
     const target = new Vector3(99, 99, 99);

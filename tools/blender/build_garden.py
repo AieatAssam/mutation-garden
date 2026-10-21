@@ -82,7 +82,7 @@ def prim(kind, material, loc=(0, 0, 0), scale=(1, 1, 1), rot=(0, 0, 0), smooth=T
     return o
 
 
-def rounded_box(material, size, loc, radius=0.04, rot=(0, 0, 0), segments=2):
+def rounded_box(material, size, loc, radius=0.04, rot=(0, 0, 0), segments=1):
     o = prim('cube', material, loc=loc, rot=rot, smooth=True)
     o.scale = (size[0] / 2, size[1] / 2, size[2] / 2)
     bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
@@ -253,7 +253,7 @@ for x in PLOT_XS:
             rid.scale = (1, 1, 1)
             rid.scale.y = 0.55 / 0.11 * 0.11 / 0.11 * 0.5  # flatten
             bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
-            b = rid.modifiers.new('bevel', 'BEVEL'); b.width = 0.05; b.segments = 2
+            b = rid.modifiers.new('bevel', 'BEVEL'); b.width = 0.05; b.segments = 1
             bpy.ops.object.modifier_apply(modifier=b.name)
             for p in rid.data.polygons:
                 p.use_smooth = True
@@ -350,13 +350,13 @@ outline(trunk)
 for (dx, dy, dz, s, shade) in ((0, 0, 1.55, 0.62, 1), (-0.38, -0.12, 1.3, 0.45, 1), (0.36, 0.05, 1.32, 0.48, 2),
                                (0.05, -0.3, 1.25, 0.42, 0), (0.1, 0.25, 1.9, 0.42, 0)):
     outline(prim('ico_sphere', f'environment.grass.{shade}', loc=(TX + dx, TY + dy, GROUND + dz),
-                 scale=(s, s, s * 0.92), subdivisions=3))
+                 scale=(s, s, s * 0.92), subdivisions=2))
 
 # ---------------------------------------------------------------- watering can (back left)
 
 WX, WY = 2.8, 1.9
-body = prim('cylinder', 'environment.water.2', loc=(WX, WY, GROUND + 0.2), vertices=20, radius=0.2, depth=0.4)
-b = body.modifiers.new('bevel', 'BEVEL'); b.width = 0.05; b.segments = 3
+body = prim('cylinder', 'environment.water.2', loc=(WX, WY, GROUND + 0.2), vertices=16, radius=0.2, depth=0.4)
+b = body.modifiers.new('bevel', 'BEVEL'); b.width = 0.05; b.segments = 2
 bpy.ops.object.modifier_apply(modifier=b.name)
 outline(body)
 spout = prim('cylinder', 'environment.water.2', loc=(WX + 0.3, WY - 0.05, GROUND + 0.32), vertices=10,
@@ -365,7 +365,7 @@ outline(spout)
 outline(prim('cylinder', 'environment.water.3', loc=(WX + 0.47, WY - 0.08, GROUND + 0.45), vertices=10,
              radius=0.06, depth=0.05, rot=(0, math.radians(55), -0.15)))
 handle = prim('torus', 'environment.water.3', loc=(WX - 0.02, WY, GROUND + 0.43), major_radius=0.14,
-              minor_radius=0.03, rot=(math.pi / 2, 0, 0))
+              minor_radius=0.03, rot=(math.pi / 2, 0, 0), major_segments=16, minor_segments=6)
 outline(handle)
 blob = prim('cylinder', 'environment.water.0', loc=(WX, WY, GROUND + 0.41), vertices=20, radius=0.17, depth=0.01)
 
@@ -420,14 +420,14 @@ for k in range(16):
         continue
     x, y = p
     h = rng.uniform(0.16, 0.26)
-    prim('cylinder', 'plants.sunny-sprout.stem.1', loc=(x, y, GROUND + h / 2), vertices=6, radius=0.018, depth=h)
+    prim('cylinder', 'plants.sunny-sprout.stem.1', loc=(x, y, GROUND + h / 2), vertices=4, radius=0.018, depth=h)
     colour = rng.choice(flower_colours)
     for pk in range(5):
         a = 2 * math.pi * pk / 5
         prim('uv_sphere', colour, loc=(x + 0.055 * math.cos(a), y + 0.055 * math.sin(a), GROUND + h),
-             scale=(0.05, 0.05, 0.025), segments=8, ring_count=5)
+             scale=(0.05, 0.05, 0.025), segments=6, ring_count=3)
     prim('uv_sphere', 'plants.sunny-sprout.fruit.1', loc=(x, y, GROUND + h + 0.012), scale=(0.035, 0.035, 0.03),
-         segments=8, ring_count=5)
+         segments=6, ring_count=3)
 
 # ---------------------------------------------------------------- join by material, build hulls
 

@@ -137,6 +137,7 @@ test('production zoom is deliberate, bounded, and leaves the garden playable', a
   await page.setViewportSize(viewport);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const stage = page.locator('#stage');
   await expect(stage).toBeVisible();
   const rect = await readStageRect(page);

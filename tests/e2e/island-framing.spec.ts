@@ -44,6 +44,7 @@ test('production garden balances the portrait island and keeps all six plots tap
   await page.setViewportSize(viewport);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
 
   const canvas = page.locator('#stage');
   const coins = page.getByRole('status', { name: 'Coins' });

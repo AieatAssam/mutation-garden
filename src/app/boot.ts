@@ -130,6 +130,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     });
     lifecycle.start();
     document.body.dataset.boot = 'webgl';
+    void r.whenLoaded().then(() => {
+      if (!disposed) document.body.dataset.models = 'ready';
+    });
     return () => {
       if (disposed) return;
       disposed = true;

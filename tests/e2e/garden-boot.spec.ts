@@ -36,6 +36,7 @@ test('production garden boots with its HUD clear of the garden', async ({ page }
   await page.setViewportSize(projectViewport);
   await page.goto('http://localhost:4173/mutation-garden/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const canvas = page.locator('#stage');
   const seedLabel = page.locator('nav[aria-label="Seeds"] .garden-ui__tray-label');
   await expect(seedLabel).toBeVisible();

@@ -224,9 +224,9 @@ async function probeGroundByReversiblePan(
 }
 
 /**
- * Where the settled stamp for a species is drawn: the projected plant top plus the stamp lift.
- * Located by projection rather than by scanning pixels, so authored art can change (ADR 0009);
- * the specs then prove taps and swipes at that point harvest the owning plot.
+ * Finds the settled stamp for a species: projected from the plant top plus the stamp lift, then
+ * confirmed by colour inside that disc (fruit fill, paper ring and tick, ink rim), so the check
+ * survives art changes to the plants (ADR 0009) but still fails when no stamp is drawn.
  */
 async function readStamp(
   page: Page,
@@ -240,6 +240,46 @@ async function readStamp(
   const radius = 0.31 * stageBounds!.width * projectionCamera.zoom / (projectionCamera.right - projectionCamera.left);
   expect(radius * 2, `${speciesLabels[speciesId]} projected stamp must be at least 26px wide`).toBeGreaterThanOrEqual(26);
   const center = projectPlotPoint(stageBounds!, speciesPlot[speciesId], speciesStampWorldY[speciesId], camera);
+  const searchRadius = radius * 1.4;
+  const clip = {
+    x: Math.max(stageBounds!.x, center.x - searchRadius),
+    y: Math.max(stageBounds!.y, center.y - searchRadius),
+    width: searchRadius * 2,
+    height: searchRadius * 2,
+  };
+  const image = (await page.screenshot({ clip, scale: 'css' })).toString('base64');
+  const fractions = await page.evaluate(async ({ encoded, fruit, paper, ink }) => {
+    const picture = new Image();
+    picture.src = `data:image/png;base64,${encoded}`;
+    await picture.decode();
+    const canvas = document.createElement('canvas');
+    canvas.width = picture.naturalWidth;
+    canvas.height = picture.naturalHeight;
+    const context = canvas.getContext('2d', { willReadFrequently: true })!;
+    context.drawImage(picture, 0, 0);
+    const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
+    const rgb = (hex: string) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
+    const targets = { fruit: rgb(fruit), paper: rgb(paper), ink: rgb(ink) };
+    const counts = { fruit: 0, paper: 0, ink: 0 };
+    let total = 0;
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        if (Math.hypot(x - width / 2, y - height / 2) > width / 2) continue;
+        total += 1;
+        const offset = (y * width + x) * 4;
+        for (const key of ['fruit', 'paper', 'ink'] as const) {
+          const [r, g, b] = targets[key];
+          if (Math.abs(data[offset]! - r!) + Math.abs(data[offset + 1]! - g!) + Math.abs(data[offset + 2]! - b!) < 45) {
+            counts[key] += 1;
+          }
+        }
+      }
+    }
+    return { fruit: counts.fruit / total, paper: counts.paper / total, ink: counts.ink / total };
+  }, { encoded: image, fruit: palette.plants[speciesId].fruit[1], paper: palette.ink['paper-white'], ink: palette.ink['press-ink'] });
+  if (fractions.paper < 0.05 || fractions.fruit < 0.1 || fractions.ink < 0.03) {
+    throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible at ${JSON.stringify(center)}: ${JSON.stringify(fractions)}`);
+  }
   return { center, box: { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 } };
 }
 
@@ -600,6 +640,8 @@ test('production status stamps stay visible and harvest their owning species', a
   const tray = await seeds.boundingBox();
   expect(tray).not.toBeNull();
   await waitForCoins(page, 12);
+  await expect(readStamp(page, 'sunny-sprout'))
+    .rejects.toThrow('settled Sunny Sprout stamp should be visible');
 
   await plant(page, 'sunny-sprout', plots[0]!, mobile);
   await plant(page, 'bubble-berry', plots[2]!, mobile);

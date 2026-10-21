@@ -16,7 +16,8 @@ import { palette } from './palette';
 import { createGarden } from './garden';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
-import type { GardenSnapshot, SpeciesId } from '../sim';
+import type { GardenSnapshot, SimEvent, SpeciesId } from '../sim';
+import { createGardenEffects } from './effects';
 import { createPlantReconciler } from './plants/reconcile';
 import { createPlotStatusResources } from './plot-status';
 import { createPlotStatusLifecycle, type PlotStatusSpecies } from './plot-status-lifecycle';
@@ -34,6 +35,7 @@ export interface Renderer {
   resize(width: number, height: number): void;
   pan(deltaXCss: number, deltaYCss: number): void;
   zoom(scale: number): void;
+  onEvents(events: readonly SimEvent[], nowMs: number, reducedMotion: boolean): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   pick(clientX: number, clientY: number): PickResult;
   dispose(): void;
@@ -62,6 +64,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const garden = createGarden(materials);
   scene.add(garden);
   const plants = createPlantReconciler(garden.plots, materials);
+  const effects = createGardenEffects(garden.plots);
   const statusResources = createPlotStatusResources();
   scene.add(statusResources.group);
   const statusSpecies: readonly PlotStatusSpecies[] = options.species.map((species) => ({
@@ -133,6 +136,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       zoomGardenCamera(camera, scale);
       draw();
     },
+    onEvents(events, nowMs, reducedMotion) {
+      if (!disposed) effects.trigger(events, nowMs, reducedMotion);
+    },
     render(previous, current, alpha, reducedMotion) {
       if (disposed) return;
       previousSnapshot = previous;
@@ -140,6 +146,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       snapshotAlpha = Math.min(1, Math.max(0, alpha));
       currentReducedMotion = reducedMotion;
       plants.update(previous, current, alpha, reducedMotion);
+      effects.update(previous.nowMs + (current.nowMs - previous.nowMs) * snapshotAlpha, reducedMotion);
       draw();
     },
     pick(clientX, clientY) {
@@ -151,6 +158,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       if (disposed) return;
       disposed = true;
       picker.dispose();
+      effects.dispose();
       plants.dispose();
       statusResources.dispose();
       garden.dispose();

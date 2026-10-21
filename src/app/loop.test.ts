@@ -16,6 +16,7 @@ function createHarness(nowMs: () => number = () => 1_000) {
   });
   const frames: Array<{ previous: number; current: number; alpha: number }> = [];
   const eventBatches: (readonly SimEvent[])[] = [];
+  const eventTimes: number[] = [];
   const loop = createFixedStepLoop({
     initialState: createInitialState(1, 0),
     nowMs,
@@ -24,7 +25,10 @@ function createHarness(nowMs: () => number = () => 1_000) {
     onRender: ({ previous, current, alpha }) => {
       frames.push({ previous: previous.nowMs, current: current.nowMs, alpha });
     },
-    onEvents: (events) => eventBatches.push([...events]),
+    onEvents: (events, nowMs) => {
+      eventBatches.push([...events]);
+      eventTimes.push(nowMs);
+    },
   });
 
   function frame(timestampMs: number): void {
@@ -35,7 +39,7 @@ function createHarness(nowMs: () => number = () => 1_000) {
     callback(timestampMs);
   }
 
-  return { loop, frame, callbacks, requestFrame, cancelFrame, frames, eventBatches };
+  return { loop, frame, callbacks, requestFrame, cancelFrame, frames, eventBatches, eventTimes };
 }
 
 const plantA: Command = { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' };
@@ -212,5 +216,27 @@ describe('fixed-step app loop', () => {
     expect(h.eventBatches).toEqual([[
       { type: 'Planted', plotId: 'plot-0', speciesId: 'sunny-sprout' },
     ]]);
+    expect(h.eventTimes).toEqual([100]);
+  });
+
+  it('passes the effective tick timestamp for events, including catch-up with a backward clock', () => {
+    const nowMs = vi.fn().mockReturnValueOnce(1_000).mockReturnValueOnce(500).mockReturnValueOnce(400);
+    const h = createHarness(nowMs);
+    h.loop.start();
+    h.frame(0);
+    h.frame(100); // Advance state to 1,000 without events.
+
+    h.loop.enqueue(plantA);
+    h.frame(200); // The backward wall time clamps to the effective state time.
+    h.loop.enqueue(plantB);
+    h.loop.catchUp(); // Catch-up also reports the timestamp of its resulting snapshot.
+
+    expect(h.eventBatches).toEqual([
+      [{ type: 'Planted', plotId: 'plot-0', speciesId: 'sunny-sprout' }],
+      [{ type: 'Planted', plotId: 'plot-1', speciesId: 'bubble-berry' }],
+    ]);
+    expect(h.eventTimes).toEqual([1_000, 1_000]);
+    expect(nowMs).toHaveBeenCalledTimes(3);
+    expect(h.frames.at(-1)?.current).toBe(1_000);
   });
 });

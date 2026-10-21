@@ -14,7 +14,7 @@ describe('Water commands', () => {
       { type: 'Watered', plotId: 'plot-0' },
       { type: 'StageReached', plotId: 'plot-0', stage: 'Growing' },
     ]);
-    expect(watered.state.plots[0]?.plant).toMatchObject({ plantedAt: start - 6_000, watered: true });
+    expect(watered.state.plots[0]?.plant).toMatchObject({ plantedAt: start, boostMs: 6_000 });
     expect(getSnapshot(step(watered.state, [], start + 18_999).state).plots[0]?.plant?.stage).toBe('Mature');
     expect(getSnapshot(step(watered.state, [], start + 19_000).state).plots[0]?.plant?.stage).toBe('Harvestable');
 

@@ -4,6 +4,7 @@ export { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, SPECIES, WATER_SPE
 export type { GrowthStageDefinition, SpeciesDefinition } from './content/species';
 export { nextRandom } from './state/rng';
 export { step } from './state/step';
+export { growthStart } from './state/types';
 export { getSnapshot } from './state/snapshot';
 export { getGrowthView } from './plants/growth';
 export type {

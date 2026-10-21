@@ -1,6 +1,6 @@
 import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
-import type { Command, GardenState, SimEvent, StepResult } from '../state/types';
+import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
 type HarvestCommand = Extract<Command, { readonly type: 'Harvest' }>;
 
@@ -32,7 +32,7 @@ export function harvest(
       continue;
     }
 
-    if (getGrowthView(plot.plant.speciesId, plot.plant.plantedAt, effectiveNowMs).stage !== 'Harvestable') {
+    if (getGrowthView(plot.plant.speciesId, growthStart(plot.plant), effectiveNowMs).stage !== 'Harvestable') {
       events.push(rejection(plotId, 'not-harvestable'));
       continue;
     }
@@ -44,7 +44,7 @@ export function harvest(
     }
 
     const size = plot.plant.size ?? 'regular';
-    const ripeAt = plot.plant.plantedAt + species.growthDurationMs;
+    const ripeAt = growthStart(plot.plant) + species.growthDurationMs;
     const fresh = effectiveNowMs - ripeAt <= FRESH_WINDOW_MS;
     const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1);
     const coins = Math.max(1, Math.floor(species.baseValue * multiplier));

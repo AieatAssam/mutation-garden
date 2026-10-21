@@ -7,10 +7,16 @@ export type YieldSize = 'small' | 'regular' | 'big';
 
 export interface PlantState {
   readonly speciesId: SpeciesId;
-  /** Growth start. Watering moves it earlier so the remaining time shrinks. */
+  /** When the seed went in. Stable for the plant's life, so presentation can use it as identity. */
   readonly plantedAt: number;
   readonly size?: YieldSize;
-  readonly watered?: boolean;
+  /** Growth time skipped by watering; growth runs from plantedAt - boostMs. */
+  readonly boostMs?: number;
+}
+
+/** The timestamp growth is measured from. */
+export function growthStart(plant: PlantState): number {
+  return plant.plantedAt - (plant.boostMs ?? 0);
 }
 
 export interface GrowthView {

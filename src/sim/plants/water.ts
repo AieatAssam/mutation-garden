@@ -1,12 +1,12 @@
 import { SPECIES, WATER_SPEEDUP } from '../content/species';
 import { getGrowthView } from './growth';
-import type { Command, GardenState, SimEvent, StepResult } from '../state/types';
+import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
 type WaterCommand = Extract<Command, { readonly type: 'Water' }>;
 
 /**
  * Water a growing plant once: its remaining growth time shrinks by WATER_SPEEDUP.
- * Growth stays timestamp-derived by moving plantedAt earlier; stages crossed by the jump emit now.
+ * Growth stays timestamp-derived through boostMs; stages crossed by the jump emit now.
  */
 export function water(state: GardenState, command: WaterCommand, effectiveNowMs: number): StepResult {
   const plotIndex = state.plots.findIndex((plot) => plot.id === command.plotId);
@@ -14,19 +14,20 @@ export function water(state: GardenState, command: WaterCommand, effectiveNowMs:
   if (plotIndex < 0 || plot === undefined) return rejected(state, command, 'unknown-plot');
   const plantState = plot.plant;
   if (plantState === null) return rejected(state, command, 'empty');
-  if (plantState.watered) return rejected(state, command, 'already-watered');
+  if (plantState.boostMs !== undefined) return rejected(state, command, 'already-watered');
   const species = SPECIES.find((entry) => entry.id === plantState.speciesId)!;
-  const before = getGrowthView(plantState.speciesId, plantState.plantedAt, effectiveNowMs);
+  const start = growthStart(plantState);
+  const before = getGrowthView(plantState.speciesId, start, effectiveNowMs);
   if (before.stage === 'Harvestable') return rejected(state, command, 'not-growing');
 
-  const remainingMs = plantState.plantedAt + species.growthDurationMs - effectiveNowMs;
-  const plantedAt = plantState.plantedAt - Math.round(remainingMs * WATER_SPEEDUP);
+  const remainingMs = start + species.growthDurationMs - effectiveNowMs;
+  const boostMs = Math.round(remainingMs * WATER_SPEEDUP);
   const plots = state.plots.slice();
-  plots[plotIndex] = { ...plot, plant: { ...plantState, plantedAt, watered: true } };
+  plots[plotIndex] = { ...plot, plant: { ...plantState, boostMs } };
 
   const events: SimEvent[] = [{ type: 'Watered', plotId: plot.id }];
-  const elapsedBefore = effectiveNowMs - plantState.plantedAt;
-  const elapsedAfter = effectiveNowMs - plantedAt;
+  const elapsedBefore = effectiveNowMs - start;
+  const elapsedAfter = elapsedBefore + boostMs;
   for (const definition of species.stages) {
     if (definition.stage === 'Seed' || definition.startsAtMs <= elapsedBefore || definition.startsAtMs > elapsedAfter) continue;
     events.push(definition.stage === 'Harvestable'

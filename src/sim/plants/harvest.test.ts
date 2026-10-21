@@ -1,12 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { SPECIES } from '../content/species';
-import { createInitialState, step, type Command, type GardenState, type SpeciesId } from '../index';
+import { createInitialState, step, type Command, type GardenState, type PlantState, type SpeciesId } from '../index';
 
 const seed = 0x12345678;
 const startTime = 10_000;
 
 function stateWithPlants(
-  plants: Readonly<Record<string, { readonly speciesId: SpeciesId; readonly plantedAt: number } | null>>,
+  plants: Readonly<Record<string, PlantState | null>>,
   nowMs = startTime,
 ): GardenState {
   const initial = createInitialState(seed, nowMs);

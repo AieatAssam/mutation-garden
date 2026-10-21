@@ -1,16 +1,16 @@
 import { SPECIES } from '../content/species';
-import type { GardenState, SimEvent, GrowthView, SpeciesId } from '../state/types';
+import { growthStart, type GardenState, type SimEvent, type GrowthView, type SpeciesId } from '../state/types';
 
 /** Derive a plant's current growth view from its planting timestamp. */
 export function getGrowthView(
   speciesId: SpeciesId,
-  plantedAt: number,
+  growthStartMs: number,
   nowMs: number,
 ): GrowthView {
   const species = SPECIES.find((entry) => entry.id === speciesId);
   if (!species) throw new RangeError(`Unknown species: ${String(speciesId)}`);
 
-  const elapsedMs = Math.max(0, nowMs - plantedAt);
+  const elapsedMs = Math.max(0, nowMs - growthStartMs);
   const progress = Math.min(1, elapsedMs / species.growthDurationMs);
   let stage: GrowthView['stage'] = 'Seed';
 
@@ -40,7 +40,7 @@ export function collectGrowthEvents(
 
     for (const definition of species.stages) {
       if (definition.stage === 'Seed') continue;
-      const boundaryMs = plant.plantedAt + definition.startsAtMs;
+      const boundaryMs = growthStart(plant) + definition.startsAtMs;
       if (boundaryMs <= fromMs || boundaryMs > toMs) continue;
 
       if (definition.stage === 'Harvestable') {

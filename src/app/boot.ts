@@ -86,7 +86,6 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         gardenUI.update({ selectedId: selectedSpeciesId, coins });
         r.render(frame.previous, frame.current, frame.alpha, motion.matches);
       },
-      onEvents: (events, nowMs) => r.onEvents(events, nowMs, motion.matches),
     });
     const input = createPointerInput(canvas, r.pick, (intent) => {
       switch (intent.type) {

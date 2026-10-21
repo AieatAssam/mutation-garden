@@ -111,8 +111,8 @@ test('ground swipes pan while plot and planted-plant swipes keep their down owne
 
   await page.screenshot({
     path: mobile
-      ? 'docs/art/evidence/m1-17a-pan-phone-390x844.png'
-      : 'docs/art/evidence/m1-17a-pan-desktop-1280x800.png',
+      ? 'test-results/evidence/m1-17a-pan-phone-390x844.png'
+      : 'test-results/evidence/m1-17a-pan-desktop-1280x800.png',
     fullPage: true,
   });
 });

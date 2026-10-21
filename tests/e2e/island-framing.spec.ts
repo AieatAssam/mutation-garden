@@ -12,7 +12,7 @@ const plotWorldCenters = [
 
 function projectedIslandBounds(width: number, height: number) {
   const materials = createMaterialLibrary();
-  const garden = createGarden(materials);
+  const garden = createGarden();
   const camera = createGardenCamera();
   resizeGardenCamera(camera, width, height);
   camera.updateMatrixWorld(true);
@@ -53,8 +53,8 @@ test('production garden balances the portrait island and keeps all six plots tap
   await expect(seedLabel).toBeVisible();
   await page.screenshot({
     path: mobile
-      ? 'docs/art/evidence/m1-07e1-framing-phone-390x844.png'
-      : 'docs/art/evidence/m1-07e1-framing-desktop-1280x800.png',
+      ? 'test-results/evidence/m1-07e1-framing-phone-390x844.png'
+      : 'test-results/evidence/m1-07e1-framing-desktop-1280x800.png',
     fullPage: false,
     scale: 'css',
     animations: 'disabled',

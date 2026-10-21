@@ -61,7 +61,7 @@ test('renders Bubble Berry stages and a readable 48px silhouette', async ({ page
   expect(pixels.height).toBeGreaterThanOrEqual(12);
   expect(pixels.touchesEdge, JSON.stringify(pixels)).toBe(false);
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
-  await page.screenshot({ path: `docs/art/evidence/m1-08b1-bubble-berry-${view}-stages.png`, scale: 'css' });
+  await page.screenshot({ path: `test-results/evidence/m1-08b1-bubble-berry-${view}-stages.png`, scale: 'css' });
   expect(errors).toEqual([]);
 });
 
@@ -78,7 +78,7 @@ test('keeps six ripe Bubble Berry plants below the garden draw-call budget', asy
   const calls = Number(await status.getAttribute('data-draw-calls'));
   expect(calls).toBeLessThan(150);
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
-  await page.screenshot({ path: `docs/art/evidence/m1-08b1-bubble-berry-${view}-six-ripe.png`, scale: 'css' });
+  await page.screenshot({ path: `test-results/evidence/m1-08b1-bubble-berry-${view}-six-ripe.png`, scale: 'css' });
   expect(errors).toEqual([]);
 });
 
@@ -98,6 +98,6 @@ test('renders six ripe plants across all three species below the garden draw-cal
   const calls = Number(await status.getAttribute('data-draw-calls'));
   expect(calls).toBeLessThan(150);
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
-  await page.screenshot({ path: `docs/art/evidence/m1-08b1-mixed-six-ripe-${view}.png`, scale: 'css' });
+  await page.screenshot({ path: `test-results/evidence/m1-08b1-mixed-six-ripe-${view}.png`, scale: 'css' });
   expect(errors).toEqual([]);
 });

@@ -185,7 +185,7 @@ function renderSixRipeGarden() {
   renderer = new WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
   renderer.setPixelRatio(1); renderer.setClearColor(new Color(palette.environment['sky-day'].horizon));
   const materials = createMaterialLibrary();
-  const garden = createGarden(materials); const scene = new Scene(); scene.add(garden);
+  const garden = createGarden(); const scene = new Scene(); scene.add(garden);
   const day = palette.lighting.day;
   scene.add(new AmbientLight(day['fill-sky'], 0.25), new HemisphereLight(day['fill-sky'], day['fill-ground'], 0.8));
   const keyLight = new DirectionalLight(day.key, 2.2); keyLight.position.set(-4, 7, 5); scene.add(keyLight);

@@ -16,11 +16,11 @@ async function firstPlotCenter(page: Page, projectName: string): Promise<{ x: nu
         pick(x: number, y: number): { kind: 'plot'; plotId: string } | { kind: 'ground' } | null;
       };
     }).gardenProbe;
-    const point = probe.inspect().plots[0];
+    const point = probe.inspect().plots[4];
     return { point, picked: point ? probe.pick(point.x, point.y) : null };
   });
-  expect(point?.plotId).toBe('plot-0');
-  expect(picked).toEqual({ kind: 'plot', plotId: 'plot-0' });
+  expect(point?.plotId).toBe('plot-4');
+  expect(picked).toEqual({ kind: 'plot', plotId: 'plot-4' });
   return { x: point!.x, y: point!.y };
 }
 

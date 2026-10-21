@@ -1,226 +1,38 @@
-import { Box3, BufferGeometry, Color, InstancedMesh, Mesh, MeshToonMaterial, Raycaster, Vector3, type Material } from 'three';
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createGarden, GROUND_SURFACE } from './garden';
+import { describe, expect, it } from 'vitest';
+import { createGarden } from './garden';
+import { buildScenery } from './scenery';
 import { createMaterialLibrary } from './materials';
-import { palette } from './palette';
-
-const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
-afterEach(() => libraries.splice(0).forEach((library) => library.dispose()));
-const makeLibrary = () => {
-  const library = createMaterialLibrary();
-  libraries.push(library);
-  return library;
-};
+import { Group } from 'three';
 
 describe('createGarden', () => {
   it('exposes six stable anchors in the two-column, three-row bed layout', () => {
-    const garden = createGarden(makeLibrary());
-    const anchors = garden.plots;
-    expect(anchors.map(({ plotId }) => plotId)).toEqual([
+    const garden = createGarden();
+    expect(garden.plots.map(({ plotId }) => plotId)).toEqual([
       'plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5',
     ]);
-    expect(new Set(anchors.map(({ plotId }) => plotId)).size).toBe(6);
-    expect(garden.plots).toBe(anchors);
-    expect(anchors.map(({ position }) => position.toArray())).toEqual([
+    expect(garden.plots.map(({ position }) => position.toArray())).toEqual([
       [-1.05, 0.65, 2], [1.05, 0.65, 2],
       [-1.05, 0.65, 0], [1.05, 0.65, 0],
       [-1.05, 0.65, -2], [1.05, 0.65, -2],
     ]);
+    garden.dispose();
   });
 
-  it('builds six outlined soil beds with baked edge occlusion', () => {
-    const library = makeLibrary();
-    const garden = createGarden(library);
-    const beds: Mesh[] = [];
-    garden.traverse((object) => {
-      if (object instanceof Mesh && object.userData.role === 'plot-bed') beds.push(object);
-    });
-
-    expect(beds).toHaveLength(6);
-    expect(beds.map((bed) => bed.userData.plotId)).toEqual([
-      'plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5',
-    ]);
-    for (const bed of beds) {
-      expect(bed.name).toBe('plot-bed');
-      expect(bed.userData.aoBaked).toBe(true);
-      expect((bed.material as MeshToonMaterial).vertexColors).toBe(true);
-      const colors = bed.geometry.getAttribute('color');
-      expect(colors).toBeDefined();
-      const shades = new Set(Array.from({ length: colors.count }, (_, index) =>
-        [colors.getX(index), colors.getY(index), colors.getZ(index)].map((value) => value.toFixed(3)).join(',')));
-      expect(shades.size).toBeGreaterThan(1);
-      expect(bed.geometry.getAttribute('position').count).toBe(colors.count);
-    }
-
-    const bedMaterial = beds[0]!.material as MeshToonMaterial;
-    const sourceBedMaterial = library.toon(palette.environment.soil[0]!);
-    expect(bedMaterial).not.toBe(sourceBedMaterial);
-    expect(bedMaterial.onBeforeCompile).toBe(sourceBedMaterial.onBeforeCompile);
-    expect(bedMaterial.customProgramCacheKey).toBe(sourceBedMaterial.customProgramCacheKey);
-  });
-
-  it('raises each clay rim around a smaller inset of soil', () => {
-    const garden = createGarden(makeLibrary());
-    const beds = new Map<string, Mesh>();
-    const soils = new Map<string, Mesh>();
-    garden.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      if (object.userData.role === 'plot-bed') beds.set(object.userData.plotId, object);
-      if (object.userData.role === 'plot-soil') soils.set(object.userData.plotId, object);
-    });
-
-    expect([...beds.keys()]).toEqual(['plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5']);
-    expect([...soils.keys()]).toEqual([...beds.keys()]);
-    garden.updateMatrixWorld(true);
-    const raycaster = new Raycaster();
-    for (const [plotId, bed] of beds) {
-      const soil = soils.get(plotId)!;
-      bed.geometry.computeBoundingBox();
-      soil.geometry.computeBoundingBox();
-      const bedBounds = bed.geometry.boundingBox!;
-      const soilBounds = soil.geometry.boundingBox!;
-
-      expect(bedBounds.max.x - bedBounds.min.x).toBeCloseTo(1.75, 5);
-      expect(bedBounds.max.y - bedBounds.min.y).toBeCloseTo(0.22, 5);
-      expect(bedBounds.max.z - bedBounds.min.z).toBeCloseTo(1.75, 5);
-      expect(soilBounds.max.x - soilBounds.min.x).toBeCloseTo(1.39, 5);
-      expect(soilBounds.max.y - soilBounds.min.y).toBeCloseTo(0.1, 5);
-      expect(soilBounds.max.z - soilBounds.min.z).toBeCloseTo(1.39, 5);
-      expect(bed.position.x).toBe(soil.position.x);
-      expect(bed.position.z).toBe(soil.position.z);
-      expect(bed.position.y + bedBounds.min.y).toBeCloseTo(0.48, 5);
-      expect(bed.position.y + bedBounds.max.y - (soil.position.y + soilBounds.max.y)).toBeCloseTo(0.05, 5);
-      expect(bed.material).toBeInstanceOf(MeshToonMaterial);
-      expect((bed.material as MeshToonMaterial).color.getHexString())
-        .toBe(new Color(palette.environment.soil[0]!).getHexString());
-      expect(soil.material).toBeInstanceOf(MeshToonMaterial);
-      expect((soil.material as MeshToonMaterial).color.getHexString())
-        .toBe(new Color(palette.environment.soil[1]!).getHexString());
-
-      const center = bed.getWorldPosition(new Vector3());
-      raycaster.set(new Vector3(center.x, 1, center.z), new Vector3(0, -1, 0));
-      expect(raycaster.intersectObjects([bed, soil], false)[0]?.object).toBe(soil);
-      raycaster.set(new Vector3(center.x + 0.8, 1, center.z), new Vector3(0, -1, 0));
-      expect(raycaster.intersectObjects([bed, soil], false)[0]?.object).toBe(bed);
-    }
-  });
-
-  it('places the brown prop outside every bed with a contact shadow beneath it', () => {
-    const garden = createGarden(makeLibrary());
-    const beds: Mesh[] = [];
-    let prop: Mesh | undefined;
-    let shadow: Mesh | undefined;
-    garden.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
-      if (object.userData.role === 'plot-bed') beds.push(object);
-      if (object.userData.role === 'garden-prop') prop = object;
-      if (object.userData.role === 'prop-shadow') shadow = object;
-    });
-
-    expect(prop).toBeDefined();
-    expect(shadow).toBeDefined();
-    garden.updateMatrixWorld(true);
-    const propBounds = new Box3().setFromObject(prop!);
-    for (const bed of beds) {
-      const bedBounds = new Box3().setFromObject(bed);
-      const overlapsX = propBounds.max.x > bedBounds.min.x && propBounds.min.x < bedBounds.max.x;
-      const overlapsZ = propBounds.max.z > bedBounds.min.z && propBounds.min.z < bedBounds.max.z;
-      expect(overlapsX && overlapsZ).toBe(false);
-    }
-
-    const propCenter = prop!.getWorldPosition(new Vector3());
-    const shadowCenter = shadow!.getWorldPosition(new Vector3());
-    expect(shadowCenter.x).toBeCloseTo(propCenter.x, 5);
-    expect(shadowCenter.z).toBeCloseTo(propCenter.z, 5);
-    expect(shadowCenter.y).toBeGreaterThanOrEqual(GROUND_SURFACE.y);
-    expect(shadowCenter.y).toBeLessThanOrEqual(GROUND_SURFACE.y + 0.01);
-  });
-
-  it('instances three warm soil furrows per bed and bakes occlusion into the island edge', () => {
-    const library = makeLibrary();
-    const garden = createGarden(library);
-    const furrows: InstancedMesh[] = [];
-    const aoMeshes: Mesh[] = [];
-    garden.traverse((object) => {
-      if (object instanceof InstancedMesh && object.userData.role === 'plot-furrows') furrows.push(object);
-      if (object instanceof Mesh && object.userData.aoBaked === true) aoMeshes.push(object);
-    });
-
-    expect(furrows).toHaveLength(1);
-    expect(furrows[0]!.name).toBe('plot-furrows');
-    expect(furrows[0]!.count).toBe(18);
-    expect(furrows[0]!.userData.furrowsPerPlot).toBe(3);
-    expect((furrows[0]!.material as MeshToonMaterial).color.getHexString())
-      .toBe(new Color(palette.environment.soil[0]!).getHexString());
-    furrows[0]!.geometry.computeBoundingBox();
-    expect(furrows[0]!.geometry.boundingBox!.max.x - furrows[0]!.geometry.boundingBox!.min.x)
-      .toBeGreaterThan(furrows[0]!.geometry.boundingBox!.max.y - furrows[0]!.geometry.boundingBox!.min.y);
-
-    expect(aoMeshes.some((mesh) => mesh.name === 'plot-bed')).toBe(true);
-    const island = aoMeshes.find((mesh) => mesh.name !== 'plot-bed');
-    expect(island).toBeDefined();
-    const grassMaterial = island!.material as MeshToonMaterial;
-    const sourceGrassMaterial = library.toon(palette.environment.grass[2]!);
-    expect(grassMaterial).not.toBe(sourceGrassMaterial);
-    expect(grassMaterial.onBeforeCompile).toBe(sourceGrassMaterial.onBeforeCompile);
-    expect(grassMaterial.customProgramCacheKey).toBe(sourceGrassMaterial.customProgramCacheKey);
-    expect(island!.geometry.getAttribute('color')).toBeDefined();
-    const islandColors = island!.geometry.getAttribute('color');
-    expect(islandColors.count).toBe(island!.geometry.getAttribute('position').count);
-    expect(new Set(Array.from({ length: islandColors.count }, (_, index) => islandColors.getY(index).toFixed(3))).size)
-      .toBeGreaterThan(1);
-  });
-
-  it('does not dispose attached geometry during construction', () => {
-    const disposed = new Set<BufferGeometry>();
-    const original = BufferGeometry.prototype.dispose;
-    const spy = vi.spyOn(BufferGeometry.prototype, 'dispose').mockImplementation(function (this: BufferGeometry) {
-      disposed.add(this);
-      original.call(this);
-    });
-    let garden: ReturnType<typeof createGarden> | undefined;
-    try {
-      garden = createGarden(makeLibrary());
-      const attached = new Set<BufferGeometry>();
-      garden.traverse((object) => { if (object instanceof Mesh) attached.add(object.geometry); });
-      expect([...attached].some((geometry) => disposed.has(geometry))).toBe(false);
-    } finally {
-      spy.mockRestore();
-      garden?.dispose();
-    }
-  });
-
-  it('disposes owned resources once and keeps borrowed resources alive', () => {
-    const library = makeLibrary();
-    const blob = library.blob();
-    const garden = createGarden(library);
-    const meshes: Mesh[] = [];
-    garden.traverse((object) => { if (object instanceof Mesh) meshes.push(object); });
-    const geometries = new Set(meshes.filter(({ geometry }) => geometry !== blob.geometry).map(({ geometry }) => geometry));
-    const geometrySpies = [...geometries].map((geometry) => vi.spyOn(geometry, 'dispose'));
-    const sky = meshes.find(({ name }) => name.startsWith('day-sky'));
-    if (!sky) throw new Error('Garden sky mesh is missing');
-    const skySpy = vi.spyOn(sky.material as Material, 'dispose');
-    const furrows = meshes.find(({ name }) => name === 'plot-furrows');
-    if (!(furrows instanceof InstancedMesh)) throw new Error('Garden furrows instance is missing');
-    const furrowsSpy = vi.spyOn(furrows, 'dispose');
-    const sceneMaterials = new Set(meshes.flatMap(({ material }) => Array.isArray(material) ? material : [material]));
-    const ownedMaterials = new Set([...sceneMaterials].filter((material) =>
-      material instanceof MeshToonMaterial && material.vertexColors));
-    const ownedMaterialSpies = [...ownedMaterials].map((material) => vi.spyOn(material, 'dispose'));
-    const borrowed = new Set([...sceneMaterials].filter((material) =>
-      material !== sky.material && !ownedMaterials.has(material)));
-    const borrowedSpies = [...borrowed].map((material) => vi.spyOn(material, 'dispose'));
-    const blobGeometrySpy = vi.spyOn(blob.geometry, 'dispose');
-
+  it('replaces scenery and disposes it once', () => {
+    const library = createMaterialLibrary();
+    const garden = createGarden();
+    const first = buildScenery(new Group(), library);
+    const second = buildScenery(new Group(), library);
+    let firstDisposed = 0;
+    const disposeFirst = first.dispose;
+    first.dispose = () => { firstDisposed += 1; disposeFirst(); };
+    garden.setScenery(first);
+    garden.setScenery(second);
+    expect(first.parent).toBeNull();
+    expect(second.parent).toBe(garden);
     garden.dispose();
     garden.dispose();
-    geometrySpies.forEach((spy) => expect(spy).toHaveBeenCalledTimes(1));
-    expect(skySpy).toHaveBeenCalledTimes(1);
-    expect(furrowsSpy).toHaveBeenCalledTimes(1);
-    expect(ownedMaterials.size).toBe(2);
-    ownedMaterialSpies.forEach((spy) => expect(spy).toHaveBeenCalledTimes(1));
-    borrowedSpies.forEach((spy) => expect(spy).not.toHaveBeenCalled());
-    expect(blobGeometrySpy).not.toHaveBeenCalled();
+    expect(firstDisposed).toBe(1);
+    library.dispose();
   });
 });

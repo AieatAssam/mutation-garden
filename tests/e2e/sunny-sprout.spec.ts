@@ -24,11 +24,11 @@ test('sunny sprout renders all stages and reduced motion', async ({ page }, info
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
   await page.evaluate(() => (window as unknown as Window & { sunnySproutFixture: { pause(): void } }).sunnySproutFixture.pause());
   await expect(page.locator('#status')).toHaveAttribute('data-frame', 'paused');
-  await page.screenshot({ path: `docs/art/evidence/m1-08a1-sunny-sprout-${view}-default.png` });
+  await page.screenshot({ path: `test-results/evidence/m1-08a1-sunny-sprout-${view}-default.png` });
   await page.locator('#reduced-motion').check(); await expect(page.locator('#reduced-motion')).toBeChecked();
   await page.evaluate(() => (window as unknown as Window & { sunnySproutFixture: { setMotion(value: boolean): void } }).sunnySproutFixture.setMotion(true));
   await expect(page.locator('#status')).toHaveAttribute('data-motion', 'reduced');
-  await page.screenshot({ path: `docs/art/evidence/m1-08a1-sunny-sprout-${view}-reduced.png` }); expect(errors).toEqual([]);
+  await page.screenshot({ path: `test-results/evidence/m1-08a1-sunny-sprout-${view}-reduced.png` }); expect(errors).toEqual([]);
 });
 
 test('reconciles visible growth, harvest and replant snapshots across layouts', async ({ page }, info) => {
@@ -48,9 +48,9 @@ test('reconciles visible growth, harvest and replant snapshots across layouts', 
   expect(growing.equals(empty)).toBe(false); expect(harvested.equals(empty)).toBe(true); expect(harvested.equals(replanted)).toBe(false);
   expect(replanted.equals(sixPlots)).toBe(false);
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
-  await canvas.screenshot({ path: `docs/art/evidence/m1-08a2-sunny-sprout-${view}-six-plots.png` });
+  await canvas.screenshot({ path: `test-results/evidence/m1-08a2-sunny-sprout-${view}-six-plots.png` });
   await page.evaluate(() => (window as unknown as Window & { sunnySproutFixture: { setMotion(value: boolean): void } }).sunnySproutFixture.setMotion(true));
-  await expect(page.locator('#reduced-motion')).toBeChecked(); const reduced = await canvas.screenshot({ path: `docs/art/evidence/m1-08a2-sunny-sprout-${view}-reduced-motion.png` });
+  await expect(page.locator('#reduced-motion')).toBeChecked(); const reduced = await canvas.screenshot({ path: `test-results/evidence/m1-08a2-sunny-sprout-${view}-reduced-motion.png` });
   await page.evaluate(() => (window as unknown as Window & { sunnySproutFixture: { setMotion(value: boolean): void } }).sunnySproutFixture.setMotion(false));
   await expect(page.locator('#reduced-motion')).not.toBeChecked(); expect(reduced.equals(sixPlots)).toBe(false);
   expect(errors).toEqual([]);

@@ -6,7 +6,7 @@ import { createMaterialLibrary } from '../../src/render/materials';
 
 function projectedGardenBottomNdc(width: number, height: number): number {
   const materials = createMaterialLibrary();
-  const garden = createGarden(materials);
+  const garden = createGarden();
   const camera = createGardenCamera();
   resizeGardenCamera(camera, width, height);
   camera.updateMatrixWorld(true);

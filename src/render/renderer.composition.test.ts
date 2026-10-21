@@ -20,7 +20,7 @@ vi.mock('three', async (importOriginal) => {
   const actual = await importOriginal<typeof import('three')>();
   class MockWebGLRenderer {
     outputColorSpace = actual.SRGBColorSpace; toneMapping = actual.NoToneMapping; shadowMap = { enabled: true };
-    setPixelRatio = vi.fn(); setClearColor = vi.fn(); setSize = vi.fn();
+    setPixelRatio = vi.fn(); setClearColor = vi.fn(); setClearAlpha = vi.fn(); setSize = vi.fn();
     render = vi.fn(() => mocks.events.push('draw')); dispose = vi.fn(() => mocks.events.push('gl.dispose'));
     constructor() { mocks.gl = this; }
   }
@@ -29,6 +29,7 @@ vi.mock('three', async (importOriginal) => {
 
 vi.mock('./materials', () => ({ createMaterialLibrary: () => (mocks.materials = { dispose: vi.fn(() => mocks.events.push('materials.dispose')) }) }));
 vi.mock('./garden', () => ({ createGarden: () => mocks.garden }));
+vi.mock('./scenery', () => ({ GARDEN_MODEL_URL: 'garden.glb', loadScenery: () => new Promise(() => {}) }));
 vi.mock('./camera', () => ({ createGardenCamera: () => mocks.camera, resizeGardenCamera: vi.fn(), panGardenCamera: vi.fn(), zoomGardenCamera: vi.fn() }));
 vi.mock('./plants/reconcile', () => ({ createPlantReconciler: () => mocks.plants }));
 vi.mock('./plot-status', () => ({ createPlotStatusResources: () => mocks.statusResources }));
@@ -65,7 +66,7 @@ function setup() {
   const statusResources = { group: statusGroup, update: vi.fn(), dispose: vi.fn(() => mocks.events.push('status.dispose')) };
   Object.assign(mocks, { camera, garden, plants, statusResources });
   vi.stubGlobal('window', { devicePixelRatio: 1 });
-  const canvas = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }) } as HTMLCanvasElement;
+  const canvas = { style: {}, getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 844 }) } as HTMLCanvasElement;
   const renderer = createRenderer(canvas, { species });
   return { renderer, camera, cameraUpdate, garden };
 }

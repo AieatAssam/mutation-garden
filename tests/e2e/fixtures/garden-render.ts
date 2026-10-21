@@ -27,7 +27,7 @@ const stage = canvas as HTMLCanvasElement;
 const probeWindow = window as unknown as Window & { gardenProbe: GardenProbe };
 const renderer = createRenderer(stage, renderOptions);
 const probeMaterials = createMaterialLibrary();
-const probeGarden = createGarden(probeMaterials);
+const probeGarden = createGarden();
 probeGarden.updateMatrixWorld(true);
 const referenceCamera = createGardenCamera();
 const point = new Vector3();
@@ -42,7 +42,7 @@ function onWindowResize() {
   else resize();
 }
 const seedState = createInitialState(1, 0);
-const plantedState = step(seedState, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
+const plantedState = step(seedState, [{ type: 'Plant', plotId: 'plot-4', seedId: 'sunny-sprout' }], 0).state;
 const growingState = step(plantedState, [], 7_999).state;
 const harvestableState = step(growingState, [], 8_000).state;
 renderer.render(getSnapshot(growingState), getSnapshot(harvestableState), 1, false);

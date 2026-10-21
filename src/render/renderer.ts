@@ -1,6 +1,5 @@
 import {
   AmbientLight,
-  Color,
   ColorManagement,
   DirectionalLight,
   HemisphereLight,
@@ -14,10 +13,10 @@ import {
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
+import { GARDEN_MODEL_URL, loadScenery } from './scenery';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
-import type { GardenSnapshot, SimEvent, SpeciesId } from '../sim';
-import { createGardenEffects } from './effects';
+import type { GardenSnapshot, SpeciesId } from '../sim';
 import { createPlantReconciler } from './plants/reconcile';
 import { createPlotStatusResources } from './plot-status';
 import { createPlotStatusLifecycle, type PlotStatusSpecies } from './plot-status-lifecycle';
@@ -35,7 +34,6 @@ export interface Renderer {
   resize(width: number, height: number): void;
   pan(deltaXCss: number, deltaYCss: number): void;
   zoom(scale: number): void;
-  onEvents(events: readonly SimEvent[], nowMs: number, reducedMotion: boolean): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   pick(clientX: number, clientY: number): PickResult;
   dispose(): void;
@@ -43,12 +41,14 @@ export interface Renderer {
 
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
   ColorManagement.enabled = true;
-  const gl = new WebGLRenderer({ canvas, antialias: true });
+  const gl = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   gl.outputColorSpace = SRGBColorSpace;
   gl.toneMapping = NoToneMapping;
   gl.shadowMap.enabled = false;
   gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  gl.setClearColor(new Color(palette.environment['sky-day'].horizon));
+  gl.setClearAlpha(0);
+  const sky = palette.environment['sky-day'];
+  canvas.style.background = `linear-gradient(180deg, ${sky.zenith} 0%, ${sky.mid} 45%, ${sky.horizon} 85%)`;
 
   const scene = new Scene();
   const camera = createGardenCamera();
@@ -61,10 +61,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   scene.add(keyLight);
 
   const materials = createMaterialLibrary();
-  const garden = createGarden(materials);
+  const garden = createGarden();
+  loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
+    console.error('Garden model failed to load', error);
+  });
   scene.add(garden);
   const plants = createPlantReconciler(garden.plots, materials);
-  const effects = createGardenEffects(garden.plots);
   const statusResources = createPlotStatusResources();
   scene.add(statusResources.group);
   const statusSpecies: readonly PlotStatusSpecies[] = options.species.map((species) => ({
@@ -136,9 +138,6 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       zoomGardenCamera(camera, scale);
       draw();
     },
-    onEvents(events, nowMs, reducedMotion) {
-      if (!disposed) effects.trigger(events, nowMs, reducedMotion);
-    },
     render(previous, current, alpha, reducedMotion) {
       if (disposed) return;
       previousSnapshot = previous;
@@ -146,7 +145,6 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       snapshotAlpha = Math.min(1, Math.max(0, alpha));
       currentReducedMotion = reducedMotion;
       plants.update(previous, current, alpha, reducedMotion);
-      effects.update(previous.nowMs + (current.nowMs - previous.nowMs) * snapshotAlpha, reducedMotion);
       draw();
     },
     pick(clientX, clientY) {
@@ -158,7 +156,6 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       if (disposed) return;
       disposed = true;
       picker.dispose();
-      effects.dispose();
       plants.dispose();
       statusResources.dispose();
       garden.dispose();

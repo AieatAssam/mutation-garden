@@ -7,7 +7,7 @@ Conventions (ADR 0009):
 - Blender is Z-up; glTF export turns it Y-up. Game z = -Blender y.
 - Every material is named after a palette.json path, e.g. "environment.grass.1".
   The game swaps it for its shared toon material; colours here are preview only.
-- Meshes named "outline-<thickness>" are smooth hulls drawn with the ink outline material.
+- Meshes named "outline-<thousandths>" (outline-60 = 0.06) are smooth hulls drawn with the ink outline material.
 - Plot centres match src/render/garden.ts: x in {-1.05, 1.05}, game z in {2, 0, -2}.
 """
 import bpy, bmesh, math, os, random
@@ -152,6 +152,8 @@ bridge(bm, lip_a, lip_b)
 bridge(bm, lip_b, side)
 bridge(bm, side, drip)
 bridge(bm, drip, under)
+bm.faces.new(list(reversed(under)))
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
 cap_top = mesh_obj('grass-top', bm, 'environment.grass.1', smooth=True)
 # Lighter lip and darker sides as material slots on one mesh.
 cap_top.data.materials.append(mat('environment.grass.0'))
@@ -168,11 +170,11 @@ outline(cap_top, 0.06)
 # ---------------------------------------------------------------- rock strata
 
 bands = [  # (top fraction, bottom fraction, top z, bottom z, palette index)
-    (0.93, 0.80, GROUND - 0.30, -0.55, 0),
-    (0.82, 0.64, -0.50, -1.25, 1),
-    (0.66, 0.46, -1.20, -1.95, 2),
-    (0.48, 0.26, -1.90, -2.60, 3),
-    (0.28, 0.02, -2.55, -3.35, 4),
+    (0.95, 0.84, GROUND - 0.30, -0.75, 0),
+    (0.86, 0.68, -0.70, -1.75, 1),
+    (0.70, 0.50, -1.70, -2.80, 2),
+    (0.52, 0.30, -2.75, -3.85, 3),
+    (0.32, 0.03, -3.80, -5.00, 4),
 ]
 rock_objs = []
 for bi, (ft, fb, zt, zb, pi) in enumerate(bands):
@@ -202,14 +204,14 @@ for bi, (ft, fb, zt, zb, pi) in enumerate(bands):
 # Hanging roots from the turf.
 for k in range(7):
     t = 2 * math.pi * (k + rng.uniform(-0.2, 0.2)) / 7 + 0.3
-    r0 = island_radius(t) * 0.9
+    r0 = island_radius(t) * 0.87
     pts = []
-    length = rng.uniform(0.7, 1.4)
+    length = rng.uniform(0.9, 1.8)
     for s in range(6):
         f = s / 5
         rr = r0 - 0.15 * f + 0.05 * math.sin(f * 7 + k)
         pts.append((rr * math.cos(t + 0.06 * math.sin(f * 5 + k)), rr * math.sin(t + 0.06 * math.sin(f * 5 + k)),
-                    GROUND - 0.25 - length * f))
+                    -0.7 - length * f))
     cu = bpy.data.curves.new(f'root-{k}', 'CURVE')
     cu.dimensions = '3D'
     sp = cu.splines.new('POLY')
@@ -224,9 +226,6 @@ for k in range(7):
     bpy.context.view_layer.objects.active = o
     o.select_set(True)
     bpy.ops.object.convert(target='MESH')
-    # taper by scaling verts toward the tip
-    for v in o.data.vertices:
-        f = (GROUND - 0.25 - v.co.z) / length
     o.select_set(False)
 
 # ---------------------------------------------------------------- beds
@@ -344,7 +343,7 @@ for k in range(12):
 
 # ---------------------------------------------------------------- tree (back right)
 
-TX, TY = 2.75, 2.45
+TX, TY = -2.7, 2.35
 trunk = prim('cone', 'environment.wood-crate.2', loc=(TX, TY, GROUND + 0.55), vertices=10,
              radius1=0.2, radius2=0.12, depth=1.1)
 outline(trunk)
@@ -355,7 +354,7 @@ for (dx, dy, dz, s, shade) in ((0, 0, 1.55, 0.62, 1), (-0.38, -0.12, 1.3, 0.45, 
 
 # ---------------------------------------------------------------- watering can (back left)
 
-WX, WY = -2.75, 1.7
+WX, WY = 2.8, 1.9
 body = prim('cylinder', 'environment.water.2', loc=(WX, WY, GROUND + 0.2), vertices=20, radius=0.2, depth=0.4)
 b = body.modifiers.new('bevel', 'BEVEL'); b.width = 0.05; b.segments = 3
 bpy.ops.object.modifier_apply(modifier=b.name)
@@ -462,7 +461,7 @@ for thickness, objs in hull_parts.items():
     bpy.context.view_layer.objects.active = dupes[0]
     bpy.ops.object.join()
     hull = bpy.context.active_object
-    hull.name = f'outline-{thickness}'
+    hull.name = f'outline-{round(thickness * 1000)}'
     hull.data.name = hull.name
     hull.data.materials.append(mat('ink.press-ink'))
     # Flat normals would crack the hull: force smooth normals through the exporter.

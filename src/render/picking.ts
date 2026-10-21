@@ -12,7 +12,7 @@ import {
   type OrthographicCamera,
 } from 'three';
 import type { PlotId } from '../sim';
-import { GROUND_SURFACE, type Garden } from './garden';
+import { BED_SIZE, GROUND_SURFACE, type Garden } from './garden';
 import { palette } from './palette';
 import type { StampPickDescriptor } from './plot-status-lifecycle';
 
@@ -45,6 +45,9 @@ export function createGardenPicker(
   const groundGeometry = new CircleGeometry(1, 48);
   const material = new MeshBasicMaterial({ color: palette.ink['press-ink'], side: DoubleSide });
   const plotTargets = garden.plots.map(() => new Mesh(plotGeometry, material));
+  // Whole bed footprints, so a tap anywhere on a bed picks it however large the bed renders.
+  const bedGeometry = new PlaneGeometry(BED_SIZE, BED_SIZE).rotateX(-Math.PI / 2);
+  const bedTargets = garden.plots.map(() => new Mesh(bedGeometry, material));
   const groundTarget = new Mesh(groundGeometry, material);
   const raycaster = new Raycaster();
   const pointer = new Vector2();
@@ -65,6 +68,10 @@ export function createGardenPicker(
       target.quaternion.copy(facing);
       target.scale.set(width, height, 1);
       target.updateMatrixWorld(true);
+      const bed = bedTargets[index]!;
+      bed.position.copy(target.position);
+      anchor.getWorldQuaternion(bed.quaternion);
+      bed.updateMatrixWorld(true);
     });
 
     garden.localToWorld(center.set(0, GROUND_SURFACE.y, 0));
@@ -142,6 +149,12 @@ export function createGardenPicker(
         }
       }
 
+      const bedHit = raycaster.intersectObjects(bedTargets, false)[0];
+      if (bedHit) {
+        const index = bedTargets.indexOf(bedHit.object as typeof bedTargets[number]);
+        return index < 0 ? null : { kind: 'plot', plotId: garden.plots[index]!.plotId };
+      }
+
       const plotHit = raycaster.intersectObjects(plotTargets, false)[0];
       if (plotHit) {
         const index = plotTargets.indexOf(plotHit.object as typeof plotTargets[number]);
@@ -163,6 +176,7 @@ export function createGardenPicker(
       if (disposed) return;
       disposed = true;
       plotGeometry.dispose();
+      bedGeometry.dispose();
       groundGeometry.dispose();
       material.dispose();
     },

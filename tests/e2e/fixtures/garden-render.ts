@@ -41,9 +41,19 @@ function onWindowResize() {
 }
 const seedState = createInitialState(1, 0);
 const plantedState = step(seedState, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
-const growingState = step(plantedState, [], 7_999).state;
-const harvestableState = step(growingState, [], 8_000).state;
-renderer.render(getSnapshot(growingState), getSnapshot(harvestableState), 1, false);
+if (new URLSearchParams(window.location.search).has('stage-effects')) {
+  const stageEventMs = 3_000;
+  const growingState = step(plantedState, [], stageEventMs).state;
+  const presentedState = step(growingState, [], stageEventMs + 120).state;
+  renderer.render(getSnapshot(growingState), getSnapshot(growingState), 1, false);
+  renderer.onEvents([{ type: 'StageReached', plotId: 'plot-0', stage: 'Growing' }], stageEventMs, false);
+  renderer.render(getSnapshot(growingState), getSnapshot(presentedState), 1, false);
+  document.body.dataset.stageEffects = 'rendered';
+} else {
+  const growingState = step(plantedState, [], 7_999).state;
+  const harvestableState = step(growingState, [], 8_000).state;
+  renderer.render(getSnapshot(growingState), getSnapshot(harvestableState), 1, false);
+}
 function project(worldPoint: Vector3, rect: DOMRect): { x: number; y: number } {
   point.copy(worldPoint).project(referenceCamera);
   return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };

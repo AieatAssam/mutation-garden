@@ -14,13 +14,16 @@ import { palette } from './palette';
 import { createGarden } from './garden';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
-import type { GardenSnapshot } from '../sim';
+import type { GardenSnapshot, PlotId, SimEvent } from '../sim';
 import { createPlantReconciler } from './plants/reconcile';
+import { createGardenEffects } from './effects';
 
 export interface Renderer {
   resize(width: number, height: number): void;
   pan(deltaXCss: number, deltaYCss: number): void;
   zoom(scale: number): void;
+  onEvents(events: readonly SimEvent[], nowMs: number, reducedMotion: boolean): void;
+  flickLeaves(plotId: PlotId, nowMs: number, reducedMotion: boolean): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   pick(clientX: number, clientY: number): PickResult;
   dispose(): void;
@@ -50,6 +53,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
   scene.add(garden);
   const picker = createGardenPicker(canvas, camera, garden);
   const plants = createPlantReconciler(garden.plots, materials);
+  const effects = createGardenEffects(garden.plots);
   function draw(): void { gl.render(scene, camera); }
 
   function layout(width: number, height: number): void {
@@ -78,9 +82,23 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       zoomGardenCamera(camera, scale);
       draw();
     },
+    onEvents(events, nowMs, reducedMotion) {
+      if (disposed) return;
+      effects.trigger(events, nowMs, reducedMotion);
+      for (const event of events) {
+        if (event.type === 'StageReached' || event.type === 'Harvestable') {
+          plants.stageAccent(event.plotId, nowMs, reducedMotion);
+        }
+      }
+    },
+    flickLeaves(plotId, nowMs, reducedMotion) {
+      if (disposed) return;
+      plants.flickLeaves(plotId, nowMs, reducedMotion);
+    },
     render(previous, current, alpha, reducedMotion) {
       if (disposed) return;
       plants.update(previous, current, alpha, reducedMotion);
+      effects.update(previous.nowMs + (current.nowMs - previous.nowMs) * Math.min(1, Math.max(0, alpha)), reducedMotion);
       draw();
     },
     pick(clientX, clientY) {
@@ -90,6 +108,7 @@ export function createRenderer(canvas: HTMLCanvasElement): Renderer {
       if (disposed) return;
       disposed = true;
       picker.dispose();
+      effects.dispose();
       plants.dispose();
       garden.dispose();
       materials.dispose();

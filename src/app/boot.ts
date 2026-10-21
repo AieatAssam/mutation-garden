@@ -77,6 +77,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         gardenUI.update({ selectedId: selectedSpeciesId, coins });
         r.render(frame.previous, frame.current, frame.alpha, motion.matches);
       },
+      onEvents: (events, nowMs) => r.onEvents(events, nowMs, motion.matches),
     });
     const input = createPointerInput(canvas, r.pick, (intent) => {
       switch (intent.type) {
@@ -87,13 +88,16 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           r.pan(intent.deltaXCss, intent.deltaYCss);
           return;
         case 'ActivatePlot': {
+          r.flickLeaves(intent.plotId, Date.now(), motion.matches);
           const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
           if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
           return;
         }
         case 'HarvestPlots': {
+          const touchTimeMs = Date.now();
+          for (const plotId of intent.plotIds) r.flickLeaves(plotId, touchTimeMs, motion.matches);
           const command = commandForSwipeHarvest(latestSnapshot, intent.plotIds);
-          if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
+          if (command && acceptPlotActivation(command, touchTimeMs)) loop.enqueue(command);
           return;
         }
         default: {

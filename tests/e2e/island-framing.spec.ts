@@ -76,14 +76,15 @@ test('production garden balances the portrait island and keeps all six plots tap
   const island = projectedIslandBounds(rect!.width, rect!.height);
   const islandTop = rect!.y + (1 - island.top) * rect!.height / 2;
   const islandBottom = rect!.y + (1 - island.bottom) * rect!.height / 2;
+  const seedBox = await seedLabel.boundingBox();
+  expect(seedBox).not.toBeNull();
+  expect(islandBottom).toBeLessThan(seedBox!.y - 16);
   let portraitGapDifference = 0;
   let skyGap = 0;
   let trayGap = 0;
   if (mobile) {
     const coinBox = await coins.boundingBox();
-    const seedBox = await seedLabel.boundingBox();
     expect(coinBox).not.toBeNull();
-    expect(seedBox).not.toBeNull();
     skyGap = islandTop - (coinBox!.y + coinBox!.height);
     trayGap = seedBox!.y - islandBottom;
     expect(skyGap, 'the island leaves usable space below the coin counter').toBeGreaterThanOrEqual(0);

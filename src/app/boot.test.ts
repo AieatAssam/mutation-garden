@@ -4,15 +4,16 @@ import * as loopModule from './loop';
 import { boot } from './boot';
 
 const {
-  disposeRenderer, resizeRenderer, panRenderer, zoomRenderer, renderRenderer, pickRenderer,
+  disposeRenderer, resizeRenderer, panRenderer, zoomRenderer, renderRenderer, eventRenderer, flickLeavesRenderer, pickRenderer,
   createGardenUI, updateGardenUI, disposeGardenUI, createPointerInput,
 } = vi.hoisted(() => ({
   disposeRenderer: vi.fn(), resizeRenderer: vi.fn(), panRenderer: vi.fn(), zoomRenderer: vi.fn(), renderRenderer: vi.fn(),
+  eventRenderer: vi.fn(), flickLeavesRenderer: vi.fn(),
   pickRenderer: vi.fn(() => null),
   createGardenUI: vi.fn(), updateGardenUI: vi.fn(), disposeGardenUI: vi.fn(),
   createPointerInput: vi.fn(),
 }));
-vi.mock('../render/renderer', () => ({ createRenderer: () => ({ resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer }) }));
+vi.mock('../render/renderer', () => ({ createRenderer: () => ({ resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, onEvents: eventRenderer, flickLeaves: flickLeavesRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer }) }));
 vi.mock('../input/pointer', () => ({
   createPointerInput: (canvas: HTMLCanvasElement, pick: unknown, onIntent: unknown) =>
     createPointerInput(canvas, pick, onIntent),
@@ -57,12 +58,16 @@ describe('boot animation wiring', () => {
 
     const cleanup = boot(canvas);
     expect(createPointerInput).toHaveBeenCalledWith(canvas, pickRenderer, expect.any(Function));
+    const onEvents = vi.mocked(loopModule.createFixedStepLoop).mock.calls.at(-1)?.[0]?.onEvents;
+    onEvents?.([{ type: 'Planted', plotId: 'plot-0', speciesId: 'sunny-sprout' }], 987);
+    expect(eventRenderer).toHaveBeenCalledWith([{ type: 'Planted', plotId: 'plot-0', speciesId: 'sunny-sprout' }], 987, false);
     const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
 
     onIntent({ type: 'PanCamera', deltaXCss: 12, deltaYCss: -7 });
     expect(panRenderer).toHaveBeenCalledTimes(1);
     expect(panRenderer).toHaveBeenLastCalledWith(12, -7);
     expect(enqueue).not.toHaveBeenCalled();
+    expect(flickLeavesRenderer).not.toHaveBeenCalled();
 
     onIntent({ type: 'ZoomCamera', scale: 1.275 });
     expect(zoomRenderer).toHaveBeenCalledTimes(1);
@@ -70,6 +75,7 @@ describe('boot animation wiring', () => {
     expect(enqueue).not.toHaveBeenCalled();
 
     onIntent({ type: 'ActivatePlot', plotId: 'plot-0' });
+    expect(flickLeavesRenderer).toHaveBeenLastCalledWith('plot-0', 1_000, false);
     expect(enqueue).toHaveBeenLastCalledWith({ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' });
 
     const plantedState = step(
@@ -135,6 +141,10 @@ describe('boot animation wiring', () => {
     onIntent({ type: 'HarvestPlots', plotIds: ['plot-2', 'plot-0', 'plot-2', 'unknown-plot' as import('../sim').PlotId] });
     expect(enqueue).toHaveBeenCalledTimes(1);
     expect(enqueue).toHaveBeenCalledWith({ type: 'Harvest', plotIds: ['plot-2', 'plot-0'] });
+    expect(flickLeavesRenderer.mock.calls).toEqual([
+      ['plot-2', 1_001, false], ['plot-0', 1_001, false],
+      ['plot-2', 1_001, false], ['unknown-plot', 1_001, false],
+    ]);
     expect(now).toHaveBeenCalledTimes(2); // Initial state plus one guard timestamp for the entire batch.
 
     nowMs = 1_002;
@@ -231,6 +241,55 @@ describe('boot animation wiring', () => {
       { selectedId: 'sunny-sprout', coins: 12 },
       { selectedId: 'sunny-sprout', coins: 7 },
     ]);
+    cleanup();
+  });
+
+  it('forwards a production Growing stage event from the fixed-step loop to the renderer', () => {
+    createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI });
+    const frames = new Map<number, (timestampMs: number) => void>();
+    let nextHandle = 0;
+    const requestFrame = vi.fn((callback: (timestampMs: number) => void) => {
+      nextHandle += 1;
+      frames.set(nextHandle, callback);
+      return nextHandle;
+    });
+    const cancelFrame = vi.fn((handle: number) => { frames.delete(handle); });
+    let nowMs = 1_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
+    const windowStub = {
+      innerWidth: 390, innerHeight: 844, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      requestAnimationFrame: requestFrame, cancelAnimationFrame: cancelFrame,
+      matchMedia: vi.fn(() => ({ matches: false })),
+    };
+    const uiRoot = { dataset: {}, style: { setProperty: vi.fn() }, remove: vi.fn() };
+    const documentStub = {
+      body: { style: {}, dataset: {}, append: vi.fn() }, hidden: false,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), createElement: vi.fn(() => uiRoot),
+    };
+    vi.stubGlobal('window', windowStub as unknown as Window);
+    vi.stubGlobal('document', documentStub as unknown as Document);
+
+    const cleanup = boot({} as HTMLCanvasElement);
+    const fireFrame = (timestampMs: number) => {
+      const [handle, callback] = frames.entries().next().value!;
+      frames.delete(handle);
+      callback(timestampMs);
+    };
+    fireFrame(0);
+    const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
+    onIntent({ type: 'ActivatePlot', plotId: 'plot-0' });
+
+    // One 100ms fixed-step tick plants the crop; continue until the 3s Growing boundary.
+    for (let frameTimestampMs = 100; frameTimestampMs <= 3_100; frameTimestampMs += 100) {
+      nowMs = 900 + frameTimestampMs;
+      fireFrame(frameTimestampMs);
+    }
+
+    expect(eventRenderer).toHaveBeenCalledWith(
+      [{ type: 'StageReached', plotId: 'plot-0', stage: 'Growing' }],
+      4_000,
+      false,
+    );
     cleanup();
   });
 });

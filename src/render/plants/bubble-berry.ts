@@ -197,8 +197,12 @@ export function createBubbleBerry(materials: MaterialLibrary, phaseOffsetMs = 0)
   root.add(blob);
 
   let disposed = false;
+  let flickStartedAt: number | null = null;
   return {
     root,
+    flickLeaves(presentationNowMs, reducedMotion) {
+      if (!reducedMotion && Number.isFinite(presentationNowMs)) flickStartedAt = presentationNowMs;
+    },
     update(plant: PlantSnapshot, presentationNowMs: number, reducedMotion: boolean) {
       const progress = Math.min(1, Math.max(0, plant.progress));
       const domeGrowth = smoothstepRange(progress, DOME_GROWTH_START, DOME_GROWTH_END);
@@ -212,6 +216,10 @@ export function createBubbleBerry(materials: MaterialLibrary, phaseOffsetMs = 0)
       berryCluster.position.y = (1 - berryGrowth) * 0.16;
       leaves.scale.set(leafSpread, 0.58 + leafUnfurl * 0.42, leafSpread);
       leaves.position.y = domeSize * 0.15;
+      const flickProgress = flickStartedAt === null ? 1
+        : Math.max(0, Math.min(1, (presentationNowMs - flickStartedAt) / 260));
+      leaves.rotation.z = reducedMotion ? 0 : Math.cos(flickProgress * Math.PI / 2) * 0.32;
+      if (flickProgress >= 1) flickStartedAt = null;
       root.scale.set(1, reducedMotion
         ? 1
         : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02, 1);

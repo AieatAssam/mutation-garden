@@ -1,13 +1,26 @@
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
-import type { Group } from 'three';
+import { Group, Mesh, MeshBasicMaterial, RingGeometry } from 'three';
 import type { MaterialLibrary } from '../materials';
+import { palette } from '../palette';
 import { createBubbleBerry } from './bubble-berry';
 import { createTwistroot } from './twistroot';
 import { createSunnySprout, type PlantRig } from './sunny-sprout';
 
-interface Entry { readonly speciesId: PlantSnapshot['speciesId']; readonly plantedAt: number; readonly rig: PlantRig }
+interface Entry {
+  readonly speciesId: PlantSnapshot['speciesId'];
+  readonly plantedAt: number;
+  readonly rig: PlantRig;
+  readonly stageFade: Mesh;
+  readonly stageFadeMaterial: MeshBasicMaterial;
+  stageStartedAt: number | null;
+  reducedStageMotion: boolean;
+}
+const STAGE_POP_MS = 160;
+const REDUCED_STAGE_FADE_MS = 120;
 export interface PlantReconciler {
   update(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
+  flickLeaves(plotId: PlotId, presentationNowMs: number, reducedMotion: boolean): void;
+  stageAccent(plotId: PlotId, presentationNowMs: number, reducedMotion: boolean): void;
   dispose(): void;
 }
 
@@ -25,10 +38,26 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
     const entry = entries.get(plotId);
     if (!entry) return;
     entry.rig.root.removeFromParent();
+    entry.stageFade.removeFromParent();
+    entry.stageFade.geometry.dispose();
+    entry.stageFadeMaterial.dispose();
     entry.rig.dispose();
     entries.delete(plotId);
   };
   return {
+    flickLeaves(plotId, presentationNowMs, reducedMotion) {
+      if (disposed) return;
+      entries.get(plotId)?.rig.flickLeaves(presentationNowMs, reducedMotion);
+    },
+    stageAccent(plotId, presentationNowMs, reducedMotion) {
+      if (disposed || !Number.isFinite(presentationNowMs)) return;
+      const entry = entries.get(plotId);
+      if (!entry) return;
+      entry.stageStartedAt = presentationNowMs;
+      entry.reducedStageMotion = reducedMotion;
+      entry.stageFade.visible = reducedMotion;
+      entry.stageFadeMaterial.opacity = reducedMotion ? 0.55 : 0;
+    },
     update(previous, current, alpha, reducedMotion) {
       if (disposed) return;
       const blend = Math.min(1, Math.max(0, alpha));
@@ -47,7 +76,30 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
             : plant.speciesId === 'bubble-berry'
               ? createBubbleBerry(materials, phase(plot.id))
               : createTwistroot(materials, phase(plot.id));
-          entry = { speciesId: plant.speciesId, plantedAt: plant.plantedAt, rig };
+          const stageFadeGeometry = new RingGeometry(0.25, 0.32, 20);
+          const stageFadeMaterial = new MeshBasicMaterial({
+            color: palette.environment.grass[0],
+            transparent: true,
+            opacity: 0,
+            depthWrite: false,
+          });
+          const stageFade = new Mesh(stageFadeGeometry, stageFadeMaterial);
+          stageFade.name = 'stage-motion-fade';
+          stageFade.userData.role = 'stage-motion-fade';
+          stageFade.position.y = 0.025;
+          stageFade.rotation.x = -Math.PI / 2;
+          stageFade.renderOrder = 4;
+          stageFade.visible = false;
+          rig.root.add(stageFade);
+          entry = {
+            speciesId: plant.speciesId,
+            plantedAt: plant.plantedAt,
+            rig,
+            stageFade,
+            stageFadeMaterial,
+            stageStartedAt: null,
+            reducedStageMotion: false,
+          };
           entries.set(plot.id, entry);
           anchors.get(plot.id)!.add(entry.rig.root);
         }
@@ -55,6 +107,30 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
         const progress = before?.speciesId === plant.speciesId && before.plantedAt === plant.plantedAt
           ? before.progress + (plant.progress - before.progress) * blend : plant.progress;
         entry.rig.update({ ...plant, progress }, now, reducedMotion);
+        if (entry.stageStartedAt !== null && entry.reducedStageMotion !== reducedMotion) {
+          entry.reducedStageMotion = reducedMotion;
+          entry.stageStartedAt = now;
+          entry.stageFade.visible = reducedMotion;
+          entry.stageFadeMaterial.opacity = reducedMotion ? 0.55 : 0;
+        }
+        if (entry.stageStartedAt !== null) {
+          const durationMs = entry.reducedStageMotion ? REDUCED_STAGE_FADE_MS : STAGE_POP_MS;
+          const progress = Math.max(0, Math.min(1, (now - entry.stageStartedAt) / durationMs));
+          const baseScale = entry.rig.root.scale.clone();
+          if (entry.reducedStageMotion) {
+            entry.rig.root.scale.copy(baseScale);
+            entry.stageFadeMaterial.opacity = 0.55 * (1 - progress);
+          } else {
+            const scale = 1 + 0.08 * (1 - progress);
+            entry.rig.root.scale.copy(baseScale).multiplyScalar(scale);
+          }
+          if (progress >= 1) {
+            entry.stageStartedAt = null;
+            entry.rig.root.scale.copy(baseScale);
+            entry.stageFade.visible = false;
+            entry.stageFadeMaterial.opacity = 0;
+          }
+        }
       }
       for (const plotId of entries.keys()) if (!seen.has(plotId)) remove(plotId);
     },

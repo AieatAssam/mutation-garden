@@ -20,7 +20,9 @@ const hasWebGlError = (target: HTMLCanvasElement) => {
   const gl = target.getContext('webgl2');
   return Boolean(gl && gl.getError() !== gl.NO_ERROR);
 };
-const speciesId: PlantSnapshot['speciesId'] = new URLSearchParams(location.search).get('species') === 'twistroot' ? 'twistroot' : 'bubble-berry';
+const params = new URLSearchParams(location.search);
+const mixedSixRipe = params.has('six-ripe') && params.has('mixed');
+const speciesId: PlantSnapshot['speciesId'] = params.get('species') === 'twistroot' ? 'twistroot' : 'bubble-berry';
 document.title = speciesId === 'twistroot' ? 'Twistroot render fixture' : 'Bubble Berry render fixture';
 silhouetteCanvas.setAttribute('aria-label', `${speciesId === 'twistroot' ? 'Twistroot' : 'Bubble Berry'} silhouette`);
 const stages: PlantSnapshot['stage'][] = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'];
@@ -142,26 +144,36 @@ function renderSixRipeGarden() {
   const keyLight = new DirectionalLight(day.key, 2.2); keyLight.position.set(-4, 7, 5); scene.add(keyLight);
   const camera = createGardenCamera();
   const plants = createPlantReconciler(garden.plots, materials);
-  const planted: PlantSnapshot = { speciesId, plantedAt: 0, stage: 'Harvestable', progress: 1 };
-  const snapshot: GardenSnapshot = { nowMs: 15_000, coins: 100, plots: garden.plots.map((plot) => ({ id: plot.plotId, plant: planted })) };
+  const mixedOrder: PlantSnapshot['speciesId'][] = ['sunny-sprout', 'bubble-berry', 'twistroot', 'sunny-sprout', 'bubble-berry', 'twistroot'];
+  const speciesForPlot = (index: number): PlantSnapshot['speciesId'] => mixedSixRipe ? mixedOrder[index]! : speciesId;
+  const snapshot: GardenSnapshot = {
+    nowMs: 15_000,
+    coins: 100,
+    plots: garden.plots.map((plot, index) => ({
+      id: plot.plotId,
+      plant: { speciesId: speciesForPlot(index), plantedAt: 0, stage: 'Harvestable', progress: 1 },
+    })),
+  };
   renderer.setSize(innerWidth, innerHeight, false); resizeGardenCamera(camera, innerWidth, innerHeight);
   renderer.render(scene, camera);
   plants.update(snapshot, snapshot, 1, true);
   renderer.render(scene, camera);
   status.dataset.drawCalls = String(renderer.info.render.calls);
   status.dataset.plants = String(garden.plots.length);
-  const ripeSignal = speciesId === 'twistroot' ? 'ripe-halo' : 'halo';
-  status.dataset.ripe = String(garden.plots.filter((plot) => {
+  status.dataset.speciesOrder = JSON.stringify(snapshot.plots.map(({ plant }) => plant?.speciesId));
+  const ripeCount = garden.plots.filter((plot, index) => {
+    const ripeSignal = speciesForPlot(index) === 'twistroot' ? 'ripe-halo' : 'halo';
     let visible = false;
     plot.traverse((object) => { if (object instanceof Mesh && object.userData.part === ripeSignal && object.visible) visible = true; });
     return visible;
-  }).length);
+  }).length;
+  status.dataset.ripe = String(ripeCount);
   const resize = () => { renderer.setSize(innerWidth, innerHeight, false); resizeGardenCamera(camera, innerWidth, innerHeight); renderer.render(scene, camera); };
   window.addEventListener('resize', resize);
   cleanup.push(() => { window.removeEventListener('resize', resize); plants.dispose(); garden.dispose(); materials.dispose(); renderer.dispose(); });
 }
 
-if (new URLSearchParams(location.search).has('six-ripe')) renderSixRipeGarden();
+if (params.has('six-ripe')) renderSixRipeGarden();
 else { renderLineup(); renderSilhouette(); }
 requestAnimationFrame(() => {
   status.dataset.webglError = String(hasWebGlError(canvas) || (status.dataset.mode !== 'six-ripe' && hasWebGlError(silhouetteCanvas)));

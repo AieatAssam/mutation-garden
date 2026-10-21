@@ -81,3 +81,23 @@ test('keeps six ripe Bubble Berry plants below the garden draw-call budget', asy
   await page.screenshot({ path: `docs/art/evidence/m1-08b1-bubble-berry-${view}-six-ripe.png`, scale: 'css' });
   expect(errors).toEqual([]);
 });
+
+test('renders six ripe plants across all three species below the garden draw-call budget', async ({ page }, info) => {
+  const errors = pageErrors(page);
+  await page.setViewportSize(sizeFor(info.project.name));
+  await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/bubble-berry.html?six-ripe&mixed');
+  const status = page.locator('#status');
+  await expect(status).toHaveAttribute('data-render', 'complete');
+  await expect(status).toHaveAttribute('data-frame', 'ready');
+  await expect(status).toHaveText('Ready');
+  await expect(status).toHaveAttribute('data-plants', '6');
+  await expect(status).toHaveAttribute('data-ripe', '6');
+  await expect(status).toHaveAttribute('data-species-order', JSON.stringify([
+    'sunny-sprout', 'bubble-berry', 'twistroot', 'sunny-sprout', 'bubble-berry', 'twistroot',
+  ]));
+  const calls = Number(await status.getAttribute('data-draw-calls'));
+  expect(calls).toBeLessThan(150);
+  const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
+  await page.screenshot({ path: `docs/art/evidence/m1-08b1-mixed-six-ripe-${view}.png`, scale: 'css' });
+  expect(errors).toEqual([]);
+});

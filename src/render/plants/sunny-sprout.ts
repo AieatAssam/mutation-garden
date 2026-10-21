@@ -17,6 +17,7 @@ import type { MaterialLibrary } from '../materials';
 export interface PlantRig {
   readonly root: Group;
   update(plant: PlantSnapshot, presentationNowMs: number, reducedMotion: boolean): void;
+  flickLeaves(presentationNowMs: number, reducedMotion: boolean): void;
   dispose(): void;
 }
 
@@ -93,8 +94,12 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
 
 
   let disposed = false;
+  let flickStartedAt: number | null = null;
   return {
     root,
+    flickLeaves(presentationNowMs, reducedMotion) {
+      if (!reducedMotion && Number.isFinite(presentationNowMs)) flickStartedAt = presentationNowMs;
+    },
     update(plant, presentationNowMs, reducedMotion) {
       const progress = Math.min(1, Math.max(0, plant.progress));
       const eased = progress * progress * (3 - 2 * progress);
@@ -107,8 +112,12 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
       rightLeaf.position.set(0.21 * unfurl, Math.min(length * 0.38, 0.28), 0);
       leftLeaf.scale.set(0.78 * unfurl, 0.62 * unfurl, 0.86 * unfurl);
       rightLeaf.scale.copy(leftLeaf.scale);
-      leftLeaf.rotation.z = 0.42;
-      rightLeaf.rotation.z = -0.42;
+      const flickProgress = flickStartedAt === null ? 1
+        : Math.max(0, Math.min(1, (presentationNowMs - flickStartedAt) / 260));
+      const flick = reducedMotion ? 0 : Math.cos(flickProgress * Math.PI / 2) * 0.48;
+      if (flickProgress >= 1) flickStartedAt = null;
+      leftLeaf.rotation.z = 0.42 + flick;
+      rightLeaf.rotation.z = -0.42 - flick;
 
       const fruitScale = 0.08 + 0.92 * eased;
       fruitRig.position.set(0, length + FRUIT_RADIUS * fruitScale, 0);
@@ -118,9 +127,9 @@ export function createSunnySprout(materials: MaterialLibrary, phaseOffsetMs = 0)
       fruitRig.rotation.z = ripe && !reducedMotion
         ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.075
         : 0;
-      root.scale.y = reducedMotion
+      root.scale.set(1, reducedMotion
         ? 1
-        : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
+        : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02, 1);
     },
     dispose() {
       if (disposed) return;

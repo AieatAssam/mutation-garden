@@ -14,6 +14,10 @@ const setup = (ids: PlotId[] = ['plot-0']) => {
 const plant = (plantedAt: number, progress: number, stage: PlantSnapshot['stage'] = 'Growing', speciesId: PlantSnapshot['speciesId'] = 'sunny-sprout'): PlantSnapshot => ({ speciesId, plantedAt, progress, stage });
 const snap = (nowMs: number, values: (PlantSnapshot | null)[], ids: PlotId[] = values.map((_, i) => `plot-${i}`)) => ({ nowMs, coins: 12, plots: values.map((value, i) => ({ id: ids[i]!, plant: value })) }) as GardenSnapshot;
 const part = (root: Object3D, name: string) => { let found: Mesh | undefined; root.traverse((node) => { if (node instanceof Mesh && node.userData.part === name) found = node; }); return found!; };
+const role = (root: Object3D, name: string) => { let found: Mesh | undefined; root.traverse((node) => { if (node instanceof Mesh && node.userData.role === name) found = node; }); return found!; };
+const phase = (plotId: PlotId) => [...plotId].reduce((hash, character) => (hash * 31 + character.charCodeAt(0)) >>> 0, 0) % 3000;
+const breathingScale = (nowMs: number, phaseOffsetMs: number) =>
+  1 + Math.sin(((nowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
 
 describe('plant reconciliation', () => {
   it('reuses rigs for repeated frozen snapshots and interpolates clamped endpoints', () => {
@@ -46,11 +50,18 @@ describe('plant reconciliation', () => {
     const root = anchors[0]!.children[0]!; const meshes: Mesh[] = [];
     root.traverse((node) => { if (node instanceof Mesh) meshes.push(node); });
     const geometries = [...new Set(meshes.filter((mesh) => mesh.userData.part !== 'blob').map((mesh) => mesh.geometry))].map((g) => vi.spyOn(g, 'dispose'));
-    const halo = vi.spyOn(part(root, 'halo').material as Material, 'dispose');
-    const borrowed = [...new Set(meshes.flatMap((mesh) => Array.isArray(mesh.material) ? mesh.material : [mesh.material]))].filter((material) => material !== part(root, 'halo').material).map((m) => vi.spyOn(m, 'dispose'));
+    const haloMaterial = part(root, 'halo').material as Material;
+    const halo = vi.spyOn(haloMaterial, 'dispose');
+    const stageFade = meshes.find((mesh) => mesh.userData.role === 'stage-motion-fade')!;
+    const stageFadeMaterial = stageFade.material as Material;
+    const stageFadeDispose = vi.spyOn(stageFadeMaterial, 'dispose');
+    const borrowed = [...new Set(meshes.flatMap((mesh) => Array.isArray(mesh.material) ? mesh.material : [mesh.material]))]
+      .filter((material) => material !== haloMaterial && material !== stageFadeMaterial)
+      .map((m) => vi.spyOn(m, 'dispose'));
     reconciler.update(snap(1, [plant(1, 0.5)]), snap(2, [null]), 0, true);
     expect(anchors[0]!.children).toHaveLength(0); geometries.forEach((dispose) => expect(dispose).toHaveBeenCalledTimes(1));
-    expect(halo).toHaveBeenCalledTimes(1); borrowed.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
+    expect(halo).toHaveBeenCalledTimes(1); expect(stageFadeDispose).toHaveBeenCalledTimes(1);
+    borrowed.forEach((dispose) => expect(dispose).not.toHaveBeenCalled());
     reconciler.update(snap(2, [null]), snap(3, [plant(3, 0.2, 'Sprout')]), 0, true);
     const replanted = anchors[0]!.children[0]!; expect(replanted).not.toBe(root);
     const unsupported = { ...plant(4, 0.3, 'Sprout'), speciesId: 'unsupported' } as unknown as PlantSnapshot;
@@ -112,6 +123,94 @@ describe('plant reconciliation', () => {
     const replanted = anchors[0]!.children[0]!;
     expect(replanted).not.toBe(rootRig);
     expect(part(replanted, 'root-body')).toBeDefined();
+    reconciler.dispose();
+  });
+
+  it('flicks leaves after a plot activation and suppresses the flick for reduced motion', () => {
+    const { anchors, reconciler } = setup();
+    const growing = plant(1, 0.5);
+    reconciler.update(snap(100, [growing]), snap(100, [growing]), 1, false);
+    const root = anchors[0]!.children[0]!;
+    const leftLeaf = part(root, 'left-leaf');
+    const rightLeaf = part(root, 'right-leaf');
+    const baseline = [leftLeaf.rotation.z, rightLeaf.rotation.z];
+
+    reconciler.flickLeaves('plot-0', 100, false);
+    reconciler.update(snap(186, [growing]), snap(186, [growing]), 1, false);
+    expect(leftLeaf.rotation.z).toBeGreaterThan(baseline[0]!);
+    expect(rightLeaf.rotation.z).toBeLessThan(baseline[1]!);
+
+    reconciler.flickLeaves('plot-0', 186, true);
+    reconciler.update(snap(200, [growing]), snap(200, [growing]), 1, true);
+    expect(leftLeaf.rotation.z).toBeCloseTo(baseline[0]!);
+    expect(rightLeaf.rotation.z).toBeCloseTo(baseline[1]!);
+    reconciler.dispose();
+  });
+
+  it('pops a plant by 8% for 160ms without accumulating or replacing its breathing scale', () => {
+    const { anchors, reconciler } = setup();
+    const growing = plant(1, 0.5);
+    reconciler.update(snap(100, [growing]), snap(100, [growing]), 1, false);
+    const rig = anchors[0]!.children[0]!;
+    const offset = phase('plot-0');
+    const startBase = breathingScale(100, offset);
+
+    reconciler.stageAccent('plot-0', 100, false);
+    reconciler.update(snap(100, [growing]), snap(100, [growing]), 1, false);
+    reconciler.update(snap(100, [growing]), snap(100, [growing]), 1, false);
+    expect(rig.scale.x).toBeCloseTo(1.08);
+    expect(rig.scale.y / startBase).toBeCloseTo(1.08);
+    expect(rig.scale.z).toBeCloseTo(1.08);
+
+    reconciler.update(snap(180, [growing]), snap(180, [growing]), 1, false);
+    expect(rig.scale.x).toBeCloseTo(1.04);
+    expect(rig.scale.y / breathingScale(180, offset)).toBeCloseTo(1.04);
+    expect(rig.scale.z).toBeCloseTo(1.04);
+    reconciler.update(snap(260, [growing]), snap(260, [growing]), 1, false);
+    expect(rig.scale.x).toBeCloseTo(1);
+    expect(rig.scale.y).toBeCloseTo(breathingScale(260, offset));
+    expect(rig.scale.z).toBeCloseTo(1);
+    reconciler.dispose();
+  });
+
+  it('uses a fixed-size 120ms fading accent in reduced motion', () => {
+    const { anchors, reconciler } = setup();
+    const growing = plant(1, 0.5);
+    reconciler.update(snap(100, [growing]), snap(100, [growing]), 1, true);
+    const container = anchors[0]!.children[0]!;
+    const fade = role(container, 'stage-motion-fade');
+    const baselineScale = container.scale.toArray();
+
+    reconciler.stageAccent('plot-0', 100, true);
+    expect(fade.visible).toBe(true);
+    expect((fade.material as Material).opacity).toBeCloseTo(0.55);
+    reconciler.update(snap(160, [growing]), snap(160, [growing]), 1, true);
+    expect((fade.material as Material).opacity).toBeCloseTo(0.275);
+    expect(container.scale.toArray()).toEqual(baselineScale);
+    reconciler.update(snap(220, [growing]), snap(220, [growing]), 1, true);
+    expect(fade.visible).toBe(false);
+    expect((fade.material as Material).opacity).toBe(0);
+    expect(container.scale.toArray()).toEqual(baselineScale);
+    reconciler.dispose();
+  });
+
+  it('converts an active scale pop to the reduced-motion fade when preference changes', () => {
+    const { anchors, reconciler } = setup();
+    const growing = plant(1, 0.5);
+    reconciler.update(snap(100, [growing]), snap(100, [growing]), 1, false);
+    const container = anchors[0]!.children[0]!;
+    reconciler.stageAccent('plot-0', 100, false);
+
+    reconciler.update(snap(100, [growing]), snap(100, [growing]), 1, true);
+    const fade = role(container, 'stage-motion-fade');
+    const scaleDuringFade = container.scale.toArray();
+    expect(fade.visible).toBe(true);
+    expect((fade.material as Material).opacity).toBeCloseTo(0.55);
+    reconciler.update(snap(160, [growing]), snap(160, [growing]), 1, true);
+    expect((fade.material as Material).opacity).toBeCloseTo(0.275);
+    expect(container.scale.toArray()).toEqual(scaleDuringFade);
+    reconciler.update(snap(220, [growing]), snap(220, [growing]), 1, true);
+    expect(fade.visible).toBe(false);
     reconciler.dispose();
   });
 });

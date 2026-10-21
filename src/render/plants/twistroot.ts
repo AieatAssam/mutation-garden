@@ -194,8 +194,12 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
   root.add(blob);
 
   let disposed = false;
+  let flickStartedAt: number | null = null;
   return {
     root,
+    flickLeaves(presentationNowMs, reducedMotion) {
+      if (!reducedMotion && Number.isFinite(presentationNowMs)) flickStartedAt = presentationNowMs;
+    },
     update(plant: PlantSnapshot, presentationNowMs: number, reducedMotion: boolean) {
       const progress = smoothstep(plant.progress);
       const rootGrowth = SEED_ROOT_GROWTH + (1 - SEED_ROOT_GROWTH) * progress;
@@ -205,6 +209,10 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
       const tipAngle = ROOT_TURNS * rootGrowth * Math.PI * 2;
       tuft.position.set(ROOT_CENTER_RADIUS * Math.cos(tipAngle), tipY - 0.015, ROOT_CENTER_RADIUS * Math.sin(tipAngle));
       tuft.rotation.y = tipAngle;
+      const flickProgress = flickStartedAt === null ? 1
+        : Math.max(0, Math.min(1, (presentationNowMs - flickStartedAt) / 260));
+      tuft.rotation.x = reducedMotion ? 0 : Math.cos(flickProgress * Math.PI / 2) * 0.28;
+      if (flickProgress >= 1) flickStartedAt = null;
       const tuftGrowth = 0.08 + 0.92 * smoothstep((plant.progress - 0.2) / 0.64);
       tuft.scale.setScalar(tuftGrowth);
       soilBulge.scale.set(0.29 + progress * 0.05, 0.055, 0.29 + progress * 0.05);
@@ -217,9 +225,9 @@ export function createTwistroot(materials: MaterialLibrary, phaseOffsetMs = 0): 
       root.rotation.z = ripe && !reducedMotion
         ? Math.sin(((presentationNowMs + phaseOffsetMs) / 3000) * Math.PI * 2) * 0.035
         : 0;
-      root.scale.y = reducedMotion
+      root.scale.set(1, reducedMotion
         ? 1
-        : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
+        : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02, 1);
     },
     dispose() {
       if (disposed) return;

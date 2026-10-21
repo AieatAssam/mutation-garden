@@ -60,3 +60,19 @@ export const SPECIES = [
 ] as const satisfies readonly SpeciesDefinition[];
 
 export const INITIAL_COINS = 12;
+
+/** Yield sizes rolled at planting: chance and value multiplier (design.md 4.3). */
+export const YIELD_SIZES = [
+  { size: 'small', chance: 0.25, multiplier: 0.8 },
+  { size: 'regular', chance: 0.6, multiplier: 1 },
+  { size: 'big', chance: 0.15, multiplier: 1.5 },
+] as const;
+
+/** Harvesting within this window after ripening pays the fresh bonus. */
+export const FRESH_WINDOW_MS = 5_000;
+export const FRESH_BONUS = 0.25;
+/** Each extra plant in one swipe adds this share of the swipe's total, up to the cap. */
+export const COMBO_STEP = 0.1;
+export const COMBO_CAP = 0.5;
+/** Watering cuts the remaining growth time by this share. */
+export const WATER_SPEEDUP = 0.3;

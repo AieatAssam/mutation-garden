@@ -17,7 +17,7 @@ export function createPlotActivationGuard(
   const lastAcceptedIntent: ({ type: Command['type']; atMs: number } | undefined)[] = Array(PLOT_IDS.length).fill(undefined);
 
   return (command, nowMs) => {
-    const plotIds = command.type === 'Plant' ? [command.plotId] : command.plotIds;
+    const plotIds = command.type === 'Harvest' ? command.plotIds : [command.plotId];
     if (plotIds.length === 0 || !Number.isSafeInteger(nowMs) || nowMs < 0) return false;
     const plotIndices = plotIds.map((plotId) => PLOT_IDS.indexOf(plotId));
     if (plotIndices.some((plotIndex) => plotIndex === -1)) return false;
@@ -46,9 +46,11 @@ export function commandForPlotActivation(
   const plot = snapshot.plots.find(({ id }) => id === plotId);
   if (!plot) return null;
 
-  return plot.plant
+  // Tapping a ripe plant harvests it; tapping a growing one waters it (design.md 4.2).
+  if (!plot.plant) return { type: 'Plant', plotId, seedId: selectedSpeciesId };
+  return plot.plant.stage === 'Harvestable'
     ? { type: 'Harvest', plotIds: [plotId] }
-    : { type: 'Plant', plotId, seedId: selectedSpeciesId };
+    : { type: 'Water', plotId };
 }
 
 /** Map a swipe batch to one harvest command using the latest snapshot. */

@@ -1,4 +1,4 @@
-import { SPECIES } from '../content/species';
+import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
 import type { Command, GardenState, SimEvent, StepResult } from '../state/types';
 
@@ -43,24 +43,24 @@ export function harvest(
       continue;
     }
 
+    const size = plot.plant.size ?? 'regular';
+    const ripeAt = plot.plant.plantedAt + species.growthDurationMs;
+    const fresh = effectiveNowMs - ripeAt <= FRESH_WINDOW_MS;
+    const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1);
+    const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
-    nextState = {
-      ...nextState,
-      coins: nextState.coins + species.baseValue,
-      plots,
-    };
-    totalCoins += species.baseValue;
+    nextState = { ...nextState, coins: nextState.coins + coins, plots };
+    totalCoins += coins;
     count += 1;
-    events.push({
-      type: 'Harvested',
-      plotId,
-      speciesId: species.id,
-      coins: species.baseValue,
-    });
+    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins, size, fresh });
   }
 
-  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: totalCoins });
+  // A swipe across several ripe plants pays a combo bonus on top (design.md 4.3).
+  const comboBonus = count > 1 ? Math.floor(totalCoins * Math.min(COMBO_CAP, COMBO_STEP * (count - 1))) : 0;
+  if (comboBonus > 0) nextState = { ...nextState, coins: nextState.coins + comboBonus };
+  totalCoins += comboBonus;
+  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: totalCoins, comboBonus });
   return { state: nextState, events };
 }
 

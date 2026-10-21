@@ -34,7 +34,7 @@ describe('Plant commands', () => {
       const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: species.id }], startTime + 250);
 
       expect(result.state.coins).toBe(initial.coins - species.seedCost);
-      expect(result.state.plots[0]).toEqual({
+      expect(result.state.plots[0]).toMatchObject({
         id: 'plot-0',
         plant: { speciesId: species.id, plantedAt: startTime + 250 },
       });
@@ -47,7 +47,7 @@ describe('Plant commands', () => {
     const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' }], startTime);
 
     expect(result.state.coins).toBe(0);
-    expect(result.state.plots[0]?.plant).toEqual({ speciesId: 'bubble-berry', plantedAt: startTime });
+    expect(result.state.plots[0]?.plant).toMatchObject({ speciesId: 'bubble-berry', plantedAt: startTime });
     expect(result.events).toEqual([{ type: 'Planted', plotId: 'plot-0', speciesId: 'bubble-berry' }]);
   });
 
@@ -89,7 +89,7 @@ describe('Plant commands', () => {
     ], startTime + 500);
 
     expect(result.state.coins).toBe(state.coins - 1);
-    expect(result.state.plots[0]?.plant).toEqual({ speciesId: 'sunny-sprout', plantedAt: startTime + 500 });
+    expect(result.state.plots[0]?.plant).toMatchObject({ speciesId: 'sunny-sprout', plantedAt: startTime + 500 });
     expect(result.events).toEqual([
       { type: 'Planted', plotId: 'plot-0', speciesId: 'sunny-sprout' },
       { type: 'CommandRejected', command: 'Plant', plotId: 'plot-0', reason: 'occupied' },

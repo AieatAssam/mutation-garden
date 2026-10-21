@@ -1,6 +1,7 @@
 import type { Command, GardenState, StepResult } from './types';
 import { plant } from '../plants/plant';
 import { harvest } from '../plants/harvest';
+import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
 
 function assertTimestamp(nowMs: number): void {
@@ -27,7 +28,9 @@ export function step(
   for (const command of commands) {
     const result = command.type === 'Plant'
       ? plant(nextState, command, effectiveNowMs)
-      : harvest(nextState, command, effectiveNowMs);
+      : command.type === 'Water'
+        ? water(nextState, command, effectiveNowMs)
+        : harvest(nextState, command, effectiveNowMs);
     nextState = result.state;
     events.push(...result.events);
   }

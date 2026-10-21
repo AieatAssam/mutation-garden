@@ -84,8 +84,8 @@ describe('boot animation wiring', () => {
       [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }],
       1_000,
     ).state;
-    const planted = getSnapshot(plantedState);
-    onRender!({ previous: planted, current: planted, alpha: 0 });
+    const ripe = getSnapshot(step(plantedState, [], 9_000).state);
+    onRender!({ previous: ripe, current: ripe, alpha: 0 });
     nowMs = 1_001;
     onIntent({ type: 'ActivatePlot', plotId: 'plot-0' });
     expect(enqueue).toHaveBeenLastCalledWith({ type: 'Harvest', plotIds: ['plot-0'] });

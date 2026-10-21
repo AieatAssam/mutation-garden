@@ -167,7 +167,8 @@ export function createGardenPicker(
         .sort((a, b) => {
           const distanceA = (clientX - a.cssX) ** 2 + (clientY - a.cssY) ** 2;
           const distanceB = (clientX - b.cssX) ** 2 + (clientY - b.cssY) ** 2;
-          return distanceA - distanceB || b.stamp.drawOrder - a.stamp.drawOrder;
+          // Equal distances (within float noise) fall back to the last-drawn stamp.
+          return Math.abs(distanceA - distanceB) > 1e-6 ? distanceA - distanceB : b.stamp.drawOrder - a.stamp.drawOrder;
         })[0];
       if (supplementalStamp) return { kind: 'plot', plotId: supplementalStamp.stamp.plotId };
       return raycaster.intersectObject(groundTarget, false).length > 0 ? { kind: 'ground' } : null;

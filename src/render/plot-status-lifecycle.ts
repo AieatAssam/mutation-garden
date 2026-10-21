@@ -5,6 +5,8 @@ import { getPlotStatusDialFacing, PLOT_STATUS_STAMP_DIAMETER, type PlotStatusDes
 
 const DIAL_POP_MS = 160;
 const STAMP_POP_MS = 220;
+/** Height of the ready stamp above the plant top, clear of fruit at the three-quarter view. */
+const STAMP_LIFT = 0.45;
 const REDUCED_STAMP_FADE_MS = 120;
 const HARVEST_STAMP_FADE_MS = 120;
 
@@ -236,7 +238,7 @@ export function createPlotStatusLifecycle(options: PlotStatusLifecycleOptions): 
           }
           if (reducedMotion) presentation.popEnabled = false;
           if (options.getPlantTop(plot.id, top)) {
-            const center = top.clone().add(new Vector3(0, 0.22, 0));
+            const center = top.clone().add(new Vector3(0, STAMP_LIFT, 0));
             const elapsed = Number.isFinite(presentation.readyAtMs)
               ? Math.max(0, presentationTimeMs - presentation.readyAtMs)
               : STAMP_POP_MS;

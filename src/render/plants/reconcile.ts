@@ -4,12 +4,15 @@ import type { MaterialLibrary } from '../materials';
 import { createBubbleBerry } from './bubble-berry';
 import { createTwistroot } from './twistroot';
 import { createSunnySprout, type PlantRig } from './sunny-sprout';
+import { createAuthoredRig, type PlantModels } from './authored';
 
 interface Entry { readonly speciesId: PlantSnapshot['speciesId']; readonly plantedAt: number; readonly rig: PlantRig }
 export interface PlantReconciler {
   update(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   /** Writes the highest visible semantic plant surface in world space. */
   getTop(plotId: PlotId, target: Vector3): boolean;
+  /** Switches to the authored Blender plants; existing rigs are rebuilt on the next update. */
+  setModels(models: PlantModels): void;
   dispose(): void;
 }
 
@@ -72,6 +75,8 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
   const entries = new Map<PlotId, Entry>();
   let disposed = false;
   let currentPlants = new Set<PlotId>();
+  // ponytail: procedural rigs stay as the fallback until plants.glb loads; delete them once S2 is accepted.
+  let models: PlantModels | null = null;
   const remove = (plotId: PlotId) => {
     const entry = entries.get(plotId);
     if (!entry) return;
@@ -93,7 +98,9 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
         let entry = entries.get(plot.id);
         if (entry && (entry.speciesId !== plant.speciesId || entry.plantedAt !== plant.plantedAt)) { remove(plot.id); entry = undefined; }
         if (!entry) {
-          const rig = plant.speciesId === 'sunny-sprout'
+          const rig = models
+            ? createAuthoredRig(plant.speciesId, models, materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
+            : plant.speciesId === 'sunny-sprout'
             ? createSunnySprout(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
             : plant.speciesId === 'bubble-berry'
               ? createBubbleBerry(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
@@ -110,11 +117,16 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
       for (const plotId of entries.keys()) if (!seen.has(plotId)) remove(plotId);
       currentPlants = new Set([...entries.keys()]);
     },
+    setModels(next) {
+      if (disposed) return;
+      models = next;
+      for (const plotId of [...entries.keys()]) remove(plotId);
+    },
     getTop(plotId, target) {
       if (disposed || !currentPlants.has(plotId)) return false;
       const entry = entries.get(plotId);
       if (!entry) return false;
-      return getSemanticTop(entry.rig.root, target);
+      return entry.rig.getTop ? entry.rig.getTop(target) : getSemanticTop(entry.rig.root, target);
     },
     dispose() {
       if (disposed) return;

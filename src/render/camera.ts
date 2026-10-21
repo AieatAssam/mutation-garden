@@ -116,7 +116,7 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
 
   const state = getPanState(camera);
   state.basePosition.set(3.6, 8.5, 11);
-  state.baseTarget.set(0.35, portrait ? -1.2 : -0.2, 0.3);
+  state.baseTarget.set(0.35, portrait ? -0.6 : -0.2, 0.3);
   state.viewportWidth = safeWidth;
   state.viewportHeight = safeHeight;
   state.lastSaturatedInput = undefined;

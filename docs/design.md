@@ -116,8 +116,8 @@ The brief requires that players can influence mutations and that randomness is n
 | Rainbow | ×10 | Harvest a Golden, Glowing and Crystal in one swipe; the next seed planted on any of those plots is Rainbow. Deterministic. | 0.1% | Rule is already deterministic |
 
 Rules:
-- Rolls use the sim's seeded RNG at **planting time** and are stored on the plant, so reloading never re-rolls and offline growth is exact.
-- A mutation that will happen is visible from the Sprout stage with a subtle tell (a glint, a hum, a size wobble) so the player can anticipate it. The full material change happens at Mature with the reveal.
+- At **planting time** the sim draws one uniform number `u` from its seeded RNG and stores it on the plant. When the plant reaches **Mature**, the sim evaluates each trait's conditions (watering, neighbours, dusk, pond) and the plant mutates if `u` is below that trait's chance. One stored draw means reloading never re-rolls and offline growth is exact, while conditions met after planting (a second watering, a dusk phase) still count.
+- Once a trait's condition holds and `u` passes, the plant shows a subtle tell (a glint, a hum, a size wobble) so the player can anticipate it. The full material change happens at Mature with the reveal.
 - **Stacking:** two mutations combine (Giant + Golden = golden at giant scale; value multiplies). Max two per plant in M2; combinations count as their own journal entries (5 traits, 10 pairs).
 - **Journal:** a printed seed catalogue. Rows are species, columns are traits. Undiscovered entries show a silhouette with a hint line once the player has met a prerequisite. Entries never hint at something unobtainable.
 - **First discovery reward:** coins equal to 10× the mutated value and XP, plus a card (M5: shareable).

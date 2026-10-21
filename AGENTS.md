@@ -9,8 +9,10 @@ Mutation Garden is a mobile-first 3D gardening game in the browser: plant, grow,
 | File | What it is |
 |---|---|
 | `docs/brief.md` | The game design brief, verbatim. The source of truth for what the game is. |
+| `docs/design.md` | The full game design: player journey, reward rhythm, rules, numbers, unlocks. What to build. |
+| `docs/art/motion.md` | **Binding** motion and effects spec: every transition, particle, sound and timing. |
 | `docs/architecture.md` | Module boundaries, deterministic sim, fixed timestep, saves, offline growth |
-| `docs/milestones/` | M1–M5 scope and acceptance criteria. M1 has ordered tasks. |
+| `docs/milestones/` | M1–M5 scope, slices and acceptance criteria. |
 | `docs/art/style-guide.md` | **Binding** art source of truth (Seed Packet direction) |
 | `docs/art/palette.json` | **Binding** colours. Generated into `src/render/palette.ts`. |
 | `docs/art/prototype/` | The visual reference: a throwaway three.js sketch and its screenshots. Not game code. |

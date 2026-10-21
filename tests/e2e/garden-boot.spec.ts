@@ -1,0 +1,51 @@
+import { expect, test } from '@playwright/test';
+import { InstancedMesh, Mesh, Vector3 } from 'three';
+import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
+import { createGarden } from '../../src/render/garden';
+import { createMaterialLibrary } from '../../src/render/materials';
+
+function projectedGardenBottomNdc(width: number, height: number): number {
+  const materials = createMaterialLibrary();
+  const garden = createGarden(materials);
+  const camera = createGardenCamera();
+  resizeGardenCamera(camera, width, height);
+  camera.updateMatrixWorld(true);
+  garden.updateMatrixWorld(true);
+  let bottom = Number.POSITIVE_INFINITY;
+  garden.traverse((object) => {
+    if (!(object instanceof Mesh) || object instanceof InstancedMesh || object.name === 'day-sky-gradient') return;
+    const positions = object.geometry.getAttribute('position');
+    for (let index = 0; index < positions.count; index += 1) {
+      const screenPoint = new Vector3().fromBufferAttribute(positions, index)
+        .applyMatrix4(object.matrixWorld).project(camera);
+      bottom = Math.min(bottom, screenPoint.y);
+    }
+  });
+  garden.dispose();
+  materials.dispose();
+  return bottom;
+}
+
+test('production garden boots with its HUD clear of the garden', async ({ page }, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  const projectViewport = testInfo.project.name === 'desktop'
+    ? { width: 1280, height: 800 }
+    : { width: 390, height: 844 };
+  await page.setViewportSize(projectViewport);
+  await page.goto('http://localhost:4173/mutation-garden/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  const canvas = page.locator('#stage');
+  const seedLabel = page.locator('nav[aria-label="Seeds"] .garden-ui__tray-label');
+  await expect(seedLabel).toBeVisible();
+  const canvasRect = await canvas.boundingBox();
+  const labelRect = await seedLabel.boundingBox();
+  expect(canvasRect).not.toBeNull();
+  expect(labelRect).not.toBeNull();
+  const islandBottomNdc = projectedGardenBottomNdc(canvasRect!.width, canvasRect!.height);
+  const islandBottomY = canvasRect!.y + (1 - islandBottomNdc) * canvasRect!.height / 2;
+  expect(islandBottomY).toBeLessThan(labelRect!.y - 16);
+
+  expect(errors).toEqual([]);
+});

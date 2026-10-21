@@ -32,6 +32,7 @@ probeGarden.updateMatrixWorld(true);
 const referenceCamera = createGardenCamera();
 const point = new Vector3();
 let inset = false;
+let disposed = false;
 function resize() {
   const rect = stage.getBoundingClientRect();
   renderer.resize(rect.width, rect.height);
@@ -86,6 +87,8 @@ probeWindow.gardenProbe = {
     resize();
   },
   dispose() {
+    if (disposed) return;
+    disposed = true;
     window.removeEventListener('resize', onWindowResize);
     renderer.dispose();
     probeGarden.dispose();

@@ -1,7 +1,7 @@
 import { Quaternion, Vector3 } from 'three';
 import type { ColorRepresentation } from 'three';
 import type { GardenSnapshot, PlantSnapshot, PlotId, SpeciesId } from '../sim';
-import { PLOT_STATUS_STAMP_DIAMETER, type PlotStatusDescriptor, type PlotStatusResources } from './plot-status';
+import { getPlotStatusDialFacing, PLOT_STATUS_STAMP_DIAMETER, type PlotStatusDescriptor, type PlotStatusResources } from './plot-status';
 
 const DIAL_POP_MS = 160;
 const STAMP_POP_MS = 220;
@@ -27,7 +27,7 @@ export interface PlotStatusLifecycleOptions {
   readonly resources: PlotStatusResources;
   readonly species: readonly PlotStatusSpecies[];
   /** Writes the bed-rim dial centre in world coordinates. */
-  readonly getDialCenter: (plotId: PlotId, target: Vector3) => boolean;
+  readonly getDialCenter: (plotId: PlotId, target: Vector3, dialFacing: Quaternion) => boolean;
   /** Writes the current plant top in world coordinates, excluding outlines and effects. */
   readonly getPlantTop: (plotId: PlotId, target: Vector3) => boolean;
 }
@@ -127,6 +127,7 @@ export function createPlotStatusLifecycle(options: PlotStatusLifecycleOptions): 
       if (!Number.isFinite(presentationTimeMs)) throw new RangeError('presentationTimeMs must be finite');
       const interpolation = clamp01(alpha);
       const cameraFacing = facing.clone();
+      const dialFacing = getPlotStatusDialFacing(cameraFacing);
       const inverseFacing = cameraFacing.clone().invert();
       const previousById = new Map(previous.plots.map((plot) => [plot.id, plot.plant]));
       const livePlotIds = new Set(current.plots.map((plot) => plot.id));
@@ -189,7 +190,7 @@ export function createPlotStatusLifecycle(options: PlotStatusLifecycleOptions): 
         let dialScale = 1;
         let stamp: PlotStatusDescriptor['stamp'];
         const dialCenter = new Vector3();
-        if (options.getDialCenter(plot.id, dialCenter)) {
+        if (options.getDialCenter(plot.id, dialCenter, dialFacing)) {
           if (plant.stage === 'Harvestable') {
             const readyPresentation = ready.get(plot.id);
             let presentation = readyPresentation;

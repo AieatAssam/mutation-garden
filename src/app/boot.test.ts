@@ -4,15 +4,20 @@ import * as loopModule from './loop';
 import { boot } from './boot';
 
 const {
+  createRenderer,
   disposeRenderer, resizeRenderer, panRenderer, zoomRenderer, renderRenderer, pickRenderer,
   createGardenUI, updateGardenUI, disposeGardenUI, createPointerInput,
 } = vi.hoisted(() => ({
+  createRenderer: vi.fn(),
   disposeRenderer: vi.fn(), resizeRenderer: vi.fn(), panRenderer: vi.fn(), zoomRenderer: vi.fn(), renderRenderer: vi.fn(),
   pickRenderer: vi.fn(() => null),
   createGardenUI: vi.fn(), updateGardenUI: vi.fn(), disposeGardenUI: vi.fn(),
   createPointerInput: vi.fn(),
 }));
-vi.mock('../render/renderer', () => ({ createRenderer: () => ({ resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer }) }));
+vi.mock('../render/renderer', () => ({ createRenderer: (...args: unknown[]) => {
+  createRenderer(...args);
+  return { resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer };
+} }));
 vi.mock('../input/pointer', () => ({
   createPointerInput: (canvas: HTMLCanvasElement, pick: unknown, onIntent: unknown) =>
     createPointerInput(canvas, pick, onIntent),
@@ -23,6 +28,7 @@ vi.mock('../ui/garden-ui', () => ({
 
 describe('boot animation wiring', () => {
   beforeEach(() => {
+    createRenderer.mockReset();
     createPointerInput.mockReset().mockReturnValue({ cancelGesture: vi.fn(), dispose: vi.fn() });
     pickRenderer.mockReset().mockReturnValue(null);
     panRenderer.mockReset();
@@ -124,6 +130,13 @@ describe('boot animation wiring', () => {
     vi.stubGlobal('document', documentStub as unknown as Document);
 
     const cleanup = boot({} as HTMLCanvasElement);
+    expect(createRenderer).toHaveBeenCalledWith(expect.anything(), {
+      species: [
+        { id: 'sunny-sprout', stageFractions: [0.125, 0.375, 0.875] },
+        { id: 'bubble-berry', stageFractions: [2 / 15, 0.4, 13 / 15] },
+        { id: 'twistroot', stageFractions: [0.12, 0.4, 0.88] },
+      ],
+    });
     const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
     const planted = getSnapshot(step(createInitialState(1, 1_000), [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },

@@ -4,6 +4,7 @@ import { createSunnySprout } from '../../../src/render/plants/sunny-sprout';
 import { createRenderer } from '../../../src/render/renderer';
 import { palette } from '../../../src/render/palette';
 import type { GardenSnapshot, PlantSnapshot } from '../../../src/sim';
+import { renderOptions } from './render-options';
 
 document.documentElement.style.setProperty('--sky', palette.environment['sky-day'].mid); document.documentElement.style.setProperty('--ink', palette.ink['press-ink']); document.documentElement.style.setProperty('--paper', palette.ink['paper-white']); document.documentElement.style.setProperty('--tomato', palette.ink['misprint-tomato']);
 if (new URLSearchParams(location.search).has('reconcile')) {
@@ -11,7 +12,7 @@ if (new URLSearchParams(location.search).has('reconcile')) {
   const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
   const status = document.querySelector<HTMLElement>('#status')!;
   const motion = document.querySelector<HTMLInputElement>('#reduced-motion')!;
-  const renderer = createRenderer(canvas);
+  const renderer = createRenderer(canvas, renderOptions);
   let reducedMotion = false;
   let currentCase = 'empty';
   const snapshot = (nowMs: number, plants: readonly (PlantSnapshot | null)[]): GardenSnapshot => ({ coins: 100, nowMs,

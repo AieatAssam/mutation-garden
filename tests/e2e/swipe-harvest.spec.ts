@@ -25,11 +25,14 @@ async function advanceGrowthClock(page: Page, deltaMs: number): Promise<void> {
 }
 
 function plotCenter(plotId: number, rect: { x: number; y: number; width: number; height: number }): Point {
+  return projectWorld(new Vector3([-1.05, 1.05][plotId % 2]!, 0.65, [2, 0, -2][Math.floor(plotId / 2)]!), rect);
+}
+
+function projectWorld(world: Vector3, rect: { x: number; y: number; width: number; height: number }): Point {
   const camera = createGardenCamera();
   resizeGardenCamera(camera, rect.width, rect.height);
   camera.updateMatrixWorld(true);
-  const world = new Vector3([-1.05, 1.05][plotId % 2]!, 0.65, [2, 0, -2][Math.floor(plotId / 2)]!);
-  const projected = world.project(camera);
+  const projected = world.clone().project(camera);
   return {
     x: rect.x + (projected.x + 1) * rect.width / 2,
     y: rect.y + (1 - projected.y) * rect.height / 2,
@@ -104,13 +107,15 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   await page.setViewportSize(viewport);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const canvas = page.locator('#stage');
   await expect(canvas).toBeVisible();
   const rect = await canvas.boundingBox();
   expect(rect).not.toBeNull();
 
   const plots = [0, 1, 2, 4].map((id) => plotCenter(id, rect!));
-  const untouchedPlot = plotCenter(3, rect!);
+  // A patch of island rock below the beds: no plant ever overlaps it, so it only changes if the camera pans.
+  const untouchedRock = projectWorld(new Vector3(0, -1.6, 1.5), rect!);
   const coins = page.getByRole('status', { name: 'Coins' });
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
   const sunny = seeds.getByRole('button', { name: 'Sunny Sprout' });
@@ -129,10 +134,10 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   }).toBeGreaterThanOrEqual(plantedAt + 8_250);
 
   // A canceled plot-owned path across ripe crops must neither harvest nor pan.
-  const beforeCancellation = await plotSignature(page, untouchedPlot);
+  const beforeCancellation = await plotSignature(page, untouchedRock);
   await cancelSwipe(page, plots[0]!, plots[3]!, mobile);
   await expect(coins).toHaveText('9');
-  expect(await plotSignature(page, untouchedPlot)).toBe(beforeCancellation);
+  expect(await plotSignature(page, untouchedRock)).toBe(beforeCancellation);
   const bubble = seeds.getByRole('button', { name: 'Bubble Berry' });
   if (mobile) await bubble.tap();
   else await bubble.click();
@@ -143,13 +148,13 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   // Keep the newly planted Bubble Berry unripe while the desktop trace/screenshot runs.
   // Sunnys have already grown against the real clock; only the guard-boundary check below advances this clock.
   await freezeGrowthClock(page);
-  const beforeHarvest = await plotSignature(page, untouchedPlot);
+  const beforeHarvest = await plotSignature(page, untouchedRock);
 
   // A fresh swipe crosses three ripe plants, reverses over one, and commits one batch.
   await swipe(page, [plots[0]!, plots[2]!, plots[3]!, plots[2]!], mobile);
   await expect(coins).toHaveText('12');
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
-  expect(await plotSignature(page, untouchedPlot)).toBe(beforeHarvest);
+  expect(await plotSignature(page, untouchedRock)).toBe(beforeHarvest);
   const harvestAt = await page.evaluate(() => Date.now());
 
   // Repeating the same harvest cannot pay again or turn its release into planting.

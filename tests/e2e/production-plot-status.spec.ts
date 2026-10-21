@@ -702,6 +702,7 @@ async function openGame(page: Page, project: string): Promise<{ mobile: boolean;
   await installGameClock(page);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const stage = page.locator('#stage');
   await expect(stage).toBeVisible();
   const bounds = await stage.boundingBox();

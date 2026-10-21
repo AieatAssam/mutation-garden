@@ -1,6 +1,6 @@
 # Mutation Garden: game design
 
-Version 1.0, 2026-10-21. This is the working design for the whole game. [brief.md](brief.md) is the owner's vision and stays unchanged; this document turns it into concrete rules, numbers and moments. Where this document is more specific than the brief, follow this document. Where it contradicts the brief, the brief wins unless the owner has approved the change (marked **Amendment**).
+Version 1.0, 2026-10-21. This is the working design for the whole game. [brief.md](brief.md) is the owner's vision and stays unchanged; this document turns it into concrete rules, numbers and moments. Where this document is more specific than the brief, follow this document. Where it contradicts the brief, the brief wins unless the owner has approved the change (marked **Amendment**). The owner approved all amendments in this document on 2026-10-21.
 
 Companion documents:
 - [art/style-guide.md](art/style-guide.md): how things look (Seed Packet direction, palette).

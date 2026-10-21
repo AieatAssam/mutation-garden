@@ -36,6 +36,8 @@ export interface Renderer {
   zoom(scale: number): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   pick(clientX: number, clientY: number): PickResult;
+  /** Resolves once the authored models are in the scene (or failed to load). */
+  whenLoaded(): Promise<void>;
   dispose(): void;
 }
 
@@ -62,7 +64,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   const materials = createMaterialLibrary();
   const garden = createGarden();
-  loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
+  const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
     console.error('Garden model failed to load', error);
   });
   scene.add(garden);
@@ -146,6 +148,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       currentReducedMotion = reducedMotion;
       plants.update(previous, current, alpha, reducedMotion);
       draw();
+    },
+    whenLoaded() {
+      return sceneryLoaded;
     },
     pick(clientX, clientY) {
       if (disposed) return null;

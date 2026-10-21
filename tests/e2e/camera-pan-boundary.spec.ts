@@ -17,6 +17,7 @@ test('maximum horizontal pan keeps every plot target on screen', async ({ page }
   await page.setViewportSize(viewport);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   await expect(page.locator('#stage')).toBeVisible();
 
   await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/garden-render.html');

@@ -64,6 +64,7 @@ test('catches up once and resumes fixed-step frames across visibility changes', 
 
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
 
   expect(await page.evaluate(() => ({
     bootDateNowCalls: window.__gardenLifecycleProbe.bootDateNowCalls,

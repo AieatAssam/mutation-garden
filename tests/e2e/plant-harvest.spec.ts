@@ -30,6 +30,7 @@ async function productionPlotCenter(page: Page, projectName: string): Promise<{ 
     : { width: 390, height: 844 });
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const stage = page.locator('#stage');
   await expect(stage).toBeVisible();
   const rect = await stage.boundingBox();
@@ -90,6 +91,7 @@ test('Sunny harvest blocks a cross-tick repeat before allowing replant', async (
   const plot = await firstPlotCenter(page, testInfo.project.name);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const startedAt = await page.evaluate(() => Date.now());
 
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
@@ -206,6 +208,7 @@ test('Twistroot costs five coins, matures after 25 seconds, pays ten and can be 
   const plot = await firstPlotCenter(page, testInfo.project.name);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
   const twistroot = seeds.getByRole('button', { name: 'Twistroot' });
   const coins = page.getByRole('status', { name: 'Coins' });

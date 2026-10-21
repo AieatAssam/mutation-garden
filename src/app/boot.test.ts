@@ -16,7 +16,8 @@ const {
 }));
 vi.mock('../render/renderer', () => ({ createRenderer: (...args: unknown[]) => {
   createRenderer(...args);
-  return { resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer, dispose: disposeRenderer };
+  return { resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer,
+    whenLoaded: () => new Promise<void>(() => {}), dispose: disposeRenderer };
 } }));
 vi.mock('../input/pointer', () => ({
   createPointerInput: (canvas: HTMLCanvasElement, pick: unknown, onIntent: unknown) =>

@@ -14,9 +14,9 @@ type SpeciesId = (typeof SPECIES)[number]['id'];
 const speciesPlot: Record<SpeciesId, number> = { 'sunny-sprout': 0, 'bubble-berry': 2, twistroot: 4 };
 const speciesStampWorldY: Record<SpeciesId, number> = {
   // Authored plant tops (tools/blender/build_plants.py) plus the 0.45 stamp lift.
-  'sunny-sprout': 2.68,
-  'bubble-berry': 2.26,
-  twistroot: 3.17,
+  'sunny-sprout': 2.89,
+  'bubble-berry': 2.30,
+  twistroot: 3.13,
 };
 
 const speciesLabels: Record<SpeciesId, string> = {

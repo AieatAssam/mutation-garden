@@ -251,3 +251,33 @@ test('Twistroot costs five coins, matures after 25 seconds, pays its yield and c
   await expect(twistroot).toHaveAttribute('aria-pressed', 'true');
   expect(errors).toEqual([]);
 });
+
+test('a planted seed and the spent coin survive a reload', async ({ page }, testInfo) => {
+  const mobile = testInfo.project.name === 'mobile-portrait';
+  const plot = await firstPlotCenter(page, testInfo.project.name);
+  await page.goto('./');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  const coins = page.getByRole('status', { name: 'Coins' });
+  await expect(coins).toHaveText('12');
+
+  await activatePlot(page, plot, mobile);
+  await expect(coins).toHaveText('11');
+  // Hiding the page saves at once, as when a phone switches apps.
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+
+  // Reload only once the write has landed; reloading earlier would save the old garden on pagehide.
+  await expect.poll(() => page.evaluate(() => new Promise<number | undefined>((resolve) => {
+    const request = indexedDB.open('mutation-garden', 1);
+    request.onsuccess = () => {
+      const get = request.result.transaction('saves', 'readonly').objectStore('saves').get('slot-0');
+      get.onsuccess = () => { resolve(get.result?.state?.coins); request.result.close(); };
+    };
+  })), { timeout: 5_000 }).toBe(11);
+
+  await page.reload();
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  await expect(coins).toHaveText('11');
+});

@@ -23,6 +23,7 @@ Living note for whoever picks this up next (human, Claude or Codex). Update it a
 - GLBs total about 1 MB uncompressed (S5 compression).
 - Audio has not been checked by ear.
 - `camera-zoom.spec` failed once under full-suite load after the HUD/camera changes (passes 20/20 when repeated); watch it in CI.
+- The Bubble Berry harvest spec failed once (desktop) in an 8-minute `--repeat-each 3` run; error not captured, passes alone and in full runs. Watch it.
 - The camera keeps back-row ready stamps below the top HUD row (`TOP_HUD_PX` in `src/render/camera.ts`): folded into the resting pose on resize, and nudged after pans and zooms.
 
 ## Log

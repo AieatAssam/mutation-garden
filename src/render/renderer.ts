@@ -19,6 +19,7 @@ import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCame
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
 import { createParticles } from './motion/particles';
+import { createAmbient, type Ambient } from './ambient';
 import { createHarvestFlights } from './harvest-flight';
 import { createPlantReconciler } from './plants/reconcile';
 import { createAuthoredRig, loadPlantModels, PLANT_MODEL_URL, type PlantModels } from './plants/authored';
@@ -49,6 +50,16 @@ export interface Renderer {
   dispose(): void;
 }
 
+const INTRO_MS = 900;
+const ISLAND_WAIT_Y = 60;
+
+/** Island height offset during the drop-in: falls 3.5 units in 450 ms, then one small bounce. */
+export function islandDropY(elapsedMs: number): number {
+  if (!(elapsedMs >= 0) || elapsedMs >= INTRO_MS) return 0;
+  if (elapsedMs < 450) return 3.5 * (1 - (elapsedMs / 450) ** 2);
+  return 0.16 * Math.sin(Math.PI * (elapsedMs - 450) / 450);
+}
+
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
   ColorManagement.enabled = true;
   const gl = new WebGLRenderer({ canvas, antialias: true, alpha: true });
@@ -72,10 +83,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   const materials = createMaterialLibrary();
   const garden = createGarden();
+  let introStartMs = -Infinity;
+  let islandLanded = false;
   let scenery: Scenery | null = null;
+  let ambient: Ambient | null = null;
   const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then((loaded) => {
     scenery = loaded;
     garden.setScenery(loaded);
+    ambient = createAmbient(loaded.creatures);
+    scene.add(ambient.group);
   }, (error: unknown) => {
     console.error('Garden model failed to load', error);
   });
@@ -112,9 +128,18 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       warm.removeFromParent();
       for (const rig of rigs) rig.dispose();
     }
-    // Draw once now, so "loaded" means the models are on screen, not waiting for the next frame.
+    // The island drops in once everything is ready (design.md 3, 0 s); "loaded" waits for it to land,
+    // so the first tap never meets a moving garden. Reduced motion skips the drop.
+    if (disposed) return;
+    introStartMs = performance.now();
+    draw();
+    if (!currentReducedMotion) await new Promise((resolve) => setTimeout(resolve, INTRO_MS));
+    introStartMs = -Infinity;
+    islandLanded = true;
+    // Draw once now, so "loaded" means the models are on screen at rest, not waiting for the next frame.
     if (!disposed) draw();
   }).catch((error: unknown) => {
+    islandLanded = true;
     console.error('Shader warm-up failed', error);
   });
   const statusResources = createPlotStatusResources();
@@ -211,7 +236,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   function draw(): void {
     const now = performance.now();
+    // Until the drop starts the island waits far above the view (still compiled, just off screen).
+    garden.position.y = islandLanded || currentReducedMotion ? 0
+      : introStartMs === -Infinity ? ISLAND_WAIT_Y : islandDropY(now - introStartMs);
     scenery?.update(now, currentReducedMotion);
+    ambient?.update(now, currentReducedMotion);
     particles.update(now);
     flights.update(now);
     refreshStatus();
@@ -280,6 +309,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       plantModels?.dispose();
       statusResources.dispose();
       particles.dispose();
+      ambient?.dispose();
       flights.dispose();
       garden.dispose();
       materials.dispose();

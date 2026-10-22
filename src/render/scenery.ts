@@ -32,6 +32,8 @@ function repairHullNormals(geometry: BufferGeometry): void {
 export interface Scenery extends Group {
   /** Paper clouds, kept apart from the merged island so they can drift. */
   readonly clouds: readonly Group[];
+  /** Creature shapes by name ("wing", "leaf"), vertex coloured, for the ambient layer to instance. */
+  readonly creatures: ReadonlyMap<string, BufferGeometry>;
   /** Moves wind and clouds to presentation time (m1-liveliness.md 4). Reduced motion holds them still. */
   update(nowMs: number, reducedMotion: boolean): void;
   dispose(): void;
@@ -128,9 +130,27 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     return false;
   };
 
+  // Creatures: "creature-wing", "creature-wing-dot", ... merge into one shape per second word.
+  const creatureParts = new Map<string, BufferGeometry[]>();
+  source.traverse((object) => {
+    const match = /^creature-([a-z]+)/.exec(object.name);
+    if (!match || !(object instanceof Mesh)) return;
+    const parts = creatureParts.get(match[1]!) ?? [];
+    parts.push(vertexColored(object, object.matrixWorld));
+    creatureParts.set(match[1]!, parts);
+  });
+  const creatures = new Map<string, BufferGeometry>();
+  for (const [name, parts] of creatureParts) {
+    const merged = mergeGeometries(parts.map((geometry) => geometry.index ? geometry : geometry.toNonIndexed()));
+    parts.forEach((geometry) => geometry.dispose());
+    if (!merged) throw new Error(`Creature "${name}" meshes have incompatible attributes`);
+    owned.push(merged);
+    creatures.set(name, merged);
+  }
+
   const printed: BufferGeometry[] = [];
   source.traverse((object) => {
-    if (!(object instanceof Mesh) || inCloud(object)) return;
+    if (!(object instanceof Mesh) || inCloud(object) || object.name.startsWith('creature-')) return;
     // glTF strips dots from node names, so hull thickness is in thousandths: outline-60 = 0.06.
     const hull = /^outline-(\d+)$/.exec(object.name);
     if (hull) {
@@ -181,7 +201,7 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     clouds.push(cloud);
     root.add(cloud);
   }
-  Object.assign(root, { clouds });
+  Object.assign(root, { clouds, creatures });
 
   root.update = (nowMs, reducedMotion) => {
     // Seconds within a whole number of wind periods, so float precision holds over long sessions.

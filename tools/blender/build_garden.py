@@ -498,6 +498,44 @@ for k, (lobes, (gx, gy, gz, size)) in enumerate(zip(CLOUD_LOBES, CLOUD_PLACES)):
     for child in (lit, shade, hull):
         child.parent = root
 
+# ---------------------------------------------------------------- creatures (m1-liveliness.md 4.3)
+# Shapes only, at the origin; the game instances and animates them. Kept out of the merge.
+
+def flat_polygon(name, points, material, z=0.0, depth=0.012):
+    bm = bmesh.new()
+    face = bm.faces.new([bm.verts.new((px, py, z)) for px, py in points])
+    ext = bmesh.ops.extrude_face_region(bm, geom=[face])
+    bmesh.ops.translate(bm, verts=[v for v in ext['geom'] if isinstance(v, bmesh.types.BMVert)], vec=(0, 0, depth))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    o = mesh_obj(name, bm, material)
+    o['keep'] = True
+    return o
+
+
+def ellipse(cx, cy, rx, ry, n=14):
+    return [(cx + rx * math.cos(2 * math.pi * k / n), cy + ry * math.sin(2 * math.pi * k / n)) for k in range(n)]
+
+
+# One right wing, hinged on the body axis (x = 0), 0.1 long: a big fore lobe and a small hind lobe.
+wing_points = []
+for k in range(24):
+    t = math.pi * k / 23 - math.pi / 2          # -90° (hind) .. +90° (fore)
+    r = 0.055 + 0.03 * math.sin(t) + 0.012 * math.cos(3 * t)
+    wing_points.append((max(0.0, r * math.cos(t)) + 0.004, r * math.sin(t) * 0.9))
+wing = flat_polygon('creature-wing', wing_points, 'ink.paper-white')
+dot = flat_polygon('creature-wing-dot', ellipse(0.045, 0.02, 0.012, 0.012, 10), 'ink.misprint-tomato', z=0.011,
+                   depth=0.003)
+edge = flat_polygon('creature-wing-edge', [(x * 1.12, y * 1.12) for x, y in wing_points], 'ink.press-ink', z=-0.004,
+                    depth=0.004)
+for part in (dot, edge):
+    part['keep'] = True
+
+# A falling leaf: pointed ellipse, 0.12 long.
+leaf_points = [(0.06 * math.cos(t), 0.028 * math.sin(t) * (1 - 0.35 * math.cos(t))) for t in
+               (2 * math.pi * k / 16 for k in range(16))]
+flat_polygon('creature-leaf', leaf_points, 'environment.grass.1', depth=0.006)
+
 # ---------------------------------------------------------------- join by material, build hulls
 
 if os.environ.get('GARDEN_STOP_BEFORE_JOIN') == '1':

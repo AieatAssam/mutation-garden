@@ -2,6 +2,7 @@ import {
   AmbientLight,
   ColorManagement,
   DirectionalLight,
+  Group,
   HemisphereLight,
   NoToneMapping,
   Quaternion,
@@ -20,7 +21,7 @@ import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
 import { createParticles } from './motion/particles';
 import { createHarvestFlights } from './harvest-flight';
 import { createPlantReconciler } from './plants/reconcile';
-import { loadPlantModels, PLANT_MODEL_URL, type PlantModels } from './plants/authored';
+import { createAuthoredRig, loadPlantModels, PLANT_MODEL_URL, type PlantModels } from './plants/authored';
 import { createPlotStatusResources } from './plot-status';
 import { createPlotStatusLifecycle, type PlotStatusSpecies } from './plot-status-lifecycle';
 
@@ -86,6 +87,29 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     plants.setModels(models);
   }, (error: unknown) => {
     console.error('Plant models failed to load', error);
+  });
+  // Compile every shader, plant morph variants included, before reporting ready, so the first
+  // frames with the island and first plants do not stall the main thread while the player taps
+  // (slow GPUs and CI software rendering).
+  const ready = Promise.all([sceneryLoaded, plantsLoaded]).then(async () => {
+    if (disposed) return;
+    const warm = new Group();
+    const rigs = plantModels
+      ? (['sunny-sprout', 'bubble-berry', 'twistroot'] as const).map((species) => createAuthoredRig(species, plantModels!, materials))
+      : [];
+    for (const rig of rigs) {
+      rig.update({ speciesId: 'sunny-sprout', plantedAt: 0, stage: 'Harvestable', progress: 1 }, 0, true);
+      warm.add(rig.root);
+    }
+    scene.add(warm);
+    try {
+      await gl.compileAsync(scene, camera);
+    } finally {
+      warm.removeFromParent();
+      for (const rig of rigs) rig.dispose();
+    }
+  }).catch((error: unknown) => {
+    console.error('Shader warm-up failed', error);
   });
   const statusResources = createPlotStatusResources();
   scene.add(statusResources.group);
@@ -223,7 +247,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       draw();
     },
     whenLoaded() {
-      return Promise.all([sceneryLoaded, plantsLoaded]).then(() => undefined);
+      return ready;
     },
     onEvents(events, reducedMotion) {
       if (!disposed) playEvents(events, reducedMotion);

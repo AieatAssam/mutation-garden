@@ -33,6 +33,8 @@ export interface RenderSpecies {
 
 export interface RendererOptions {
   readonly species: readonly RenderSpecies[];
+  /** Presentation clock in ms; fixtures pass a manual one so frames are repeatable. Defaults to performance.now. */
+  readonly now?: () => number;
 }
 
 export interface Renderer {
@@ -61,6 +63,7 @@ export function islandDropY(elapsedMs: number): number {
 }
 
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
+  const clock = options.now ?? (() => performance.now());
   ColorManagement.enabled = true;
   const gl = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   gl.outputColorSpace = SRGBColorSpace;
@@ -131,7 +134,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     // The island drops in once everything is ready (design.md 3, 0 s); "loaded" waits for it to land,
     // so the first tap never meets a moving garden. Reduced motion skips the drop.
     if (disposed) return;
-    introStartMs = performance.now();
+    introStartMs = clock();
     draw();
     if (!currentReducedMotion) await new Promise((resolve) => setTimeout(resolve, INTRO_MS));
     introStartMs = -Infinity;
@@ -179,7 +182,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     if (!previousSnapshot || !currentSnapshot) return;
     camera.updateWorldMatrix(true, false);
     const facing = camera.getWorldQuaternion(new Quaternion());
-    status.update(currentSnapshot, previousSnapshot, snapshotAlpha, facing, performance.now(), currentReducedMotion);
+    status.update(currentSnapshot, previousSnapshot, snapshotAlpha, facing, clock(), currentReducedMotion);
   }
 
   const particles = createParticles();
@@ -189,7 +192,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const effectPoint = new Vector3();
 
   function playEvents(events: readonly SimEvent[], reducedMotion: boolean): void {
-    const now = performance.now();
+    const now = clock();
     for (const event of events) {
       if (!('plotId' in event) || event.type === 'CommandRejected') continue;
       const anchor = plotsById.get(event.plotId);
@@ -235,7 +238,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }
 
   function draw(): void {
-    const now = performance.now();
+    const now = clock();
     // Until the drop starts the island waits far above the view (still compiled, just off screen).
     garden.position.y = islandLanded || currentReducedMotion ? 0
       : introStartMs === -Infinity ? ISLAND_WAIT_Y : islandDropY(now - introStartMs);

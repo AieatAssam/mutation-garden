@@ -12,7 +12,9 @@ if (new URLSearchParams(location.search).has('reconcile')) {
   const canvas = document.querySelector<HTMLCanvasElement>('#stage')!;
   const status = document.querySelector<HTMLElement>('#status')!;
   const motion = document.querySelector<HTMLInputElement>('#reduced-motion')!;
-  const renderer = createRenderer(canvas, renderOptions);
+  // A manual presentation clock makes every case's frame repeatable (no idle motion drift between cases).
+  let clockMs = 0;
+  const renderer = createRenderer(canvas, { ...renderOptions, now: () => clockMs });
   let reducedMotion = false;
   let currentCase = 'empty';
   const snapshot = (nowMs: number, plants: readonly (PlantSnapshot | null)[]): GardenSnapshot => ({ coins: 100, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, nowMs,
@@ -29,14 +31,14 @@ if (new URLSearchParams(location.search).has('reconcile')) {
       const plants = Array.from({ length: 6 }, (_, index) => plant(index * 100, index === 5 ? 'Harvestable' : 'Growing', (index + 1) / 7));
       previous = snapshot(1000, plants); current = snapshot(1100, plants);
     }
+    // Every case starts at the same presentation time, then steps 250 ms so short fades (harvested
+    // stamps fade over 120 ms) finish before the settled frame.
+    clockMs = 10_000;
     renderer.render(previous, current, 0.5, reducedMotion);
-    // Let short presentation fades (harvested stamps fade over 120 ms) finish, then report the settled case.
+    clockMs += 250;
+    renderer.render(current, current, 1, reducedMotion);
     status.dataset.case = '';
-    setTimeout(() => {
-      if (currentCase !== name) return;
-      renderer.render(current, current, 1, reducedMotion);
-      status.dataset.case = name;
-    }, 250);
+    requestAnimationFrame(() => { if (currentCase === name) status.dataset.case = name; });
   };
   function resize() { renderer.resize(innerWidth, innerHeight); }
   window.addEventListener('resize', resize); resize(); setCase('empty');

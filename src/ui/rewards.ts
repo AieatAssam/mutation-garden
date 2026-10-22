@@ -85,9 +85,10 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
         if (event.type === 'Harvested') {
           const point = options.projectPlot(event.plotId);
           if (!point) continue;
-          floatLabel(`+${event.coins}`, point.x, point.y, 'coins', reducedMotion);
+          // Labels sit above the plant so the fruit's flight to the crate stays visible.
+          floatLabel(`+${event.coins}`, point.x, point.y - 44, 'coins', reducedMotion);
           const note = event.size === 'big' ? 'Big' : event.fresh ? 'Fresh' : null;
-          if (note) floatLabel(note, point.x, point.y - 30, 'note', reducedMotion);
+          if (note) floatLabel(note, point.x, point.y - 74, 'note', reducedMotion);
           flyCoins(event.coins, point.x, point.y, reducedMotion);
         } else if (event.type === 'HarvestCompleted' && event.count > 1) {
           const banner = document.createElement('div');

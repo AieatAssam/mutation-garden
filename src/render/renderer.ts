@@ -168,7 +168,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       switch (event.type) {
         case 'Planted':
           particles.burst({ origin: effectPoint.clone().setY(effectPoint.y + 0.05), count: 9,
-            colors: palette.environment.soil.slice(0, 3), speed: 1.4, up: 1.2, gravity: 5, lifeMs: 380, size: 0.07 }, now, reducedMotion);
+            colors: palette.environment.soil.slice(0, 3), speed: 1.4, up: 1.2, gravity: 5, lifeMs: 380, size: 0.15 }, now, reducedMotion);
           break;
         case 'StageReached':
         case 'Harvestable': {
@@ -180,13 +180,13 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
             colors: event.type === 'Harvestable'
               ? [ramp(species).fruit[0], palette.ink['paper-white'], ramp(species).fruit[1]]
               : [ramp(species).leaf[0], ramp(species).leaf[1]],
-            speed: 1.1, up: 1.6, gravity: 4, lifeMs: 450, size: 0.06 }, now, reducedMotion);
+            speed: 1.1, up: 1.6, gravity: 4, lifeMs: 450, size: 0.12 }, now, reducedMotion);
           break;
         }
         case 'Watered':
           particles.burst({ origin: effectPoint.clone().setY(effectPoint.y + 1.3), count: 14,
             colors: [palette.environment.water[0], palette.environment.water[1]], speed: 0.5, up: -1.5, gravity: 7,
-            lifeMs: 420, size: 0.05 }, now, reducedMotion);
+            lifeMs: 420, size: 0.11 }, now, reducedMotion);
           break;
         case 'Harvested': {
           flights.launch(event.speciesId, effectPoint, now, reducedMotion);
@@ -194,7 +194,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
           const fruit = plants.getTop(event.plotId, top) ? top.setY(top.y - 0.35) : effectPoint.clone().setY(effectPoint.y + 1);
           particles.burst({ origin: fruit, count: 14,
             colors: [ramp(event.speciesId).fruit[0], ramp(event.speciesId).fruit[1], ramp(event.speciesId).leaf[1]],
-            speed: 2.2, up: 1.8, gravity: 6, lifeMs: 480, size: 0.07 }, now, reducedMotion);
+            speed: 2.2, up: 1.8, gravity: 6, lifeMs: 480, size: 0.15 }, now, reducedMotion);
           break;
         }
         default:

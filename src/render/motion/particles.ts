@@ -42,6 +42,8 @@ export function createParticles(capacity = PARTICLE_CAPACITY): Particles {
   mesh.name = 'particles';
   mesh.frustumCulled = false;
   mesh.renderOrder = 5;
+  // Create instance colours now so the shader is compiled with them before the first burst.
+  mesh.setColorAt(0, new Color(1, 1, 1));
   mesh.count = 0;
   const live: Particle[] = [];
   const colors: Color[] = [];

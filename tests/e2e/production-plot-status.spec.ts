@@ -6,6 +6,7 @@ import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCame
 import { getPlotStatusDialFacing } from '../../src/render/plot-status';
 import { captureVisibleBodyMasks } from './production-body-mask';
 import { palette } from '../../src/render/palette';
+import { expectHarvestPaid } from './payout';
 import { SPECIES } from '../../src/sim';
 
 type Point = { x: number; y: number };
@@ -656,7 +657,7 @@ test('production status stamps stay visible and harvest their owning species', a
 
   await attachGardenCapture(page, info, `${info.project.name}-ripe-before-harvest.png`);
 
-  for (const [index, speciesId] of (['sunny-sprout', 'bubble-berry', 'twistroot'] as const).entries()) {
+  for (const speciesId of ['sunny-sprout', 'bubble-berry', 'twistroot'] as const) {
     const stamp = renderedStamps[speciesId];
     expect(stamp.box.width, `${speciesId} stamp width`).toBeGreaterThanOrEqual(26);
     expect(stamp.box.height, `${speciesId} stamp height`).toBeGreaterThanOrEqual(26);
@@ -666,8 +667,7 @@ test('production status stamps stay visible and harvest their owning species', a
     expect(stamp.box.y + stamp.box.height).toBeLessThanOrEqual(viewport.height);
     expect(stamp.box.y + stamp.box.height).toBeLessThan(tray!.y);
 
-    await realActivate(page, stamp.center, mobile);
-    await waitForCoins(page, [5, 11, 21][index]!);
+    await expectHarvestPaid(page, () => realActivate(page, stamp.center, mobile));
   }
   await attachGardenCapture(page, info, `${info.project.name}-after-harvest.png`);
   expect(errors).toEqual([]);
@@ -701,15 +701,16 @@ test('production stamp swipe cancellation and immediate repeat pay once without 
 
   frames = await freezeFrames(page);
   const beforeRepeat = await stageSignature(page);
-  await realSwipe(page, gesture, mobile);
-  await realSwipe(page, gesture, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  expect(await stageSignature(page), 'both repeated stamp-start swipes leave the garden and camera unchanged while frames are frozen')
-    .toBe(beforeRepeat);
-  await resumeFrames(page);
-  await waitForCoins(page, 21);
+  const harvest = await expectHarvestPaid(page, async () => {
+    await realSwipe(page, gesture, mobile);
+    await realSwipe(page, gesture, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    expect(await stageSignature(page), 'both repeated stamp-start swipes leave the garden and camera unchanged while frames are frozen')
+      .toBe(beforeRepeat);
+    await resumeFrames(page);
+  });
   await waitForSimulationOpportunity(page);
-  await waitForCoins(page, 21);
+  await waitForCoins(page, harvest.after);
 });
 
 test('production camera pan, zoom and resize keep fresh fruit picks playable', async ({ page }, info) => {
@@ -767,10 +768,11 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   expect(await stageSignature(page), 'empty-ground pan changes the rendered camera while app frames are frozen')
     .not.toBe(cameraBeforePan);
   const stampAfterPan = await readStamp(page, 'sunny-sprout', camera);
-  await realActivate(page, stampAfterPan.center, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  await resumeFrames(page);
-  await waitForCoins(page, 5);
+  await expectHarvestPaid(page, async () => {
+    await realActivate(page, stampAfterPan.center, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    await resumeFrames(page);
+  });
   frames = await freezeFrames(page);
   const stageBoundsForZoom = await stage.boundingBox();
   expect(stageBoundsForZoom).not.toBeNull();
@@ -815,10 +817,11 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   expect(stampAfterZoom.box.width,
     `fresh zoomed Bubble Berry stamp remains visible; contacts=${JSON.stringify(groundPair)}, plots=${JSON.stringify(plotsAfterPan)}, stamps=${JSON.stringify([twistrootStampBeforePan.center, stampAfterPan.center, stampForZoom.center, stampAfterZoom.center])}`)
     .toBeGreaterThanOrEqual(26);
-  await realActivate(page, stampAfterZoom.center, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  await resumeFrames(page);
-  await waitForCoins(page, 11);
+  await expectHarvestPaid(page, async () => {
+    await realActivate(page, stampAfterZoom.center, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    await resumeFrames(page);
+  });
   frames = await freezeFrames(page);
   await page.setViewportSize(mobile ? { width: 412, height: 915 } : { width: 1024, height: 768 });
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
@@ -834,11 +837,12 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
       }).__gardenTestFrames.count());
     }, { once: true, capture: true });
   });
-  await realActivate(page, stampAfterResize.center, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  expect(Number(await page.locator('body').getAttribute('data-pointer-down-at-frame'))).toBe(frames);
-  await resumeFrames(page);
-  await waitForCoins(page, 21);
+  await expectHarvestPaid(page, async () => {
+    await realActivate(page, stampAfterResize.center, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    expect(Number(await page.locator('body').getAttribute('data-pointer-down-at-frame'))).toBe(frames);
+    await resumeFrames(page);
+  });
   await session?.detach();
   expect(errors).toEqual([]);
 });

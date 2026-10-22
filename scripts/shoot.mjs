@@ -33,7 +33,7 @@ for (const [name, viewport, scale] of [['phone', { width: 390, height: 844 }, 2]
   } else {
     // Phone plot centres (CSS px) for the current camera; desktop skips planting.
     if (name !== 'phone') { await page.close(); continue; }
-    const plots = [[157, 345], [271, 365], [124, 407], [238, 426], [91, 468], [205, 488]];
+    const plots = [[157, 314], [271, 334], [124, 378], [238, 399], [91, 443], [205, 463]];
     const order = ['Twistroot', 'Bubble Berry', 'Sunny Sprout', 'Sunny Sprout', 'Sunny Sprout', 'Sunny Sprout'];
     for (const [index, [x, y]] of plots.entries()) {
       await page.getByRole('button', { name: order[index] }).click();

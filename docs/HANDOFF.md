@@ -21,7 +21,6 @@ Living note for whoever picks this up next (human, Claude or Codex). Update it a
 
 - Ambient life is time-based. Specs that compare frames must use reduced motion (wind, clouds and creatures hold still) or a manual clock (`createRenderer(canvas, { now })`, see `tests/e2e/fixtures/sunny-sprout.ts`).
 - `scripts/shoot.mjs --gpu` for sharp review shots; the software renderer is slow enough that the pixel-ratio probe picks 1×.
-- `scripts/shoot.mjs --plant` misses the Twistroot plot (5 of 6 planted); its plot centres need refreshing.
 
 - Procedural plant rigs remain only for unit tests and fixtures; production waits for `plants.glb` (`waitForModels`), so a restored garden never swaps models. They can be deleted once the tests move to authored models.
 - GLBs total about 1 MB uncompressed (S5 compression).

@@ -19,7 +19,7 @@ afterEach(() => {
 
 function setup(width = 390, height = 844, getStamps?: () => readonly StampPickDescriptor[]) {
   const library = createMaterialLibrary(); libraries.push(library);
-  const garden = createGarden(library); gardens.push(garden);
+  const garden = createGarden(); gardens.push(garden);
   const camera = createGardenCamera(); resizeGardenCamera(camera, width, height);
   const rect = { left: 0, top: 0, width, height };
   const picker = createGardenPicker({ getBoundingClientRect: () => rect as DOMRect }, camera, garden, getStamps);
@@ -386,7 +386,17 @@ describe('garden picker', () => {
     expect(picker.pick(0, 0)).toBeNull();
   });
 
-  it('disposes its two geometries and one material exactly once without disposing borrowed resources', () => {
+  it('picks a bed anywhere on its footprint, beyond the 48px minimum target', () => {
+    const { garden, picker, screen } = setup();
+    garden.plots.forEach((anchor) => {
+      for (const [dx, dz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]] as const) {
+        const [x, y] = screen(anchor.localToWorld(new Vector3(dx, 0, dz)));
+        expect(picker.pick(x, y), `${anchor.plotId} corner ${dx},${dz}`).toEqual({ kind: 'plot', plotId: anchor.plotId });
+      }
+    });
+  });
+
+  it('disposes its three geometries and one material exactly once without disposing borrowed resources', () => {
     const { picker, garden } = setup();
     const borrowed: (BufferGeometry | Material)[] = [];
     garden.traverse((object) => { if (object instanceof Mesh) borrowed.push(object.geometry, object.material as Material); });
@@ -394,7 +404,7 @@ describe('garden picker', () => {
     const geometry = vi.spyOn(BufferGeometry.prototype, 'dispose');
     const material = vi.spyOn(Material.prototype, 'dispose');
     picker.dispose(); picker.dispose();
-    expect(geometry).toHaveBeenCalledTimes(2);
+    expect(geometry).toHaveBeenCalledTimes(3);
     expect(material).toHaveBeenCalledTimes(1);
     borrowedSpies.forEach((spy) => expect(spy).not.toHaveBeenCalled());
     geometry.mockRestore(); material.mockRestore();

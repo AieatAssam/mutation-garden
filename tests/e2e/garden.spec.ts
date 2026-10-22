@@ -39,10 +39,6 @@ test('garden picker covers plot targets across sizes', async ({ browserName, pag
     }));
     expect(canvasSize.width).toBeGreaterThan(0);
     expect(canvasSize.height).toBeGreaterThan(0);
-    await page.screenshot({
-      path: desktop ? 'docs/art/evidence/m1-07c-desktop-1280x800.png' : 'docs/art/evidence/m1-07c-phone-390x844.png',
-      fullPage: true,
-    });
 
     for (const viewport of viewports) {
       await page.setViewportSize(viewport);

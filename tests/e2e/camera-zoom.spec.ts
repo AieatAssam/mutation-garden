@@ -137,6 +137,7 @@ test('production zoom is deliberate, bounded, and leaves the garden playable', a
   await page.setViewportSize(viewport);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const stage = page.locator('#stage');
   await expect(stage).toBeVisible();
   const rect = await readStageRect(page);
@@ -339,8 +340,8 @@ test('production zoom is deliberate, bounded, and leaves the garden playable', a
   const fruit = sunnyFruitCenter(0, camera, finalRect);
   await page.screenshot({
     path: mobile
-      ? 'docs/art/evidence/m1-17b4b-zoom-phone-390x844.png'
-      : 'docs/art/evidence/m1-17b4b-zoom-desktop-1280x800.png',
+      ? 'test-results/evidence/m1-17b4b-zoom-phone-390x844.png'
+      : 'test-results/evidence/m1-17b4b-zoom-desktop-1280x800.png',
     // Capture the accepted viewport at CSS resolution; fullPage capture is
     // unusually slow with the mobile WebGL canvas in headless Chromium.
     scale: 'css',

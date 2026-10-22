@@ -7,3 +7,5 @@ playwright-report/
 test-results/
 coverage/
 *.log
+.claude/launch.json
+.salvage-shots/

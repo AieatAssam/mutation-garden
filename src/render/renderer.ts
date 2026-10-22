@@ -1,6 +1,5 @@
 import {
   AmbientLight,
-  Color,
   ColorManagement,
   DirectionalLight,
   HemisphereLight,
@@ -14,6 +13,7 @@ import {
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
+import { GARDEN_MODEL_URL, loadScenery } from './scenery';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, SpeciesId } from '../sim';
@@ -36,17 +36,21 @@ export interface Renderer {
   zoom(scale: number): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   pick(clientX: number, clientY: number): PickResult;
+  /** Resolves once the authored models are in the scene (or failed to load). */
+  whenLoaded(): Promise<void>;
   dispose(): void;
 }
 
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
   ColorManagement.enabled = true;
-  const gl = new WebGLRenderer({ canvas, antialias: true });
+  const gl = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   gl.outputColorSpace = SRGBColorSpace;
   gl.toneMapping = NoToneMapping;
   gl.shadowMap.enabled = false;
   gl.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-  gl.setClearColor(new Color(palette.environment['sky-day'].horizon));
+  gl.setClearAlpha(0);
+  const sky = palette.environment['sky-day'];
+  canvas.style.background = `linear-gradient(180deg, ${sky.zenith} 0%, ${sky.mid} 45%, ${sky.horizon} 85%)`;
 
   const scene = new Scene();
   const camera = createGardenCamera();
@@ -59,7 +63,16 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   scene.add(keyLight);
 
   const materials = createMaterialLibrary();
-  const garden = createGarden(materials);
+  const garden = createGarden();
+  const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
+    console.error('Garden model failed to load', error);
+  });
+  // Compile every shader before reporting ready, so the first frame with the island does not stall
+  // the main thread while the player is already tapping (slow GPUs and CI software rendering).
+  const ready = sceneryLoaded.then(() => (disposed ? undefined : gl.compileAsync(scene, camera)))
+    .then(() => undefined, (error: unknown) => {
+      console.error('Shader warm-up failed', error);
+    });
   scene.add(garden);
   const plants = createPlantReconciler(garden.plots, materials);
   const statusResources = createPlotStatusResources();
@@ -141,6 +154,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       currentReducedMotion = reducedMotion;
       plants.update(previous, current, alpha, reducedMotion);
       draw();
+    },
+    whenLoaded() {
+      return ready;
     },
     pick(clientX, clientY) {
       if (disposed) return null;

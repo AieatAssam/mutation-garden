@@ -121,8 +121,8 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
 
   await page.screenshot({
     path: testInfo.project.name === 'desktop'
-      ? 'docs/art/evidence/m1-08c2-seed-tray-desktop-1280x800.png'
-      : 'docs/art/evidence/m1-08c2-seed-tray-phone-390x844.png',
+      ? 'test-results/evidence/m1-08c2-seed-tray-desktop-1280x800.png'
+      : 'test-results/evidence/m1-08c2-seed-tray-phone-390x844.png',
     scale: 'css',
   });
 

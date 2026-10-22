@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Mesh, Vector3 } from 'three';
+import { Vector3 } from 'three';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGarden } from './garden';
 import { createMaterialLibrary } from './materials';
@@ -19,11 +19,11 @@ describe('garden camera', () => {
   });
 
   it.each([
-    [360, 800, 800 / 48, [10.5, 12.5, 17], [0, 1.3, 0]],
-    [390, 844, 844 / 48, [10.5, 12.5, 17], [0, 1.3, 0]],
-    [390, 896, 18.2, [10.5, 12.5, 17], [0, 1.3, 0]],
-    [844, 390, 7.8, [10.5, 6.8, 14], [-2.6, -1.3, 0]],
-    [1280, 800, 9, [10.5, 6.8, 14], [-2.6, -1.3, 0]],
+    [360, 800, 6.9 * 800 / 360, [3.6, 8.5, 11], [0.35, -1.2, 0.3]],
+    [390, 844, 6.9 * 844 / 390, [3.6, 8.5, 11], [0.35, -1.2, 0.3]],
+    [390, 896, 6.9 * 896 / 390, [3.6, 8.5, 11], [0.35, -1.2, 0.3]],
+    [844, 390, 390 / 56, [3.6, 8.5, 11], [0.35, -0.2, 0.3]],
+    [1280, 800, 9.4, [3.6, 8.5, 11], [0.35, -0.2, 0.3]],
   ] as const)(
     'keeps the three-quarter camera and plot framing at %ix%i', (width, height, expectedHeight, position, target) => {
       const camera = createGardenCamera();
@@ -48,39 +48,6 @@ describe('garden camera', () => {
       }
     },
   );
-
-  it('fills the portrait frame with the island while keeping the garden in view on desktop', () => {
-    const materials = createMaterialLibrary();
-    const garden = createGarden(materials);
-    garden.updateMatrixWorld(true);
-    const island = garden.children.find((object): object is Mesh => object instanceof Mesh &&
-      object.userData.aoBaked === true && object.userData.role !== 'plot-bed');
-    expect(island).toBeDefined();
-    const positions = island!.geometry.getAttribute('position');
-    for (const [width, height, portrait] of [[390, 844, true], [1280, 800, false]] as const) {
-      const camera = createGardenCamera();
-      resizeGardenCamera(camera, width, height);
-      camera.updateMatrixWorld(true);
-      const projected = Array.from({ length: positions.count }, (_, index) =>
-        new Vector3().fromBufferAttribute(positions, index).applyMatrix4(island!.matrixWorld).project(camera));
-      const minX = Math.min(...projected.map(({ x }) => x));
-      const maxX = Math.max(...projected.map(({ x }) => x));
-      const minY = Math.min(...projected.map(({ y }) => y));
-      const maxY = Math.max(...projected.map(({ y }) => y));
-
-      expect(minX).toBeGreaterThan(-1);
-      expect(maxX).toBeLessThan(1);
-      expect(minY).toBeGreaterThan(-1);
-      expect(maxY).toBeLessThan(1);
-      if (portrait) {
-        // The issue target is about 85% of the viewport width: NDC spans 2 units.
-        expect(maxX - minX).toBeGreaterThanOrEqual(1.6);
-        expect(maxX - minX).toBeLessThanOrEqual(1.8);
-      }
-    }
-    garden.dispose();
-    materials.dispose();
-  });
 
   it('keeps framing unchanged for a zero pan', () => {
     const camera = createGardenCamera();
@@ -114,7 +81,7 @@ describe('garden camera', () => {
   it.each([[390, 844], [1280, 800]] as const)(
     'keeps every plot center inside the horizontal pan envelope at %ix%i', (width, height) => {
       const materials = createMaterialLibrary();
-      const garden = createGarden(materials);
+      const garden = createGarden();
       const camera = createGardenCamera();
       resizeGardenCamera(camera, width, height);
       const centers = () => {

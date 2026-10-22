@@ -97,7 +97,7 @@ test('offers all three seeds, with Sunny selected and Twistroot selectable in a 
   await expect(twistroot).toHaveCSS('color', expectedAccentRgb);
   const view = testInfo.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
   await page.screenshot({
-    path: `docs/art/evidence/m1-07e2-seed-selection-${view}.png`,
+    path: `test-results/evidence/m1-07e2-seed-selection-${view}.png`,
     fullPage: false,
     scale: 'css',
     animations: 'disabled',

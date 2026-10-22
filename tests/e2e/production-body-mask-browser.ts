@@ -32,7 +32,7 @@ export function captureVisibleBodyMasksInBrowser({ speciesId, plotId, stage, cro
   camera.setViewOffset(stage.width, stage.height, crop.x - stage.x, crop.y - stage.y, 120, 120);
   camera.updateMatrixWorld(true);
   const materials = createMaterialLibrary();
-  const garden = createGarden(materials);
+  const garden = createGarden();
   const scene = new Scene();
   scene.add(garden);
   garden.updateMatrixWorld(true);

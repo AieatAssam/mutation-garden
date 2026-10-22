@@ -63,7 +63,7 @@ test('renders all Twistroot stages, a readable 48px silhouette, and stable reduc
   expect(pixels.touchesEdge, JSON.stringify(pixels)).toBe(false);
 
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
-  await page.screenshot({ path: `docs/art/evidence/m1-08c1-twistroot-${view}-stages.png`, scale: 'css' });
+  await page.screenshot({ path: `test-results/evidence/m1-08c1-twistroot-${view}-stages.png`, scale: 'css' });
   expect(errors).toEqual([]);
 });
 
@@ -81,6 +81,6 @@ test('keeps six ripe Twistroot plants below the garden draw-call budget', async 
   const calls = Number(await status.getAttribute('data-draw-calls'));
   expect(calls).toBeLessThan(150);
   const view = info.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
-  await page.screenshot({ path: `docs/art/evidence/m1-08c1-twistroot-${view}-six-ripe.png`, scale: 'css' });
+  await page.screenshot({ path: `test-results/evidence/m1-08c1-twistroot-${view}-six-ripe.png`, scale: 'css' });
   expect(errors).toEqual([]);
 });

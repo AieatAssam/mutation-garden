@@ -5,7 +5,7 @@ const MIN_CAMERA_ZOOM = 1;
 const MAX_CAMERA_ZOOM = 1.35;
 const PLOT_TARGET_HALF_SIZE = 24;
 const PLOT_TARGET_MARGIN = 8;
-const PORTRAIT_FRAMING_OFFSET = -2;
+const PORTRAIT_FRAMING_OFFSET = 0;
 const PLOT_TARGET_CENTERS = [
   [-1.05, 0.65, 2], [1.05, 0.65, 2],
   [-1.05, 0.65, 0], [1.05, 0.65, 0],
@@ -46,18 +46,20 @@ function maximumCameraZoom(camera: OrthographicCamera, state: CameraPanState): n
   }
 
   camera.updateMatrixWorld(true);
-  let left = Number.POSITIVE_INFINITY;
-  let right = Number.NEGATIVE_INFINITY;
+  // Zoom scales about the view centre, so fit the farthest plot target from the centre on each axis.
+  let reachX = 0;
+  let reachY = 0;
   for (const center of PLOT_TARGET_CENTERS) {
-    const screenX = (new Vector3(...center).project(camera).x + 1) * state.viewportWidth / 2;
-    left = Math.min(left, screenX);
-    right = Math.max(right, screenX);
+    const projected = new Vector3(...center).project(camera);
+    reachX = Math.max(reachX, Math.abs(projected.x) * state.viewportWidth / 2);
+    reachY = Math.max(reachY, Math.abs(projected.y) * state.viewportHeight / 2);
   }
 
-  const currentSpan = right - left;
-  const availableWidth = state.viewportWidth - 2 * (PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN);
-  if (!Number.isFinite(currentSpan) || currentSpan <= 0 || availableWidth <= 0) return MIN_CAMERA_ZOOM;
-  const fitZoom = camera.zoom * availableWidth / currentSpan;
+  const margin = PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN;
+  const availableX = state.viewportWidth / 2 - margin;
+  const availableY = state.viewportHeight / 2 - margin;
+  if (!(reachX > 0) || !(reachY > 0) || availableX <= 0 || availableY <= 0) return MIN_CAMERA_ZOOM;
+  const fitZoom = camera.zoom * Math.min(availableX / reachX, availableY / reachY);
   return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, fitZoom));
 }
 
@@ -109,18 +111,12 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   const safeHeight = height;
   const aspect = safeWidth / safeHeight;
   const portrait = aspect < 1;
-  const viewHeight = portrait
-    ? Math.min(18.2, safeHeight / 48)
-    : Math.min(9, safeHeight / 50);
+  // Portrait fits the beds plus a margin to the phone width and lets the island run off the sides.
+  const viewHeight = portrait ? Math.min(18.2, 6.9 / aspect) : Math.min(9.4, safeHeight / 56);
 
   const state = getPanState(camera);
-  if (portrait) {
-    state.basePosition.set(10.5, 12.5, 17);
-    state.baseTarget.set(0, 1.3, 0);
-  } else {
-    state.basePosition.set(10.5, 6.8, 14);
-    state.baseTarget.set(-2.6, -1.3, 0);
-  }
+  state.basePosition.set(3.6, 8.5, 11);
+  state.baseTarget.set(0.35, portrait ? -1.2 : -0.2, 0.3);
   state.viewportWidth = safeWidth;
   state.viewportHeight = safeHeight;
   state.lastSaturatedInput = undefined;

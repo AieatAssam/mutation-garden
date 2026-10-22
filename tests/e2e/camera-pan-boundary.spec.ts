@@ -17,6 +17,7 @@ test('maximum horizontal pan keeps every plot target on screen', async ({ page }
   await page.setViewportSize(viewport);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-boot', 'webgl');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   await expect(page.locator('#stage')).toBeVisible();
 
   await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/garden-render.html');
@@ -54,8 +55,8 @@ test('maximum horizontal pan keeps every plot target on screen', async ({ page }
 
     await page.screenshot({
       path: desktop
-        ? `docs/art/evidence/m1-17a1b-pan-envelope-desktop-${edge}-1280x800.png`
-        : `docs/art/evidence/m1-17a1b-pan-envelope-phone-${edge}-390x844.png`,
+        ? `test-results/evidence/m1-17a1b-pan-envelope-desktop-${edge}-1280x800.png`
+        : `test-results/evidence/m1-17a1b-pan-envelope-phone-${edge}-390x844.png`,
       fullPage: true,
     });
   }

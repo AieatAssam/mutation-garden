@@ -16,7 +16,7 @@ export interface FixedStepLoopOptions {
   readonly requestFrame: (callback: (timestampMs: number) => void) => number;
   readonly cancelFrame: (handle: number) => void;
   readonly onRender: (frame: RenderFrame) => void;
-  readonly onEvents?: (events: readonly SimEvent[]) => void;
+  readonly onEvents?: (events: readonly SimEvent[], nowMs: number) => void;
 }
 
 export interface FixedStepLoop {
@@ -48,7 +48,7 @@ export function createFixedStepLoop(options: FixedStepLoopOptions): FixedStepLoo
     const result = step(state, commands, nowMs);
     state = result.state;
     current = getSnapshot(state);
-    if (result.events.length > 0) options.onEvents?.(result.events);
+    if (result.events.length > 0) options.onEvents?.(result.events, current.nowMs);
     return result;
   };
 

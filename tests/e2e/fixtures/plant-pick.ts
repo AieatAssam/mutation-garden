@@ -21,7 +21,7 @@ const initialRect = stage.getBoundingClientRect();
 renderer.resize(initialRect.width, initialRect.height);
 
 const materials = createMaterialLibrary();
-const garden = createGarden(materials);
+const garden = createGarden();
 const reconciler = createPlantReconciler(garden.plots, materials);
 reconciler.update(snapshot, snapshot, 1, true);
 garden.updateMatrixWorld(true);

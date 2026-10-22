@@ -8,7 +8,7 @@ You write tests for Mutation Garden. Read AGENTS.md, docs/architecture.md (Testi
 - Sim: Vitest unit tests in src/sim/**/*.test.ts. Cover rules, invalid input, determinism (same seed + same commands = same state), step-size independence, integer coin maths.
 - Saves: fixture JSON under tests/fixtures/saves/ for every schema version; each must migrate to the current schema.
 - Offline catch-up: property tests for idempotence and additivity.
-- Browser: Playwright specs in tests/e2e/ that pass on both the mobile-portrait and desktop projects. Use real taps and swipes, not direct state pokes. Wait on app signals or DOM state, never fixed sleeps.
+- Browser: Playwright specs in tests/e2e/ for gameplay flows (plant, harvest, swipe, pan, zoom, refresh) that pass on both the mobile-portrait and desktop projects. Do not pin art geometry or pixel positions. Use real taps and swipes, not direct state pokes. Wait on app signals or DOM state, never fixed sleeps.
 - Never add retries, test.skip, or looser assertions to get green. A flaky test is a bug: find the cause.
 - Keep src/ changes out of your diff unless the task says so; if a test exposes a bug, report it.
 """

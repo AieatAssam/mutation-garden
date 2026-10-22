@@ -191,6 +191,8 @@ Each plant must be identifiable as a solid black shape at 48 px tall.
 
 ## 8. Motion principles
 
+The full, binding motion and effects spec is [motion.md](motion.md). This section is the summary.
+
 1. **Everything lands.** A seed drops, overshoots into the soil (squash to 0.7 height, 1.25 width), and springs back over 220 ms. Use spring easing with light damping, not ease-in-out.
 2. **Growth is smooth, with a pop at each stage.** The brief requires smooth growth, not model swaps. Each species is one rig whose parts (stem length, leaf unfurl, fruit size, Twistroot's twist) are driven continuously by growth progress, eased so it never looks linear. Crossing a stage (Seed, Sprout, Growing, Mature, Harvestable) adds a 160 ms accent (scale ×1.08 → 1.0), a puff of soil and the growth-pop sound. The plant also breathes: ±2% vertical scale on a 2.4 s loop, offset per plant so the garden doesn't move in sync. Leaves flick when touched.
 3. **Ripe means hop and stamp.** Every species uses the same four signals: a growth dial on the bed rim, fruit that warms from step 4 to step 2, one silhouette change plus a small hop every 3 s at Harvestable, and a round seed-packet stamp above the plant. Sparkles are for the Golden mutation only. No arrows or exclamation icons. Numbers: [m1-liveliness.md](m1-liveliness.md) section 2.

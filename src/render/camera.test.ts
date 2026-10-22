@@ -233,6 +233,20 @@ describe('garden camera', () => {
     expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);
   });
 
+  it.each([[0, -1e9], [0, 1e9]] as const)('keeps every plot on screen after a vertical pan (%s, %s) and a full zoom', (dx, dy) => {
+    const camera = createGardenCamera();
+    resizeGardenCamera(camera, 390, 844);
+    panGardenCamera(camera, dx, dy);
+    zoomGardenCamera(camera, 1e100);
+    panGardenCamera(camera, dx, dy);
+    camera.updateMatrixWorld(true);
+    for (const [x, z] of [[-1.05, 2], [1.05, 2], [-1.05, 0], [1.05, 0], [-1.05, -2], [1.05, -2]]) {
+      const y = (1 - new Vector3(x, 0.65, z).project(camera).y) * 844 / 2;
+      expect(y).toBeGreaterThanOrEqual(32 - 1e-6);
+      expect(y).toBeLessThanOrEqual(844 - 32 + 1e-6);
+    }
+  });
+
   it('responds immediately when zoom reverses after reaching a limit', () => {
     const camera = createGardenCamera();
     resizeGardenCamera(camera, 390, 844);

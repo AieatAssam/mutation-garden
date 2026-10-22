@@ -409,6 +409,14 @@
   line-height: 1.25;
   text-align: center;
   transform: translateX(-50%);
+  /* One line only: the camera keeps back-row stamps below it (topHudPx in src/render/camera.ts). */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.garden-ui__hint.is-long {
+  white-space: normal;
 }
 
 /* Wide screens: the objective joins the top row, right of the level chip, so it never covers
@@ -419,9 +427,15 @@
     right: calc(var(--garden-safe-right) + 130px);
     left: auto;
     max-width: calc(50% - 190px);
+    font-size: 14px;
     text-align: left;
     transform: none;
   }
+}
+
+/* While the "While you were away" card offers its own one-tap harvest, the tray button steps aside. */
+.garden-ui__away:not([hidden]) ~ .garden-ui__tray .garden-ui__harvest-all {
+  display: none;
 }
 
 /* Sits on its own just above the tray, so it never covers a seed card. */

@@ -52,8 +52,9 @@ function maximumCameraZoom(camera: OrthographicCamera, state: CameraPanState): n
     return MAX_CAMERA_ZOOM;
   }
 
-  // Solve the limit from the resting pose at zoom 1: screen reach grows linearly with zoom about the
-  // view centre, so the answer is the same however the player panned or zoomed to get here.
+  // Solve the limit at zoom 1 from the resting pose: screen reach grows linearly with zoom about the
+  // view centre, so repeated pinches always meet the same limit. Pan is clamped separately
+  // (keepPlotTargetsInView), so a panned view still keeps every plot on screen.
   const offset = state.offset.clone();
   const zoom = camera.zoom;
   state.offset.set(0, 0, 0);
@@ -95,12 +96,37 @@ function keepPlotTargetsInView(camera: OrthographicCamera, state: CameraPanState
   if (state.viewportWidth <= 0) return;
   applyPose(camera, state);
   const [minDelta, maxDelta] = horizontalPanDeltaBounds(camera, state.viewportWidth);
-  if (minDelta > maxDelta) return;
-  const correction = Math.max(minDelta, Math.min(maxDelta, 0));
-  if (correction === 0) return;
-  const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-  const worldUnitsPerCssPixel = (camera.right - camera.left) / (state.viewportWidth * camera.zoom);
-  state.offset.addScaledVector(right, -correction * worldUnitsPerCssPixel);
+  const correction = minDelta <= maxDelta ? Math.max(minDelta, Math.min(maxDelta, 0)) : 0;
+  if (correction !== 0) {
+    const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const worldUnitsPerCssPixel = (camera.right - camera.left) / (state.viewportWidth * camera.zoom);
+    state.offset.addScaledVector(right, -correction * worldUnitsPerCssPixel);
+    applyPose(camera, state);
+  }
+  keepPlotTargetsInViewVertically(camera, state);
+}
+
+/** Pan and zoom can carry the front or back row off screen vertically; slide the view back. */
+function keepPlotTargetsInViewVertically(camera: OrthographicCamera, state: CameraPanState): void {
+  if (state.viewportHeight <= 0) return;
+  camera.updateMatrixWorld(true);
+  const margin = PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN;
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const center of PLOT_TARGET_CENTERS) {
+    const y = (1 - new Vector3(...center).project(camera).y) * state.viewportHeight / 2;
+    top = Math.min(top, y);
+    bottom = Math.max(bottom, y);
+  }
+  // Screen pixels to move the garden down (positive) or up so every plot target fits.
+  const lowest = margin - top;
+  const highest = state.viewportHeight - margin - bottom;
+  if (lowest > highest) return;
+  const shift = Math.max(lowest, Math.min(highest, 0));
+  if (shift === 0) return;
+  const up = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  state.offset.addScaledVector(up, shift * (camera.top - camera.bottom) / (state.viewportHeight * camera.zoom));
+  applyPose(camera, state);
 }
 
 /** World-space shift that brings every ready stamp below the top HUD row, or null when none is needed. */
@@ -267,6 +293,8 @@ export function panGardenCamera(
   if (inputWasBounded && state.offset.length() >= MAX_PAN_DISTANCE - 1e-9) {
     state.lastSaturatedInput = { deltaXCss, deltaYCss };
   }
+  applyPose(camera, state);
+  keepPlotTargetsInViewVertically(camera, state);
   keepStampsBelowHud(camera, state);
   applyPose(camera, state);
 }

@@ -233,6 +233,8 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     levelBar.setAttribute('aria-valuenow', String(progress));
     hint.textContent = state.hint ?? '';
     hint.hidden = !state.hint;
+    // Objectives fit one line; rare long notices (saves) wrap so nothing is cut off.
+    hint.classList.toggle('is-long', (state.hint ?? '').length > 40);
     const ripe = state.ripeCount ?? 0;
     harvestAll.hidden = ripe < 2 || !options.onHarvestAll;
     harvestAll.textContent = `Harvest all ${ripe}`;

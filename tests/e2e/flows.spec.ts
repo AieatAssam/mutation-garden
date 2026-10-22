@@ -31,7 +31,7 @@ async function openGarden(page: Page, mobile: boolean): Promise<(index: number) 
 }
 
 const waitUntil = (page: Page, timestampMs: number) => expect.poll(() => page.evaluate(() => Date.now()),
-  { intervals: [50, 100], timeout: 15_000 }).toBeGreaterThanOrEqual(timestampMs);
+  { intervals: [50, 100], timeout: 25_000 }).toBeGreaterThanOrEqual(timestampMs);
 
 test('a new player is guided from the first plant to the first harvest within 30 s', async ({ page }, info) => {
   const mobile = info.project.name === 'mobile-portrait';
@@ -43,27 +43,35 @@ test('a new player is guided from the first plant to the first harvest within 30
   await expect(hint).toHaveText('Tap a plot to plant.');
   await tapPlot(0);
   await expect(coins).toHaveText('11');
-  await expect(hint).toHaveText('Plants grow on their own. Tap one to water it.');
+  await expect(hint).toHaveText('Tap a growing plant to water it.');
   await expect(hint).toHaveText('Tap the ripe plant to harvest it.', { timeout: 12_000 });
   await expectHarvestPaid(page, () => tapPlot(0));
   expect(await page.evaluate(() => Date.now()) - startedAt).toBeLessThan(30_000);
 });
 
-test('watering a sprout makes it ripe sooner', async ({ page }, info) => {
-  const mobile = info.project.name === 'mobile-portrait';
-  const tapPlot = await openGarden(page, mobile);
-  const coins = page.getByRole('status', { name: 'Coins' });
+test.describe('watering', () => {
+  test.beforeEach(async ({ page }) => startWithSave(page));
 
-  await tapPlot(2);
-  await expect(coins).toHaveText('11');
-  const plantedAt = await page.evaluate(() => Date.now());
-  // After the replant guard (2.5 s) the plant is a Sprout; watering cuts 30% of the 5.3 s left, so it
-  // ripens near 6.4 s instead of 8 s.
-  await waitUntil(page, plantedAt + 2_700);
-  await tapPlot(2);
-  await waitUntil(page, plantedAt + 6_900);
-  await tapPlot(2);
-  await expect(coins).not.toHaveText('11', { timeout: Math.max(1, plantedAt + 7_800 - await page.evaluate(() => Date.now())) });
+  test('watering a sprout makes it ripe sooner', async ({ page }, info) => {
+    const mobile = info.project.name === 'mobile-portrait';
+    const tapPlot = await openGarden(page, mobile);
+    const coins = page.getByRole('status', { name: 'Coins' });
+    await page.getByRole('navigation', { name: 'Seeds' }).getByRole('button', { name: 'Twistroot' }).click();
+
+    // Twistroot: Sprout from 3 s, ripe at 25 s. Times are taken before the plant tap, so the real
+    // plant time is a little later and every deadline below errs on the safe side.
+    const beforePlant = await page.evaluate(() => Date.now());
+    await tapPlot(2);
+    await expect(coins).toHaveText('7');
+    await waitUntil(page, beforePlant + 3_600);
+    await tapPlot(2);
+    // Watering cuts 30% of the time left (about 6 s), so it ripens near 19 s instead of 25 s.
+    await waitUntil(page, beforePlant + 20_000);
+    await tapPlot(2);
+    await expect.poll(() => coins.textContent(), { intervals: [50], timeout: 4_000 }).not.toBe('7');
+    expect(await page.evaluate(() => Date.now()), 'paid before it could have ripened unwatered')
+      .toBeLessThan(beforePlant + 25_000);
+  });
 });
 
 test.describe('with every seed unlocked', () => {

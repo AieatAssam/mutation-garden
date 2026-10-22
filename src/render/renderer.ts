@@ -8,6 +8,7 @@ import {
   Quaternion,
   Scene,
   SRGBColorSpace,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
@@ -53,6 +54,9 @@ export interface Renderer {
 }
 
 const INTRO_MS = 900;
+const PIXEL_RATIO_PROBE_FRAMES = 3;
+/** A frame slower than this at full resolution (60 fps leaves 16.7 ms) drops the pixel ratio to 1. */
+const SLOW_FRAME_MS = 14;
 const ISLAND_WAIT_Y = 60;
 
 /** Island height offset during the drop-in: falls 3.5 units in 450 ms, then one small bounce. */
@@ -131,6 +135,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       warm.removeFromParent();
       for (const rig of rigs) rig.dispose();
     }
+    if (disposed) return;
+    choosePixelRatio();
     // The island drops in once everything is ready (design.md 3, 0 s); "loaded" waits for it to land,
     // so the first tap never meets a moving garden. Reduced motion skips the drop.
     if (disposed) return;
@@ -248,6 +254,31 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     flights.update(now);
     refreshStatus();
     gl.render(scene, camera);
+  }
+
+  /**
+   * Adaptive resolution (architecture.md, performance): time a few synced frames of the full island
+   * once, before "ready", and drop to 1× if they are slow. Deciding once keeps the picture stable.
+   */
+  function choosePixelRatio(): void {
+    if (gl.getPixelRatio() <= 1) return;
+    const context = gl.getContext();
+    const pixel = new Uint8Array(4);
+    const wait = garden.position.y;
+    garden.position.y = 0;
+    gl.render(scene, camera);
+    context.readPixels(0, 0, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+    const start = performance.now();
+    for (let frame = 0; frame < PIXEL_RATIO_PROBE_FRAMES; frame += 1) {
+      gl.render(scene, camera);
+      context.readPixels(0, 0, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+    }
+    garden.position.y = wait;
+    if ((performance.now() - start) / PIXEL_RATIO_PROBE_FRAMES > SLOW_FRAME_MS) {
+      const size = gl.getSize(new Vector2());
+      gl.setPixelRatio(1);
+      gl.setSize(size.x, size.y, false);
+    }
   }
 
   function layout(width: number, height: number): void {

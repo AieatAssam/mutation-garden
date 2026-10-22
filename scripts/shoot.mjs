@@ -1,10 +1,13 @@
-// Captures the running game at phone and desktop sizes: node scripts/shoot.mjs <outDir> [url] [--plant]
+// Captures the running game at phone and desktop sizes: node scripts/shoot.mjs <outDir> [url] [--plant] [--gpu]
+// --gpu uses the real GPU (sharper: the software renderer is slow enough to drop the pixel ratio to 1).
 // --plant plants a mix on the phone and captures at 3 s, 9 s and 26 s.
 import { chromium } from '@playwright/test';
 const args = process.argv.slice(2);
 const plantMode = args.includes('--plant');
 const [out = '.', url = 'http://localhost:5173/mutation-garden/'] = args.filter((arg) => !arg.startsWith('--'));
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch(args.includes('--gpu')
+  ? { headless: false, args: ['--window-position=-2400,0'] }
+  : { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 for (const [name, viewport, scale] of [['phone', { width: 390, height: 844 }, 2], ['desktop', { width: 1280, height: 800 }, 1]]) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: scale });
   if (plantMode) {

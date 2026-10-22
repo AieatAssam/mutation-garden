@@ -15,7 +15,7 @@ if (new URLSearchParams(location.search).has('reconcile')) {
   const renderer = createRenderer(canvas, renderOptions);
   let reducedMotion = false;
   let currentCase = 'empty';
-  const snapshot = (nowMs: number, plants: readonly (PlantSnapshot | null)[]): GardenSnapshot => ({ coins: 100, nowMs,
+  const snapshot = (nowMs: number, plants: readonly (PlantSnapshot | null)[]): GardenSnapshot => ({ coins: 100, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, nowMs,
     plots: Array.from({ length: 6 }, (_, index) => ({ id: `plot-${index}`, plant: plants[index] ?? null })) });
   const plant = (plantedAt: number, stage: PlantSnapshot['stage'], progress: number): PlantSnapshot => ({ speciesId: 'sunny-sprout', plantedAt, stage, progress });
   const setCase = (name: string) => {

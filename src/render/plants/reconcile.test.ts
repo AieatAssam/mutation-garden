@@ -12,7 +12,7 @@ const setup = (ids: PlotId[] = ['plot-0']) => {
   return { anchors, materials, reconciler: createPlantReconciler(anchors, materials) };
 };
 const plant = (plantedAt: number, progress: number, stage: PlantSnapshot['stage'] = 'Growing', speciesId: PlantSnapshot['speciesId'] = 'sunny-sprout'): PlantSnapshot => ({ speciesId, plantedAt, progress, stage });
-const snap = (nowMs: number, values: (PlantSnapshot | null)[], ids: PlotId[] = values.map((_, i) => `plot-${i}`)) => ({ nowMs, coins: 12, plots: values.map((value, i) => ({ id: ids[i]!, plant: value })) }) as GardenSnapshot;
+const snap = (nowMs: number, values: (PlantSnapshot | null)[], ids: PlotId[] = values.map((_, i) => `plot-${i}`)) => ({ nowMs, coins: 12, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, plots: values.map((value, i) => ({ id: ids[i]!, plant: value })) }) as GardenSnapshot;
 const part = (root: Object3D, name: string) => { let found: Mesh | undefined; root.traverse((node) => { if (node instanceof Mesh && node.userData.part === name) found = node; }); return found!; };
 const isSemanticSurface = (mesh: Mesh) => {
   const name = String(mesh.userData.part ?? mesh.name);

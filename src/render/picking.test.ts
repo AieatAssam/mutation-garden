@@ -44,7 +44,7 @@ function updateSunnyPlant(garden: Garden, reconciler: PlantReconciler, stage: Pl
   const plant: PlantSnapshot = { speciesId: 'sunny-sprout', plantedAt: 0, stage, progress };
   const snapshot = {
     nowMs: 8_000,
-    coins: 12,
+    coins: 12, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10,
     plots: garden.plots.map(({ plotId }) => ({ id: plotId, plant: plotId === 'plot-0' ? plant : null })),
   } as GardenSnapshot;
   reconciler.update(snapshot, snapshot, 1, true);
@@ -57,7 +57,7 @@ function addRipeTwistroot(garden: Garden): PlantReconciler {
   const plant: PlantSnapshot = { speciesId: 'twistroot', plantedAt: 0, stage: 'Harvestable', progress: 1 };
   const snapshot = {
     nowMs: 25_000,
-    coins: 12,
+    coins: 12, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10,
     plots: garden.plots.map(({ plotId }) => ({ id: plotId, plant: plotId === 'plot-0' ? plant : null })),
   } as GardenSnapshot;
   reconciler.update(snapshot, snapshot, 1, true);

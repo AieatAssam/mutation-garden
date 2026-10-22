@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "savedAt": 1760000005000,
+  "appVersion": "fixture",
+  "checksum": "5424db65",
+  "state": {
+    "schema": 1,
+    "coins": 8,
+    "lastNowMs": 1760000000000,
+    "rngState": 3683392648,
+    "plots": [
+      {
+        "id": "plot-0",
+        "plant": {
+          "speciesId": "sunny-sprout",
+          "plantedAt": 1760000000000,
+          "size": "regular"
+        }
+      },
+      {
+        "id": "plot-1",
+        "plant": null
+      },
+      {
+        "id": "plot-2",
+        "plant": {
+          "speciesId": "bubble-berry",
+          "plantedAt": 1760000000000,
+          "size": "small"
+        }
+      },
+      {
+        "id": "plot-3",
+        "plant": null
+      },
+      {
+        "id": "plot-4",
+        "plant": null
+      },
+      {
+        "id": "plot-5",
+        "plant": null
+      }
+    ]
+  }
+}

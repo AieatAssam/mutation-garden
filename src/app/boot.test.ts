@@ -218,8 +218,8 @@ describe('boot animation wiring', () => {
 
   it('forwards a later snapshot coin total without reusing the initial balance', () => {
     createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI });
-    const initial: GardenSnapshot = { coins: 12, nowMs: 1_000, plots: [] };
-    const later: GardenSnapshot = { ...initial, coins: 7, nowMs: 1_100 };
+    const initial: GardenSnapshot = { coins: 12, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, nowMs: 1_000, plots: [] };
+    const later: GardenSnapshot = { ...initial, coins: 7, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, nowMs: 1_100 };
     vi.spyOn(loopModule, 'createFixedStepLoop').mockImplementation((options) => ({
       enqueue: vi.fn(), catchUp: vi.fn(), stop: vi.fn(),
       start() {

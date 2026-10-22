@@ -1,7 +1,7 @@
 import type { GardenState, PlotState } from './types';
 import { INITIAL_COINS } from '../content/species';
 
-export const SIM_SCHEMA_VERSION = 1;
+export const SIM_SCHEMA_VERSION = 2;
 export { INITIAL_COINS };
 
 function assertTimestamp(nowMs: number): void {
@@ -16,7 +16,12 @@ function assertSeed(seed: number): void {
   }
 }
 
-export function createInitialState(seed: number, nowMs: number): GardenState {
+export interface InitialStateOptions {
+  /** Starting XP, for sandbox or test gardens that begin with later seeds unlocked. */
+  readonly xp?: number;
+}
+
+export function createInitialState(seed: number, nowMs: number, options: InitialStateOptions = {}): GardenState {
   assertSeed(seed);
   assertTimestamp(nowMs);
 
@@ -30,6 +35,7 @@ export function createInitialState(seed: number, nowMs: number): GardenState {
     coins: INITIAL_COINS,
     lastNowMs: nowMs,
     rngState: seed >>> 0,
+    xp: options.xp ?? 0,
     plots,
   };
 }

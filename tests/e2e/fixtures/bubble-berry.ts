@@ -195,7 +195,7 @@ function renderSixRipeGarden() {
   const speciesForPlot = (index: number): PlantSnapshot['speciesId'] => mixedSixRipe ? mixedOrder[index]! : speciesId;
   const snapshot: GardenSnapshot = {
     nowMs: 15_000,
-    coins: 100,
+    coins: 100, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10,
     plots: garden.plots.map((plot, index) => ({
       id: plot.plotId,
       plant: { speciesId: speciesForPlot(index), plantedAt: 0, stage: 'Harvestable', progress: 1 },

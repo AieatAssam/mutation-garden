@@ -29,7 +29,10 @@ export function encodeSave(state: GardenState, savedAt: number, appVersion: stri
 }
 
 /** migrations[n] turns a schema-n state into schema n+1. Never delete one; each has a fixture test. */
-export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>) => Record<string, unknown>>> = {};
+export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>) => Record<string, unknown>>> = {
+  // Schema 2 adds garden XP (M1-S4).
+  1: (state) => ({ ...state, schema: 2, xp: 0 }),
+};
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
 const SIZES = new Set(['small', 'regular', 'big']);
@@ -41,7 +44,7 @@ export function validateState(value: unknown): value is GardenState {
   const state = value as Record<string, unknown>;
   if (state.schema !== SIM_SCHEMA_VERSION || !isCount(state.coins) || !isCount(state.lastNowMs)) return false;
   if (!Number.isInteger(state.rngState) || (state.rngState as number) < 0 || (state.rngState as number) > 0xffff_ffff) return false;
-  if (state.xp !== undefined && !isCount(state.xp)) return false;
+  if (!isCount(state.xp)) return false;
   if (!Array.isArray(state.plots) || state.plots.length === 0) return false;
   return state.plots.every((plot: unknown) => {
     if (!plot || typeof plot !== 'object') return false;

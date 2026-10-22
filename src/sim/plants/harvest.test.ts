@@ -9,7 +9,7 @@ function stateWithPlants(
   plants: Readonly<Record<string, PlantState | null>>,
   nowMs = startTime,
 ): GardenState {
-  const initial = createInitialState(seed, nowMs);
+  const initial = createInitialState(seed, nowMs, { xp: 100 });
   return {
     ...initial,
     lastNowMs: nowMs,
@@ -181,7 +181,7 @@ describe('Harvest commands', () => {
       { type: 'Harvest', plotIds: ['plot-0', 'plot-1'] },
     ];
     const replay = () => {
-      const initial = createInitialState(seed, startTime);
+      const initial = createInitialState(seed, startTime, { xp: 100 });
       const planted = step(initial, [commands[0]!], startTime).state;
       return step(planted, [commands[1]!], startTime + 8_000);
     };
@@ -209,7 +209,7 @@ describe('Harvest commands', () => {
   });
 
   it('emits growth boundary events before harvest events in the same step', () => {
-    const planted = step(createInitialState(seed, startTime), [
+    const planted = step(createInitialState(seed, startTime, { xp: 100 }), [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
     ], startTime);
     const result = step(planted.state, [harvest('plot-0')], startTime + 8_000);

@@ -11,7 +11,7 @@ const species: readonly PlotStatusSpecies[] = [
 ];
 
 function snapshot(nowMs: number, plants: Readonly<Record<string, PlantSnapshot | null>>): GardenSnapshot {
-  return { nowMs, coins: 12, plots: Object.entries(plants).map(([id, plant]) => ({ id, plant })) };
+  return { nowMs, coins: 12, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, plots: Object.entries(plants).map(([id, plant]) => ({ id, plant })) };
 }
 
 function plant(stage: PlantSnapshot['stage'], progress: number, speciesId: SpeciesId = 'sunny-sprout', plantedAt = 0): PlantSnapshot {
@@ -115,7 +115,7 @@ describe('plot status snapshot reconciliation', () => {
     const plotIds = Array.from({ length: 6 }, (_, index) => `plot-${index}`);
     const h = harness(plotIds);
     const ready = {
-      coins: 12,
+      coins: 12, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10,
       nowMs: 1,
       plots: plotIds.map((id, index) => ({ id, plant: plant('Harvestable', 1, species[index % species.length]!.id, index) })),
     } satisfies GardenSnapshot;

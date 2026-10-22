@@ -11,14 +11,15 @@ function freezeState(state: GardenState): GardenState {
 }
 
 describe('initial garden state', () => {
-  it('creates a JSON-safe schema 1 state with six stable empty plots', () => {
+  it('creates a JSON-safe schema 2 state with six stable empty plots', () => {
     const state = createInitialState(seed, startTime);
 
     expect(state).toEqual({
-      schema: 1,
+      schema: 2,
       coins: expect.any(Number),
       lastNowMs: startTime,
       rngState: expect.any(Number),
+      xp: 0,
       plots: [
         { id: 'plot-0', plant: null },
         { id: 'plot-1', plant: null },

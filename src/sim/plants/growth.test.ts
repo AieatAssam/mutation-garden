@@ -11,7 +11,7 @@ import {
 const seed = 0x1234_5678;
 
 function plantOne(speciesId: (typeof SPECIES)[number]['id'], plotId = 'plot-0') {
-  const initial = createInitialState(seed, 0);
+  const initial = createInitialState(seed, 0, { xp: 100 });
   const command: Command = { type: 'Plant', plotId, seedId: speciesId };
   const planted = step(initial, [command], 0);
   return { state: planted.state, plantedAt: 0 };
@@ -65,7 +65,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('emits every crossed stage in plot order and then species table order on a long jump', () => {
-    const initial = createInitialState(seed, 0);
+    const initial = createInitialState(seed, 0, { xp: 100 });
     const commands: Command[] = [
       { type: 'Plant', plotId: 'plot-2', seedId: 'twistroot' },
       { type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' },
@@ -90,7 +90,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('emits existing-plant growth events before successful and rejected plant command events', () => {
-    const planted = step(createInitialState(seed, 0), [
+    const planted = step(createInitialState(seed, 0, { xp: 100 }), [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
     ], 0).state;
     const result = step(planted, [
@@ -114,9 +114,13 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('keeps six stable empty plots in snapshots and exposes only derived growth there', () => {
-    const initial = createInitialState(seed, 100);
+    const initial = createInitialState(seed, 100, { xp: 100 });
     expect(getSnapshot(initial)).toEqual({
       coins: initial.coins,
+      xp: 100,
+      level: 5,
+      levelStartXp: 90,
+      nextLevelXp: 150,
       nowMs: 100,
       plots: Array.from({ length: 6 }, (_, index) => ({ id: `plot-${index}`, plant: null })),
     });
@@ -131,7 +135,7 @@ describe('timestamp-derived plant growth', () => {
       stage: 'Seed',
       progress: 0,
     });
-    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'plots']);
+    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'xp', 'plots']);
     expect(Object.keys(planted.state.plots[0]!.plant!)).toEqual(['speciesId', 'plantedAt', 'size']);
 
     const half = step(planted.state, [], 4_100);
@@ -144,7 +148,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('copies snapshot arrays, plot records, and plant records from a frozen source state', () => {
-    const planted = step(createInitialState(seed, 100), [
+    const planted = step(createInitialState(seed, 100, { xp: 100 }), [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
     ], 500).state;
     const frozenState = freezeDeep(planted) as GardenState;
@@ -163,7 +167,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('does not emit historical growth events for a plant created in the current step', () => {
-    const initial = createInitialState(seed, 0);
+    const initial = createInitialState(seed, 0, { xp: 100 });
     const result = step(initial, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
     ], 100_000);
@@ -202,7 +206,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('reaches the same final state and snapshot with one large step or many small steps', () => {
-    const initial = createInitialState(seed, 0);
+    const initial = createInitialState(seed, 0, { xp: 100 });
     const planted = step(initial, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'bubble-berry' },
@@ -220,7 +224,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('replays deterministically without mutating frozen nested state or commands', () => {
-    const initial = createInitialState(seed, 0);
+    const initial = createInitialState(seed, 0, { xp: 100 });
     const planted = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
     const frozenState = freezeDeep(planted) as GardenState;
     const commands = freezeDeep([
@@ -236,7 +240,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('does not change coins or RNG state as plants grow', () => {
-    const planted = step(createInitialState(seed, 0), [
+    const planted = step(createInitialState(seed, 0, { xp: 100 }), [
       { type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' },
     ], 0).state;
     const grown = step(planted, [], 30_000).state;

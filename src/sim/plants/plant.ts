@@ -1,4 +1,4 @@
-import { SPECIES, YIELD_SIZES } from '../content/species';
+import { levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
 import { nextRandom } from '../state/rng';
 import type { YieldSize } from '../state/types';
 import type { Command, GardenState, SimEvent, StepResult } from '../state/types';
@@ -24,6 +24,10 @@ export function plant(
 
   if (plot.plant !== null) {
     return rejected(state, command, 'occupied');
+  }
+
+  if (species.unlockLevel > levelForXp(state.xp)) {
+    return rejected(state, command, 'locked');
   }
 
   if (state.coins < species.seedCost) {
@@ -64,7 +68,7 @@ function rollSize(value: number): YieldSize {
 function rejected(
   state: GardenState,
   command: PlantCommand,
-  reason: 'unknown-plot' | 'unknown-seed' | 'occupied' | 'insufficient-coins',
+  reason: 'unknown-plot' | 'unknown-seed' | 'occupied' | 'insufficient-coins' | 'locked',
 ): StepResult {
   return {
     state,

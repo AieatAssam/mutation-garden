@@ -35,7 +35,7 @@ Codex works as a small team. Role files live in `.codex/agents/`; models are set
 
 **The visual bar.** Before a visual slice is done, put its 390×844 screenshot beside `docs/art/prototype/shots/proto-phone-day.png`. If the game does not look at least as good, the slice is not done. Polish beats proof.
 
-Run `npm run check` locally before opening or updating a PR. The reviewer reviews each slice PR once at medium effort (high for sim or save changes) and lists only real defects. The art advisor reviews each visual slice once, from the screenshots in the PR body. Do not commit evidence PNGs; commit only the final approved shot per milestone. Fix review findings, wait for green CI with zero retries, then squash-merge and update the milestone doc.
+Run `npm run check` locally before opening or updating a PR. The reviewer reviews each slice PR once at medium effort (high for sim or save changes) and lists only real defects. The art advisor reviews each visual slice once, from the screenshots in the PR body. Do not commit evidence PNGs. The exception is up to four review shots per slice in `docs/art/salvage/`, linked from the PR body, pruned when the milestone is accepted; commit only the final approved shot per milestone after that. Fix review findings, wait for green CI with zero retries, then squash-merge and update the milestone doc.
 
 Use fresh subagent contexts so each role's model and instructions apply. Before ending a work session, add a short stopping-point note at the top of the active milestone file with what is done, what is in flight and the next task.
 

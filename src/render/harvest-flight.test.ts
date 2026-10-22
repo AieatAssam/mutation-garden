@@ -16,7 +16,7 @@ describe('harvest flights', () => {
   it('flies the harvested parts from the plot to the crate and then retires them', () => {
     const library = createMaterialLibrary();
     const flights = createHarvestFlights(() => models, library);
-    flights.launch('sunny-sprout', new Vector3(1, 0.65, 2), 0, false);
+    flights.launch('sunny-sprout', new Vector3(1, 0.65, 2), 'regular', 0, false);
     expect(flights.activeCount).toBe(1);
     const group = flights.root.children[0]!;
     flights.update(30);
@@ -35,7 +35,7 @@ describe('harvest flights', () => {
   it('skips the flight under reduced motion', () => {
     const library = createMaterialLibrary();
     const flights = createHarvestFlights(() => models, library);
-    flights.launch('sunny-sprout', new Vector3(), 0, true);
+    flights.launch('sunny-sprout', new Vector3(), 'big', 0, true);
     expect(flights.activeCount).toBe(0);
     library.dispose();
   });

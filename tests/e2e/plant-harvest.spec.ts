@@ -126,7 +126,7 @@ test('Sunny harvest blocks a cross-tick repeat before allowing replant', async (
   await expect(coins).toHaveText('11');
   const plantedAt = await page.evaluate(() => Date.now());
 
-  // An immediate activation waters the seedling; it must leave the seed and balance intact.
+  // An immediate activation is too early to water or harvest; it must leave the seed and balance intact.
   const immatureTapAt = await page.evaluate(() => performance.now());
   await activatePlot(page, plot, mobile);
   await waitForSimTick(page, immatureTapAt);
@@ -198,7 +198,7 @@ test('Bubble Berry costs three coins, matures in fifteen seconds and pays its yi
   expect(errors).toEqual([]);
 });
 
-test('Twistroot costs five coins, ripens sooner when watered, pays its yield and can be replanted', async ({ page }, testInfo) => {
+test('Twistroot costs five coins, matures after 25 seconds, pays its yield and can be replanted', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const mobile = testInfo.project.name === 'mobile-portrait';
   const errors: string[] = [];
@@ -224,7 +224,7 @@ test('Twistroot costs five coins, ripens sooner when watered, pays its yield and
   await expect(coins).toHaveText('7');
   const plantedAt = await page.evaluate(() => Date.now());
 
-  // An early real activation waters the Twistroot; it stays planted and keeps the exact balance.
+  // An early real activation is too early to water; the Twistroot stays planted and keeps the exact balance.
   const immatureTapAt = await page.evaluate(() => performance.now());
   await activatePlot(page, plot, mobile);
   await waitForSimTick(page, immatureTapAt);
@@ -232,11 +232,12 @@ test('Twistroot costs five coins, ripens sooner when watered, pays its yield and
 
   // The timestamped production plant reaches its 25-second harvest threshold before the next tap.
   await waitUntilTimestamp(page, plantedAt + 25_250, 30_000);
-  // The early tap watered it, so it ripened sooner; base 10, yield size 0.8x to 1.5x, fresh up to +25%.
+  // Base 10, yield size 0.8x to 1.5x, fresh up to +25%.
   const harvest = await expectHarvestPaid(page, () => activatePlot(page, plot, mobile));
   expect(harvest.paid).toBeGreaterThanOrEqual(8);
   expect(harvest.paid).toBeLessThanOrEqual(18);
   const firstHarvestElapsedMs = await page.evaluate((planted) => Date.now() - planted, plantedAt);
+  expect(firstHarvestElapsedMs).toBeGreaterThanOrEqual(25_000);
   expect(firstHarvestElapsedMs).toBeLessThan(30_000);
 
   const harvestedAt = await page.evaluate(() => Date.now());

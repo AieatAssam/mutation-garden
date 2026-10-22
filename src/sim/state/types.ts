@@ -63,6 +63,7 @@ export type RejectionReason =
   | 'empty'
   | 'not-harvestable'
   | 'not-growing'
+  | 'too-early'
   | 'already-watered';
 
 export type SimEvent =

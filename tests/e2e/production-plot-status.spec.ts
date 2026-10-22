@@ -240,16 +240,22 @@ async function readStamp(
   if (!camera) resizeGardenCamera(projectionCamera, stageBounds!.width, stageBounds!.height);
   const radius = 0.31 * stageBounds!.width * projectionCamera.zoom / (projectionCamera.right - projectionCamera.left);
   expect(radius * 2, `${speciesLabels[speciesId]} projected stamp must be at least 26px wide`).toBeGreaterThanOrEqual(26);
-  const center = projectPlotPoint(stageBounds!, speciesPlot[speciesId], speciesStampWorldY[speciesId], camera);
-  const searchRadius = radius * 1.4;
+  // Yield size scales the plant, so search up its axis around the regular stamp height.
+  const base = speciesStampWorldY[speciesId];
+  const candidates = Array.from({ length: 15 }, (_, index) => base - 0.5 + index * 0.1)
+    .map((worldY) => projectPlotPoint(stageBounds!, speciesPlot[speciesId], worldY, camera));
+  const xs = candidates.map(({ x }) => x);
+  const ys = candidates.map(({ y }) => y);
   const clip = {
-    x: Math.max(stageBounds!.x, center.x - searchRadius),
-    y: Math.max(stageBounds!.y, center.y - searchRadius),
-    width: searchRadius * 2,
-    height: searchRadius * 2,
+    x: Math.max(stageBounds!.x, Math.min(...xs) - radius * 1.4),
+    y: Math.max(stageBounds!.y, Math.min(...ys) - radius * 1.4),
+    width: 0,
+    height: 0,
   };
+  clip.width = Math.min(stageBounds!.x + stageBounds!.width, Math.max(...xs) + radius * 1.4) - clip.x;
+  clip.height = Math.min(stageBounds!.y + stageBounds!.height, Math.max(...ys) + radius * 1.4) - clip.y;
   const image = (await page.screenshot({ clip, scale: 'css' })).toString('base64');
-  const fractions = await page.evaluate(async ({ encoded, fruit, paper, ink }) => {
+  const results = await page.evaluate(async ({ encoded, fruit, paper, ink, centers, radius: discRadius }) => {
     const picture = new Image();
     picture.src = `data:image/png;base64,${encoded}`;
     await picture.decode();
@@ -261,26 +267,37 @@ async function readStamp(
     const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
     const rgb = (hex: string) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
     const targets = { fruit: rgb(fruit), paper: rgb(paper), ink: rgb(ink) };
-    const counts = { fruit: 0, paper: 0, ink: 0 };
-    let total = 0;
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        if (Math.hypot(x - width / 2, y - height / 2) > width / 2) continue;
-        total += 1;
-        const offset = (y * width + x) * 4;
-        for (const key of ['fruit', 'paper', 'ink'] as const) {
-          const [r, g, b] = targets[key];
-          if (Math.abs(data[offset]! - r!) + Math.abs(data[offset + 1]! - g!) + Math.abs(data[offset + 2]! - b!) < 45) {
-            counts[key] += 1;
+    return centers.map(({ x: cx, y: cy }) => {
+      const counts = { fruit: 0, paper: 0, ink: 0 };
+      let total = 0;
+      for (let y = Math.max(0, Math.floor(cy - discRadius)); y < Math.min(height, Math.ceil(cy + discRadius)); y += 1) {
+        for (let x = Math.max(0, Math.floor(cx - discRadius)); x < Math.min(width, Math.ceil(cx + discRadius)); x += 1) {
+          if (Math.hypot(x - cx, y - cy) > discRadius) continue;
+          total += 1;
+          const offset = (y * width + x) * 4;
+          for (const key of ['fruit', 'paper', 'ink'] as const) {
+            const [r, g, b] = targets[key];
+            if (Math.abs(data[offset]! - r!) + Math.abs(data[offset + 1]! - g!) + Math.abs(data[offset + 2]! - b!) < 45) {
+              counts[key] += 1;
+            }
           }
         }
       }
-    }
-    return { fruit: counts.fruit / total, paper: counts.paper / total, ink: counts.ink / total };
-  }, { encoded: image, fruit: palette.plants[speciesId].fruit[1], paper: palette.ink['paper-white'], ink: palette.ink['press-ink'] });
-  if (fractions.paper < 0.05 || fractions.fruit < 0.1 || fractions.ink < 0.03) {
-    throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible at ${JSON.stringify(center)}: ${JSON.stringify(fractions)}`);
+      return total === 0 ? { fruit: 0, paper: 0, ink: 0 }
+        : { fruit: counts.fruit / total, paper: counts.paper / total, ink: counts.ink / total };
+    });
+  }, {
+    encoded: image, fruit: palette.plants[speciesId].fruit[1], paper: palette.ink['paper-white'], ink: palette.ink['press-ink'],
+    centers: candidates.map(({ x, y }) => ({ x: x - clip.x, y: y - clip.y })), radius: radius * 1.4,
+  });
+  const visible = results
+    .map((fractions, index) => ({ fractions, center: candidates[index]! }))
+    .filter(({ fractions }) => fractions.paper >= 0.05 && fractions.fruit >= 0.1 && fractions.ink >= 0.03)
+    .sort((a, b) => b.fractions.paper - a.fractions.paper)[0];
+  if (!visible) {
+    throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible above plot ${speciesPlot[speciesId]}: ${JSON.stringify(results)}`);
   }
+  const center = visible.center;
   return { center, box: { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 } };
 }
 

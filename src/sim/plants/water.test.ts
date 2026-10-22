@@ -37,7 +37,7 @@ describe('Water commands', () => {
     const state = planted();
     const ripe = step(state, [], start + 25_000).state;
     for (const [target, from, reason] of [
-      ['plot-1', state, 'empty'], ['nope', state, 'unknown-plot'], ['plot-0', ripe, 'not-growing'],
+      ['plot-1', state, 'empty'], ['nope', state, 'unknown-plot'], ['plot-0', ripe, 'not-growing'], ['plot-0', state, 'too-early'],
     ] as const) {
       const result = step(from, [{ type: 'Water', plotId: target }], from.lastNowMs);
       expect(result.events).toEqual([{ type: 'CommandRejected', command: 'Water', plotId: target, reason }]);

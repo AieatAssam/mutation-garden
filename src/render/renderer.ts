@@ -189,7 +189,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
             lifeMs: 420, size: 0.11 }, now, reducedMotion);
           break;
         case 'Harvested': {
-          flights.launch(event.speciesId, effectPoint, now, reducedMotion);
+          flights.launch(event.speciesId, effectPoint, event.size, now, reducedMotion);
           const top = new Vector3();
           const fruit = plants.getTop(event.plotId, top) ? top.setY(top.y - 0.35) : effectPoint.clone().setY(effectPoint.y + 1);
           particles.burst({ origin: fruit, count: 14,

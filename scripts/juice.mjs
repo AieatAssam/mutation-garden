@@ -1,9 +1,12 @@
 // Records planting, watering and a swipe harvest at 390x844 and tiles the harvest frames:
-// node scripts/juice.mjs <outDir> [url]   (needs ffmpeg on PATH)
+// node scripts/juice.mjs <outDir> [url] [--gpu]   (needs ffmpeg on PATH; --gpu uses the real GPU in a headed window)
 import { chromium } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
-const [out = '.', url = 'http://localhost:5173/mutation-garden/'] = process.argv.slice(2);
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const args = process.argv.slice(2);
+const [out = '.', url = 'http://localhost:5173/mutation-garden/'] = args.filter((arg) => !arg.startsWith('--'));
+const browser = await chromium.launch(args.includes('--gpu')
+  ? { headless: false, args: ['--window-position=-2000,0'] }
+  : { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, recordVideo: { dir: out, size: { width: 390, height: 844 } } });
 const page = await context.newPage();
 page.on('console', (m) => m.type() === 'error' && console.error(m.text()));
@@ -27,6 +30,6 @@ await page.waitForTimeout(1500);
 const video = await page.video().path();
 await context.close();
 await browser.close();
-execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(Math.max(0, harvestAt - 0.1)), '-i', video, '-t', '1.2',
-  '-vf', 'fps=15,crop=390:600:0:120,scale=195:-1,tile=6x3', '-frames:v', '1', `${out}/juice-tiles.png`]);
+execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-ss', String(Math.max(0, harvestAt - 0.1)), '-i', video, '-t', '0.9',
+  '-vf', 'fps=20,crop=390:600:0:120,scale=195:-1,tile=6x3', '-frames:v', '1', `${out}/juice-tiles.png`]);
 console.log(video, harvestAt);

@@ -1,6 +1,8 @@
 import { OrthographicCamera, Vector3 } from 'three';
 
 const MAX_PAN_DISTANCE = 2.5;
+/** Highest ready stamp above a plot (tallest big plant plus the stamp lift). */
+const STAMP_TOP_Y = 3.3;
 const MIN_CAMERA_ZOOM = 1;
 const MAX_CAMERA_ZOOM = 1.35;
 const PLOT_TARGET_HALF_SIZE = 24;
@@ -53,6 +55,9 @@ function maximumCameraZoom(camera: OrthographicCamera, state: CameraPanState): n
     const projected = new Vector3(...center).project(camera);
     reachX = Math.max(reachX, Math.abs(projected.x) * state.viewportWidth / 2);
     reachY = Math.max(reachY, Math.abs(projected.y) * state.viewportHeight / 2);
+    // Keep ripe plants' ready stamps on screen too, not just the plots they stand on.
+    const stamp = new Vector3(center[0], STAMP_TOP_Y, center[2]).project(camera);
+    reachY = Math.max(reachY, Math.abs(stamp.y) * state.viewportHeight / 2);
   }
 
   const margin = PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN;
@@ -116,7 +121,7 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
 
   const state = getPanState(camera);
   state.basePosition.set(3.6, 8.5, 11);
-  state.baseTarget.set(0.35, portrait ? -0.6 : -0.2, 0.3);
+  state.baseTarget.set(0.35, portrait ? -0.6 : 1.2, 0.3);
   state.viewportWidth = safeWidth;
   state.viewportHeight = safeHeight;
   state.lastSaturatedInput = undefined;

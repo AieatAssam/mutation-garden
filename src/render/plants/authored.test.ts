@@ -89,6 +89,10 @@ describe('authored plants', () => {
     rig.update(plant(1, 'Harvestable'), 0, true);
     expect(fruitMaterial.color.getHex()).toBe(new Color(palette.plants['sunny-sprout'].fruit[1]).getHex());
     expect(fruitMesh.scale.x).toBeGreaterThan(1.1);
+    const regularFruit = fruitMesh.scale.x;
+    rig.update({ ...plant(1, 'Harvestable'), size: 'big' }, 0, true);
+    expect(fruitMesh.scale.x / regularFruit, 'big fruit is visibly bigger').toBeCloseTo(1.2);
+    expect(stemMesh.scale.x, 'the stem keeps its size').toBe(1);
     const top = new Vector3();
     expect(rig.getTop!(top)).toBe(true);
     expect(top.y).toBeGreaterThan(1);

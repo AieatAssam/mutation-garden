@@ -17,7 +17,8 @@ import {
 
 export function boot(canvas: HTMLCanvasElement): () => void {
   document.body.style.background = palette.environment['sky-day'].horizon;
-  const initialState = createInitialState(1, Date.now());
+  // Each new garden gets its own seed, so yield sizes (and later mutations) differ between players.
+  const initialState = createInitialState(crypto.getRandomValues(new Uint32Array(1))[0]!, Date.now());
   let selectedSpeciesId: SpeciesId = 'sunny-sprout';
   let coins = initialState.coins;
   let latestSnapshot: GardenSnapshot = getSnapshot(initialState);

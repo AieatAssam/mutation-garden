@@ -22,8 +22,8 @@ describe('garden camera', () => {
     [360, 800, 6.9 * 800 / 360, [3.6, 8.5, 11], [0.35, -0.6, 0.3]],
     [390, 844, 6.9 * 844 / 390, [3.6, 8.5, 11], [0.35, -0.6, 0.3]],
     [390, 896, 6.9 * 896 / 390, [3.6, 8.5, 11], [0.35, -0.6, 0.3]],
-    [844, 390, 390 / 56, [3.6, 8.5, 11], [0.35, -0.2, 0.3]],
-    [1280, 800, 9.4, [3.6, 8.5, 11], [0.35, -0.2, 0.3]],
+    [844, 390, 390 / 56, [3.6, 8.5, 11], [0.35, 1.2, 0.3]],
+    [1280, 800, 9.4, [3.6, 8.5, 11], [0.35, 1.2, 0.3]],
   ] as const)(
     'keeps the three-quarter camera and plot framing at %ix%i', (width, height, expectedHeight, position, target) => {
       const camera = createGardenCamera();
@@ -271,9 +271,10 @@ describe('garden camera', () => {
     resizeGardenCamera(camera, 390, 844);
     zoomGardenCamera(camera, 1.2);
 
-    for (const [width, height] of [[360, 800], [390, 844], [844, 390], [1280, 800]] as const) {
+    // Short landscape has no room to zoom in without pushing back-row stamps off screen.
+    for (const [width, height, zoom] of [[360, 800, 1.2], [390, 844, 1.2], [1280, 800, 1.2], [844, 390, 1]] as const) {
       resizeGardenCamera(camera, width, height);
-      expect(camera.zoom, `${width}x${height}`).toBeCloseTo(1.2, 10);
+      expect(camera.zoom, `${width}x${height}`).toBeCloseTo(zoom, 10);
       expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);
     }
   });

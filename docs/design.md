@@ -53,7 +53,7 @@ Targets come from brief section 7. Each row is a moment we design, build and tes
 | ~25 s | Swipe taught | When two or more plants are ripe at once, hint: "Swipe across ripe plants." Swipe gives combo "×2", "×3" with rising pitch. |
 | ~45 s | Level 2 | XP bar fills. Level-up stamp. **Unlocks Bubble Berry seed** (card flips in on the tray). |
 | ~1:30 | First order | Order board appears: "Harvest 4 Bubble Berries" for a coin bonus and XP. |
-| ~2:00 | First purchase | Shop button lights up: **Watering can** (first tool). Watering makes the next growth 30% faster and darkens the soil. |
+| ~2:00 | First purchase | Shop button lights up: **Watering can** (first tool). It lets each plant be watered a second time, which is the Giant rule. |
 | ~2:30 | Level 3 | Unlocks Twistroot. |
 | ~3:00 | First mutation (scripted) | The first Twistroot planted after Level 3 always comes up **Giant**. Full first-discovery reveal. Journal unlocks with one entry filled and the rest of the row shown as silhouettes. |
 | ~4:00 | Rule learned | Journal entry for Giant says how: "Giant: water a plant twice while it grows." The player can now cause it. |
@@ -74,7 +74,7 @@ These sharpen the brief's plant, grow and harvest loop into something with textu
 ### 4.2 Growth
 - Real-time, timestamp-derived (unchanged).
 - Five stages, each with a pop accent (motion.md 4.2).
-- **Watering (Amendment: pulled into M1-S3 from M3):** each plant can be watered **once** in M1, cutting its remaining time by 30%. Watered soil is visibly darker for the rest of the growth. Watering twice (M2) enables Giant.
+- **Watering (Amendment: pulled into M1-S3 from M3):** tap a growing plant (Sprout stage or later) to water it **once**, cutting its remaining time by 30%. Seeds can't be watered, so a double tap after planting does nothing. The M3 watering can upgrade adds the second watering that enables Giant. Watered soil is visibly darker for the rest of the growth. Watering twice (M2) enables Giant.
 
 ### 4.3 Harvest and yield
 - Tap a ripe plant or swipe across several.
@@ -143,7 +143,7 @@ Rules:
 
 ### 7.2 Shop (one currency: coins)
 - Seeds (always available once unlocked).
-- Tools: watering can (Lv 1, 15 coins), sprinkler (waters a row; Lv 7), golden trowel (Big chance +10%; Lv 9), harvest basket (swipe range +1 plot; Lv 11).
+- Tools: watering can (Lv 1, 15 coins; a second watering per plant), sprinkler (waters a row; Lv 7), golden trowel (Big chance +10%; Lv 9), harvest basket (swipe range +1 plot; Lv 11).
 - Plots: price doubles each (40, 80, 160 …), gated by level so coins can't skip the pacing.
 - Decorations: gnome, windmill, bird bath, lanterns. Purely cosmetic, each placed on fixed decoration spots (no precision placement) and each has one idle animation.
 

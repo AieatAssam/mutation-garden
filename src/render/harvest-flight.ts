@@ -1,8 +1,8 @@
 import { Group, Mesh, Vector3 } from 'three';
-import type { SpeciesId } from '../sim';
+import type { SpeciesId, YieldSize } from '../sim';
 import type { MaterialLibrary } from './materials';
 import { palette } from './palette';
-import { SPECIES_SCALE, type PlantModels } from './plants/authored';
+import { SPECIES_SCALE, YIELD_SCALE, type PlantModels } from './plants/authored';
 
 /** Top of the harvest crate in tools/blender/build_garden.py (Blender x 2.75, y -0.75). */
 export const CRATE_TOP = new Vector3(2.75, 1.05, 0.75);
@@ -22,7 +22,7 @@ interface Flight {
 export interface HarvestFlights {
   readonly root: Group;
   /** Launches the plant's harvested parts from where they grew on the plot to the crate (motion.md 4.4). */
-  launch(species: SpeciesId, plotAnchor: Vector3, nowMs: number, reducedMotion: boolean): void;
+  launch(species: SpeciesId, plotAnchor: Vector3, size: YieldSize, nowMs: number, reducedMotion: boolean): void;
   update(nowMs: number): void;
   readonly activeCount: number;
   dispose(): void;
@@ -42,7 +42,7 @@ export function createHarvestFlights(models: () => PlantModels | null, materials
 
   return {
     root,
-    launch(species, plotAnchor, nowMs, reducedMotion) {
+    launch(species, plotAnchor, size, nowMs, reducedMotion) {
       const current = models();
       if (!current || reducedMotion) return;
       if (flights.length >= MAX_FLIGHTS) finish(flights.shift()!);
@@ -64,7 +64,7 @@ export function createHarvestFlights(models: () => PlantModels | null, materials
         group.add(mesh, hull);
       }
       root.add(group);
-      const scale = SPECIES_SCALE[species] * 1.14;
+      const scale = SPECIES_SCALE[species] * 1.14 * YIELD_SCALE[size];
       const from = plotAnchor.clone().addScaledVector(centre, scale);
       flights.push({ group, from, to: CRATE_TOP.clone(), startMs: nowMs, scale });
     },

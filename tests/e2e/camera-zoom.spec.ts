@@ -1,4 +1,5 @@
 import { expect, test, type CDPSession, type Page } from '@playwright/test';
+import { expectHarvestPaid } from './payout';
 import { createHash } from 'node:crypto';
 import { Vector3 } from 'three';
 import {
@@ -346,9 +347,10 @@ test('production zoom is deliberate, bounded, and leaves the garden playable', a
     // unusually slow with the mobile WebGL canvas in headless Chromium.
     scale: 'css',
   });
-  if (mobile) await page.touchscreen.tap(fruit.x, fruit.y);
-  else await page.mouse.click(fruit.x, fruit.y);
-  await expect(coins).toHaveText('13');
+  await expectHarvestPaid(page, async () => {
+    if (mobile) await page.touchscreen.tap(fruit.x, fruit.y);
+    else await page.mouse.click(fruit.x, fruit.y);
+  });
   expect(await pageScrollY(page)).toBe(startingScrollY);
   expect(errors).toEqual([]);
 });

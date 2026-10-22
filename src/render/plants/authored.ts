@@ -40,6 +40,8 @@ const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroo
 /** Display size per species, tuned so each plant fills its bed at phone size. */
 export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4 };
 const RIPE_SWELL = 1.14;
+/** Harvested parts show their rolled yield size (design.md 4.3). */
+export const YIELD_SCALE = { small: 0.88, regular: 1, big: 1.2 } as const;
 const DROP_MS = 140;
 
 /** The seed falls into the soil, squashes to 0.7 and springs back (motion.md 4.1). */
@@ -183,7 +185,7 @@ export function createAuthoredRig(
   const unripe = new Color(fruitRamp[3]);
   const ripeColor = new Color(fruitRamp[1]);
 
-  const animated: { meshes: Mesh[]; part: PartTemplate; growth: number }[] = [];
+  const animated: { meshes: Mesh[]; part: PartTemplate; growth: number; scale: number }[] = [];
   for (const part of models.parts.get(species) ?? []) {
     const mesh = new Mesh(part.geometry, part.ripe ? fruitMaterial : materials.toon(part.color));
     mesh.name = part.name;
@@ -193,7 +195,7 @@ export function createAuthoredRig(
     hull.userData.part = `${part.name}-outline`;
     hull.renderOrder = 2;
     body.add(mesh, hull);
-    animated.push({ meshes: [mesh, hull], part, growth: 0 });
+    animated.push({ meshes: [mesh, hull], part, growth: 0, scale: 1 });
   }
   const byName = new Map(animated.map((entry) => [entry.part.name, entry]));
   const ride = new Vector3();
@@ -231,16 +233,23 @@ export function createAuthoredRig(
       // so ripeness is an obvious change rather than the end of a gradient (motion.md 4.3).
       const warm = ripe ? 1 : 0.6 * smooth(clamp01((progress - 0.5) / 0.5));
       fruitMaterial.color.copy(unripe).lerp(ripeColor, warm);
-      for (const entry of animated) entry.growth = partGrowth(entry.part, progress);
-      for (const { meshes, part, growth } of animated) {
+      const yieldScale = YIELD_SCALE[plant.size ?? 'regular'];
+      for (const entry of animated) {
+        entry.growth = partGrowth(entry.part, progress);
+        entry.scale = entry.part.fly ? yieldScale : 1;
+      }
+      for (const { meshes, part, growth, scale: partScale } of animated) {
         // Attached parts ride their parent's tip: offset by how far that tip is from its grown place.
         ride.set(0, 0, 0);
         const parent = part.attach ? byName.get(part.attach) : undefined;
-        if (parent) ride.copy(parent.part.seedTop).lerp(parent.part.grownTop, parent.growth).sub(parent.part.grownTop);
-        const size = part.morph ? 1 : growth * (ripe && part.fly ? RIPE_SWELL : 1);
+        if (parent) {
+          ride.copy(parent.part.seedTop).lerp(parent.part.grownTop, parent.growth).multiplyScalar(parent.scale)
+            .sub(parent.part.grownTop);
+        }
+        const size = (part.morph ? 1 : growth * (ripe && part.fly ? RIPE_SWELL : 1)) * partScale;
         for (const mesh of meshes) {
           if (part.morph) mesh.morphTargetInfluences![0] = growth;
-          mesh.visible = size > 0.001;
+          mesh.visible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0);
           mesh.scale.setScalar(Math.max(0.001, size));
           mesh.position.copy(part.origin).add(ride);
         }

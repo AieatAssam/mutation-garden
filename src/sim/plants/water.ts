@@ -19,6 +19,8 @@ export function water(state: GardenState, command: WaterCommand, effectiveNowMs:
   const start = growthStart(plantState);
   const before = getGrowthView(plantState.speciesId, start, effectiveNowMs);
   if (before.stage === 'Harvestable') return rejected(state, command, 'not-growing');
+  // A seed can't be watered yet, so a quick double tap after planting does nothing (design.md 4.2).
+  if (before.stage === 'Seed') return rejected(state, command, 'too-early');
 
   const remainingMs = start + species.growthDurationMs - effectiveNowMs;
   const boostMs = Math.round(remainingMs * WATER_SPEEDUP);
@@ -40,7 +42,7 @@ export function water(state: GardenState, command: WaterCommand, effectiveNowMs:
 function rejected(
   state: GardenState,
   command: WaterCommand,
-  reason: 'unknown-plot' | 'empty' | 'already-watered' | 'not-growing',
+  reason: 'unknown-plot' | 'empty' | 'already-watered' | 'not-growing' | 'too-early',
 ): StepResult {
   return { state, events: [{ type: 'CommandRejected', command: command.type, plotId: command.plotId, reason }] };
 }

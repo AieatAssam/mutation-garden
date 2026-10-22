@@ -108,6 +108,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       warm.removeFromParent();
       for (const rig of rigs) rig.dispose();
     }
+    // Draw once now, so "loaded" means the models are on screen, not waiting for the next frame.
+    if (!disposed) draw();
   }).catch((error: unknown) => {
     console.error('Shader warm-up failed', error);
   });

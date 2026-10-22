@@ -4,6 +4,10 @@ import { Vector3 } from 'three';
 import { PLOT_ACTIVATION_GUARD_MS } from '../../src/app/commands';
 import { expectHarvestPaid } from './payout';
 import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
+import { startWithSave } from './garden-save';
+
+// These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
+test.beforeEach(async ({ page }) => startWithSave(page));
 
 type Point = { x: number; y: number };
 
@@ -115,8 +119,8 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   expect(rect).not.toBeNull();
 
   const plots = [0, 1, 2, 4].map((id) => plotCenter(id, rect!));
-  // A patch of island rock below the beds: no plant ever overlaps it, so it only changes if the camera pans.
-  const untouchedRock = projectWorld(new Vector3(0, -1.6, 1.5), rect!);
+  // The pond: scenery no plant, effect or HUD element covers, so it only changes if the camera pans.
+  const untouchedRock = projectWorld(new Vector3(-2.85, 0.48, 1.0), rect!);
   const coins = page.getByRole('status', { name: 'Coins' });
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
   const sunny = seeds.getByRole('button', { name: 'Sunny Sprout' });

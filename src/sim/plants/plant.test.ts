@@ -30,7 +30,7 @@ describe('Plant commands', () => {
   it.each(SPECIES)(
     'plants %s and debits its exact seed cost',
     (species) => {
-      const initial = createInitialState(seed, startTime);
+      const initial = createInitialState(seed, startTime, { xp: 100 });
       const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: species.id }], startTime + 250);
 
       expect(result.state.coins).toBe(initial.coins - species.seedCost);
@@ -43,7 +43,7 @@ describe('Plant commands', () => {
   );
 
   it('allows spending exactly the available coins', () => {
-    const initial = withCoins(createInitialState(seed, startTime), 3);
+    const initial = withCoins(createInitialState(seed, startTime, { xp: 100 }), 3);
     const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' }], startTime);
 
     expect(result.state.coins).toBe(0);
@@ -52,14 +52,14 @@ describe('Plant commands', () => {
   });
 
   it('rejects planting in an unknown plot without changing coins or plants', () => {
-    const state = createInitialState(seed, startTime);
+    const state = createInitialState(seed, startTime, { xp: 100 });
     expectRejectedWithoutPlanting(state, {
       type: 'Plant', plotId: 'plot-missing', seedId: 'sunny-sprout',
     }, 'unknown-plot');
   });
 
   it('rejects an invalid runtime seed without changing coins or plants', () => {
-    const state = createInitialState(seed, startTime);
+    const state = createInitialState(seed, startTime, { xp: 100 });
     const invalidSeed = 'not-a-species' as SpeciesId;
     expectRejectedWithoutPlanting(state, {
       type: 'Plant', plotId: 'plot-0', seedId: invalidSeed,
@@ -67,7 +67,7 @@ describe('Plant commands', () => {
   });
 
   it('rejects planting into an occupied plot without changing coins or plants', () => {
-    const state = createInitialState(seed, startTime);
+    const state = createInitialState(seed, startTime, { xp: 100 });
     const planted = step(state, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], startTime).state;
     expectRejectedWithoutPlanting(planted, {
       type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry',
@@ -75,14 +75,14 @@ describe('Plant commands', () => {
   });
 
   it('rejects a seed that costs more than the available coins', () => {
-    const state = withCoins(createInitialState(seed, startTime), 2);
+    const state = withCoins(createInitialState(seed, startTime, { xp: 100 }), 2);
     expectRejectedWithoutPlanting(state, {
       type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry',
     }, 'insufficient-coins');
   });
 
   it('applies repeated same-plot commands in order and rejects the second planting', () => {
-    const state = createInitialState(seed, startTime);
+    const state = createInitialState(seed, startTime, { xp: 100 });
     const result = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
       { type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' },
@@ -97,7 +97,7 @@ describe('Plant commands', () => {
   });
 
   it('spends commands in order, allowing later cheaper seeds after an unaffordable command', () => {
-    const state = withCoins(createInitialState(seed, startTime), 4);
+    const state = withCoins(createInitialState(seed, startTime, { xp: 100 }), 4);
     const result = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },
@@ -116,7 +116,7 @@ describe('Plant commands', () => {
   });
 
   it('uses the effective clock when nowMs moves backward', () => {
-    const initial = createInitialState(seed, startTime);
+    const initial = createInitialState(seed, startTime, { xp: 100 });
     const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], startTime - 1);
 
     expect(result.state.lastNowMs).toBe(startTime);
@@ -124,7 +124,7 @@ describe('Plant commands', () => {
   });
 
   it('does not mutate a frozen input state or frozen commands', () => {
-    const initial = createInitialState(seed, startTime);
+    const initial = createInitialState(seed, startTime, { xp: 100 });
     const plots = initial.plots.map((plot) => Object.freeze(plot));
     const frozenState: GardenState = Object.freeze({ ...initial, plots: Object.freeze(plots) });
     const command = Object.freeze({ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' } as const);
@@ -143,8 +143,8 @@ describe('Plant commands', () => {
       { type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' },
     ];
-    const first = step(createInitialState(seed, startTime), commands, startTime + 250);
-    const replay = step(createInitialState(seed, startTime), commands, startTime + 250);
+    const first = step(createInitialState(seed, startTime, { xp: 100 }), commands, startTime + 250);
+    const replay = step(createInitialState(seed, startTime, { xp: 100 }), commands, startTime + 250);
 
     expect(replay).toEqual(first);
   });

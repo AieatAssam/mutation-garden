@@ -57,7 +57,7 @@
     "text-on-accent": "#FFF9EC",
     "accent": "#C93A24",
     "accent-pressed": "#A82E1C",
-    "misprint-shadow": "#E5482F",
+    "misprint-shadow": "#CDB28A",
     "coin": { "face": "#F2B632", "rim": "#C9861C", "emboss": "#FFE08A", "outline": "#2B1E2E" },
     "coin-text": "#7A4B0C",
     "success": "#2F7A3A",

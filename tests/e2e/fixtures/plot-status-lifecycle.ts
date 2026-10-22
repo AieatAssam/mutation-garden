@@ -47,7 +47,7 @@ const stageFractions = [0.2, 0.55, 0.9] as const;
 const plant: PlantSnapshot = { speciesId: 'sunny-sprout', plantedAt: 0, stage: 'Harvestable', progress: 1 };
 const previousPlant: PlantSnapshot = { ...plant, stage: 'Mature', progress: 0.9 };
 function snapshot(nowMs: number, plantValue: PlantSnapshot): GardenSnapshot {
-  return { nowMs, coins: 100, plots: [{ id: 'lifecycle-plot', plant: plantValue }] };
+  return { nowMs, coins: 100, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, plots: [{ id: 'lifecycle-plot', plant: plantValue }] };
 }
 
 interface Sample {

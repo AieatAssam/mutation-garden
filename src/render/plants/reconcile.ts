@@ -69,7 +69,12 @@ function phase(plotId: PlotId): number {
   return hash % 3000;
 }
 
-export function createPlantReconciler(plots: readonly (Group & { readonly plotId?: PlotId })[], materials: MaterialLibrary): PlantReconciler {
+export function createPlantReconciler(
+  plots: readonly (Group & { readonly plotId?: PlotId })[],
+  materials: MaterialLibrary,
+  /** Production waits for the authored models instead of showing procedural rigs and swapping later. */
+  options: { readonly waitForModels?: boolean } = {},
+): PlantReconciler {
   const anchors = new Map(plots.filter((plot): plot is Group & { readonly plotId: PlotId } => Boolean(plot.plotId)).map((plot) => [plot.plotId, plot]));
   const hopPhaseOffsets = new Map(plots.flatMap((plot, index) => plot.plotId ? [[plot.plotId, index * 500] as const] : []));
   const entries = new Map<PlotId, Entry>();
@@ -97,6 +102,7 @@ export function createPlantReconciler(plots: readonly (Group & { readonly plotId
         if (!plant || (plant.speciesId !== 'sunny-sprout' && plant.speciesId !== 'bubble-berry' && plant.speciesId !== 'twistroot') || !anchors.has(plot.id)) { remove(plot.id); continue; }
         let entry = entries.get(plot.id);
         if (entry && (entry.speciesId !== plant.speciesId || entry.plantedAt !== plant.plantedAt)) { remove(plot.id); entry = undefined; }
+        if (!entry && !models && options.waitForModels) continue;
         if (!entry) {
           const rig = models
             ? createAuthoredRig(plant.speciesId, models, materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)

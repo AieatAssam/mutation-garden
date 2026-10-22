@@ -21,6 +21,10 @@ export interface FixedStepLoopOptions {
 
 export interface FixedStepLoop {
   enqueue(command: Command): void;
+  /** The authoritative state, for saving. */
+  getState(): GardenState;
+  /** Replaces the state (a loaded save) and drops queued commands. */
+  restore(state: GardenState): void;
   catchUp(): void;
   start(): void;
   stop(): void;
@@ -86,6 +90,15 @@ export function createFixedStepLoop(options: FixedStepLoopOptions): FixedStepLoo
   };
 
   return {
+    getState() {
+      return state;
+    },
+    restore(next) {
+      state = next;
+      previous = getSnapshot(state);
+      current = previous;
+      commandQueue.length = 0;
+    },
     enqueue(command) {
       commandQueue.push(copyCommand(command));
     },

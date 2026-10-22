@@ -3,7 +3,7 @@ import { createInitialState, getSnapshot, step, type GardenState } from '../inde
 
 const start = 10_000;
 const planted = (): GardenState =>
-  step(createInitialState(7, start), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], start).state;
+  step(createInitialState(7, start, { xp: 100 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], start).state;
 
 describe('Water commands', () => {
   it('cuts the remaining growth time by 30% once', () => {
@@ -49,7 +49,7 @@ describe('Water commands', () => {
 describe('Yield size', () => {
   it('rolls from the seeded RNG at planting and replays exactly', () => {
     const sizes = (seed: number) => {
-      let state = createInitialState(seed, 0);
+      let state = createInitialState(seed, 0, { xp: 100 });
       const out: string[] = [];
       for (let index = 0; index < 40; index += 1) {
         state = { ...state, coins: 100, plots: state.plots.map((plot) => ({ ...plot, plant: null })) };

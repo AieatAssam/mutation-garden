@@ -38,15 +38,22 @@ export interface PlotSnapshot {
 
 export interface GardenSnapshot {
   readonly coins: number;
+  readonly xp: number;
+  readonly level: number;
+  /** XP at which the current level started and the next one begins. */
+  readonly levelStartXp: number;
+  readonly nextLevelXp: number;
   readonly nowMs: number;
   readonly plots: readonly PlotSnapshot[];
 }
 
 export interface GardenState {
-  readonly schema: 1;
+  readonly schema: 2;
   readonly coins: number;
   readonly lastNowMs: number;
   readonly rngState: number;
+  /** Garden XP; the level is derived from it (design.md 4.4). */
+  readonly xp: number;
   readonly plots: readonly PlotState[];
 }
 
@@ -64,7 +71,8 @@ export type RejectionReason =
   | 'not-harvestable'
   | 'not-growing'
   | 'too-early'
-  | 'already-watered';
+  | 'already-watered'
+  | 'locked';
 
 export type SimEvent =
   | { readonly type: 'Planted'; readonly plotId: PlotId; readonly speciesId: SpeciesId }
@@ -91,6 +99,7 @@ export type SimEvent =
       readonly comboBonus: number;
     }
   | { readonly type: 'Watered'; readonly plotId: PlotId }
+  | { readonly type: 'LevelUp'; readonly level: number; readonly unlocked: readonly SpeciesId[] }
   | {
       readonly type: 'CommandRejected';
       readonly command: Command['type'];

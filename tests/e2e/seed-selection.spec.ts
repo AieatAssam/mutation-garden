@@ -1,5 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { palette } from '../../src/render/palette';
+import { startWithSave } from './garden-save';
+
+// These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
+test.beforeEach(async ({ page }) => startWithSave(page));
 
 test('offers all three seeds, with Sunny selected and Twistroot selectable in a fixed viewport', async ({ page }, testInfo) => {
   const errors: string[] = [];
@@ -61,14 +65,12 @@ test('offers all three seeds, with Sunny selected and Twistroot selectable in a 
   await expect(sunny).toHaveAttribute('aria-pressed', 'false');
   await expect(twistroot).toHaveClass(/is-selected/);
   await expect(twistroot).toBeFocused();
-  const panel = palette.ui.panel;
-  const accent = palette.ui.accent;
-  const expectedPanelRgb = `rgb(${Number.parseInt(panel.slice(1, 3), 16)}, ${Number.parseInt(panel.slice(3, 5), 16)}, ${Number.parseInt(panel.slice(5, 7), 16)})`;
-  const expectedAccentRgb = `rgb(${Number.parseInt(accent.slice(1, 3), 16)}, ${Number.parseInt(accent.slice(3, 5), 16)}, ${Number.parseInt(accent.slice(5, 7), 16)})`;
+  // Seed cards after the look prototype: the selected card is butter yellow, the others paper.
+  const rgb = (hex: string) => `rgb(${Number.parseInt(hex.slice(1, 3), 16)}, ${Number.parseInt(hex.slice(3, 5), 16)}, ${Number.parseInt(hex.slice(5, 7), 16)})`;
   await page.mouse.move(0, 0);
-  await expect(twistroot).toHaveCSS('background-color', expectedPanelRgb);
-  await expect(twistroot).toHaveCSS('color', expectedAccentRgb);
-  await expect(sunny).toHaveCSS('background-color', expectedAccentRgb);
+  await expect(twistroot).toHaveCSS('background-color', rgb(palette.ui.coin.emboss));
+  await expect(twistroot).toHaveCSS('border-color', rgb(palette.ui.coin.rim));
+  await expect(sunny).toHaveCSS('background-color', rgb(palette.ui.panel));
   await expect(coins).toHaveText('12');
 
   const pageSize = await page.evaluate(() => ({
@@ -93,8 +95,7 @@ test('offers all three seeds, with Sunny selected and Twistroot selectable in a 
   });
   await expect(twistroot).toBeFocused();
   await expect(twistroot).toHaveClass(/is-selected/);
-  await expect(twistroot).toHaveCSS('background-color', expectedPanelRgb);
-  await expect(twistroot).toHaveCSS('color', expectedAccentRgb);
+  await expect(twistroot).toHaveCSS('background-color', rgb(palette.ui.coin.emboss));
   const view = testInfo.project.name === 'desktop' ? 'desktop-1280x800' : 'phone-390x844';
   await page.screenshot({
     path: `test-results/evidence/m1-07e2-seed-selection-${view}.png`,
@@ -127,6 +128,7 @@ test('selected seed depresses while pressed and returns to its raised state on r
     ? { width: 1280, height: 800 }
     : { width: 390, height: 844 });
   await page.goto('./');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
 
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
   const twistroot = seeds.getByRole('button', { name: 'Twistroot' });
@@ -134,7 +136,7 @@ test('selected seed depresses while pressed and returns to its raised state on r
   await twistroot.press('Enter');
   await expect(twistroot).toHaveAttribute('aria-pressed', 'true');
   await page.mouse.move(0, 0);
-  await expect(twistroot).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, -3)');
+  await expect(twistroot).toHaveCSS('background-color', `rgb(${[1, 3, 5].map((i) => Number.parseInt(palette.ui.coin.emboss.slice(i, i + 2), 16)).join(', ')})`);
 
   const bounds = await twistroot.boundingBox();
   expect(bounds).not.toBeNull();
@@ -144,16 +146,14 @@ test('selected seed depresses while pressed and returns to its raised state on r
     const style = getComputedStyle(button);
     return { transform: style.transform, boxShadow: style.boxShadow };
   });
-  expect(restingStyle.transform).toBe('matrix(1, 0, 0, 1, 0, -3)');
-  expect(restingStyle.boxShadow).toContain('0px 8px 0px');
+  expect(restingStyle.transform).toBe('none');
 
+  // Pressing a seed card pushes it down and in slightly, like a stamp, then it springs back.
   await page.mouse.move(x, y);
   await page.mouse.down();
-  await expect(twistroot).toHaveCSS('transform', 'matrix(1, 0, 0, 1, 0, 5)');
-  await expect(twistroot).toHaveCSS('box-shadow', /0px 0px 0px/);
+  await expect(twistroot).toHaveCSS('transform', 'matrix(0.97, 0, 0, 0.97, 0, 3)');
 
   await page.mouse.up();
   await expect(twistroot).toHaveCSS('transform', restingStyle.transform);
-  await expect(twistroot).toHaveCSS('box-shadow', restingStyle.boxShadow);
   await expect(twistroot).toHaveAttribute('aria-pressed', 'true');
 });

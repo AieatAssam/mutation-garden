@@ -58,14 +58,21 @@ test('renders six occupied plot status descriptors in five draw calls', async ({
     };
   });
   const alpha = 0.4;
+  let decisiveRegions = 0;
   for (const region of ['fruit', 'paper'] as const) {
     const expected = blend(samples.full[region], samples.shadow[region], alpha);
     const singleCoverageError = maxChannelError(samples.partial[region], expected);
     expect(singleCoverageError, `${region} face should apply stamp alpha once over its shadow`).toBeLessThanOrEqual(8);
     const compounded = blend(samples.full[region], expected, alpha);
-    expect(maxChannelError(samples.partial[region], compounded), `${region} face should not accumulate alpha across layers`).toBeGreaterThan(singleCoverageError + 8);
+    // Double-applied alpha is only distinguishable where the face and its shadow differ enough;
+    // the soft tan card shadow sits close to the paper face, so that region may not decide it.
+    if (maxChannelError(compounded, expected) > 16) {
+      decisiveRegions += 1;
+      expect(maxChannelError(samples.partial[region], compounded), `${region} face should not accumulate alpha across layers`).toBeGreaterThan(singleCoverageError + 8);
+    }
     expect(maxChannelError(samples.shadow[region], samples.background[region])).toBeGreaterThan(8);
   }
+  expect(decisiveRegions, 'at least one region must decide whether alpha compounds').toBeGreaterThanOrEqual(1);
   const stampCssSize = Number(await page.locator('body').getAttribute('data-stamp-css-size'));
   expect(stampCssSize).toBeGreaterThanOrEqual(26);
   expect(stampCssSize).toBeLessThanOrEqual(30);

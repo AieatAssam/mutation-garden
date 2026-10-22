@@ -178,3 +178,15 @@ Research notes behind this spec:
 - [GPU Gems 3, ch. 6: GPU-generated procedural wind](https://developer.nvidia.com/gpugems/gpugems3/part-i-geometry/chapter-6-gpu-generated-procedural-wind-animations-trees): vertex-shader wind for many plants.
 - [Unity forum: wind for low-poly leaves](https://discussions.unity.com/t/realtime-wind-animation-for-lowpoly-leaves/675363): per-vertex weights in vertex colours.
 - Grow a Garden mutation guides ([Deltia's Gaming](https://deltiasgaming.com/?p=241855), [VideoGamer](https://www.videogamer.com/?p=1166511)): mutations as the main value lever, condition-triggered and stacking. We keep stacking but make every trait learnable rather than event- or luck-gated.
+
+## 7. Additions from research (2026-10-22)
+
+From [../research/viral-findings.md](../research/viral-findings.md). Tune on device.
+
+- **Counter roll-up:** the coin counter tweens to its new value over about 400 ms with an overshoot ease (`cubic-bezier(0.34, 1.56, 0.64, 1)`) as the flying coins land; each landing bumps the label. The sim value is already correct; only the display rolls.
+- **Two-beat reveal:** for a mutation, the trait colour shows first (motes and the dissolve edge), then the material lands. Hold 300–600 ms of anticipation before the flash on first discoveries.
+- **Tier badge:** stars plus a trait icon on every mutation label, so tiers read without colour.
+- **Every sound has a visual twin;** nothing important is audio-only.
+- **Shake tiers:** small 0.2 s at 1–2 px (5-combo), medium 0.3 s at 3–4 px (first Golden or Glowing), large 0.5 s at 6–8 px with under 1° roll (first Crystal or Rainbow). Never during a drag. Off with reduced motion, replaced by a brief freeze and tint.
+- **Flash limit:** at most three full-screen flashes per second; avoid saturated red flashes.
+- **Foil loop:** mutated fruit runs a gentle 3 s gleam loop so a mutated garden shimmers at rest.

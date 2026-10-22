@@ -27,12 +27,15 @@ export async function expectHarvestPaid(page: Page, act: () => Promise<void>): P
     (window as unknown as { __payoutObserver?: MutationObserver }).__payoutObserver = observer;
   });
   await act();
-  await expect.poll(async () => Number((await coins.textContent())?.trim()), { timeout: 5_000 }).toBeGreaterThan(before);
-  // Labels and the counter update in the same sim tick; give the observer one frame to record them.
-  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
-  const paid = await page.evaluate(() => ((window as unknown as { __payouts?: number[] }).__payouts ?? []).reduce((sum, value) => sum + value, 0));
-  const after = Number((await coins.textContent())?.trim());
-  expect(paid, 'the game showed a payout').toBeGreaterThan(0);
-  expect(after, 'the counter moved by exactly the payout shown').toBe(before + paid);
+  const read = () => page.evaluate(() => ({
+    paid: ((window as unknown as { __payouts?: number[] }).__payouts ?? []).reduce((sum, value) => sum + value, 0),
+    shown: Number(document.querySelector('[aria-label="Coins"]')?.textContent?.trim()),
+  }));
+  // The counter rolls up over about 400 ms (motion.md 7), so wait for it to settle on the total.
+  await expect.poll(async () => {
+    const { paid, shown } = await read();
+    return paid > 0 && shown === before + paid;
+  }, { message: 'the counter moved by exactly the payout shown', timeout: 5_000 }).toBe(true);
+  const { paid, shown: after } = await read();
   return { before, after, paid };
 }

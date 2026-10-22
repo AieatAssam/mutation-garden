@@ -43,8 +43,8 @@ test('maximum horizontal pan keeps every plot target on screen', async ({ page }
       for (const [dx, dy] of targetOffsets) {
         const x = plot.x + dx;
         const y = plot.y + dy;
-        expect(x, `${plot.plotId} target left edge`).toBeGreaterThanOrEqual(8);
-        expect(x, `${plot.plotId} target right edge`).toBeLessThanOrEqual(viewport.width - 8);
+        expect(x, `${plot.plotId} target left edge`).toBeGreaterThanOrEqual(8 - 1e-5);
+        expect(x, `${plot.plotId} target right edge`).toBeLessThanOrEqual(viewport.width - 8 + 1e-5);
         expect(y, `${plot.plotId} target top edge`).toBeGreaterThanOrEqual(0);
         expect(y, `${plot.plotId} target bottom edge`).toBeLessThanOrEqual(viewport.height);
         expect(await page.evaluate(({ x: px, y: py }) =>

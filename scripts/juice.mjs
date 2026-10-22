@@ -13,7 +13,7 @@ page.on('console', (m) => m.type() === 'error' && console.error(m.text()));
 const t0 = Date.now();
 await page.goto(url);
 await page.locator('body[data-models="ready"]').waitFor();
-const plots = [[91, 428], [205, 451], [124, 357], [238, 380], [157, 286], [271, 309]];
+const plots = [[91, 468], [205, 488], [124, 407], [238, 426], [157, 345], [271, 365]];
 for (const [x, y] of plots.slice(0, 4)) {
   await page.mouse.click(x, y);
   await page.waitForTimeout(80);

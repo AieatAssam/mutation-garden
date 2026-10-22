@@ -4,6 +4,10 @@ import './garden-ui.css';
 export interface SeedDescriptor {
   readonly id: SpeciesId;
   readonly name: string;
+  readonly cost: number;
+  readonly unlockLevel: number;
+  /** The fruit colour shown on the seed card (a palette value). */
+  readonly color?: string;
 }
 
 export interface GardenUIOptions {
@@ -11,19 +15,52 @@ export interface GardenUIOptions {
   readonly selectedId: SpeciesId;
   readonly coins: number;
   readonly onSelect: (speciesId: SpeciesId) => void;
+  readonly onToggleSound?: () => void;
+  readonly onToggleMusic?: () => void;
+  readonly onHarvestAll?: () => void;
 }
 
 export interface GardenUIUpdate {
   readonly selectedId: SpeciesId;
   readonly coins: number;
+  readonly level?: number;
+  /** 0..1 progress through the current level. */
+  readonly levelProgress?: number;
+  /** One short line telling the player what to do next. Empty hides it. */
+  readonly hint?: string;
+  readonly sound?: boolean;
+  readonly music?: boolean;
+  readonly reducedMotion?: boolean;
+  /** Ripe plants right now; two or more show the Harvest all button. */
+  readonly ripeCount?: number;
 }
 
 export interface GardenUI {
   update(update: GardenUIUpdate): void;
+  /** Stamps the new level and names what it unlocked (motion.md 4.7). */
+  levelUp(level: number, unlocked: readonly string[], reducedMotion: boolean): void;
+  /** "While you were away" card with a one-tap harvest of everything ripe. */
+  showAway(ripeCount: number, onHarvestAll: () => void): void;
+  hideAway(): void;
   dispose(): void;
 }
 
-/** Mount the app's seed and coin controls into an owned overlay container. */
+const SVG = 'http://www.w3.org/2000/svg';
+
+function icon(paths: readonly string[]): SVGSVGElement {
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 24 24');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('garden-ui__icon');
+  for (const d of paths) {
+    const path = document.createElementNS(SVG, 'path');
+    path.setAttribute('d', d);
+    svg.append(path);
+  }
+  return svg;
+}
+
+/** Mount the app's HUD into an owned overlay container. */
 export function createGardenUI(container: HTMLElement, options: GardenUIOptions): GardenUI {
   const overlay = document.createElement('div');
   overlay.className = 'garden-ui';
@@ -36,19 +73,19 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const coinToken = document.createElement('span');
   coinToken.className = 'garden-ui__coin-token';
   coinToken.setAttribute('aria-hidden', 'true');
-  const coinMark = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const coinMark = document.createElementNS(SVG, 'svg');
   coinMark.classList.add('garden-ui__coin-mark');
   coinMark.setAttribute('viewBox', '0 0 40 40');
   coinMark.setAttribute('focusable', 'false');
-  const rim = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const rim = document.createElementNS(SVG, 'path');
   rim.classList.add('garden-ui__coin-ridges');
   rim.setAttribute('d', 'M20 2v4 M26.9 3.2l-1.4 3.8 M33 7l-2.8 2.8 M36.8 13.1 33 14.5 M38 20h-4 M36.8 26.9 33 25.5 M33 33l-2.8-2.8 M26.9 36.8l-1.4-3.8 M20 38v-4 M13.1 36.8l1.4-3.8 M7 33l2.8-2.8 M3.2 26.9 7 25.5 M2 20h4 M3.2 13.1 7 14.5 M7 7l2.8 2.8 M13.1 3.2l1.4 3.8');
-  const innerRing = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+  const innerRing = document.createElementNS(SVG, 'circle');
   innerRing.classList.add('garden-ui__coin-inner-ring');
   innerRing.setAttribute('cx', '20');
   innerRing.setAttribute('cy', '20');
   innerRing.setAttribute('r', '10');
-  const seed = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  const seed = document.createElementNS(SVG, 'path');
   seed.classList.add('garden-ui__coin-seed');
   seed.setAttribute('d', 'M17 23c-2.4-2.3-1.1-6.2 3-6.8 2.1 2.1 2.1 5.2-3 6.8Zm3-1.8c0-3 1.4-5 4-6');
   coinMark.append(rim, innerRing, seed);
@@ -56,6 +93,49 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const coinAmount = document.createElement('span');
   coinAmount.className = 'garden-ui__coin-amount';
   coinStatus.append(coinToken, coinAmount);
+
+  // Top card: level, progress and the current objective (brief section 8; prototype title card).
+  const levelBadge = document.createElement('div');
+  levelBadge.className = 'garden-ui__card';
+  const levelText = document.createElement('strong');
+  levelText.className = 'garden-ui__level-text';
+  const levelBar = document.createElement('span');
+  levelBar.className = 'garden-ui__level-bar';
+  levelBar.setAttribute('role', 'progressbar');
+  levelBar.setAttribute('aria-label', 'Level progress');
+  levelBar.setAttribute('aria-valuemin', '0');
+  levelBar.setAttribute('aria-valuemax', '100');
+  const levelFill = document.createElement('span');
+  levelFill.className = 'garden-ui__level-fill';
+  levelBar.append(levelFill);
+  levelBadge.append(levelText, levelBar);
+
+  const toggles = document.createElement('div');
+  toggles.className = 'garden-ui__toggles';
+  const toggle = (label: string, paths: readonly string[], onClick?: () => void) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = 'garden-ui__toggle';
+    button.setAttribute('aria-label', label);
+    button.append(icon(paths));
+    button.addEventListener('click', () => onClick?.());
+    toggles.append(button);
+    return button;
+  };
+  const soundButton = toggle('Sound', ['M4 9h4l5-4v14l-5-4H4Z', 'M16.5 8.5a5 5 0 0 1 0 7', 'M19 6a8.5 8.5 0 0 1 0 12'], options.onToggleSound);
+  const musicButton = toggle('Music', ['M9 18V6l10-2v12', 'M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z', 'M19 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z'], options.onToggleMusic);
+
+  // The objective line shows only while there is something to say, so it rarely covers the garden.
+  const hint = document.createElement('p');
+  hint.className = 'garden-ui__hint';
+  hint.setAttribute('role', 'status');
+  hint.setAttribute('aria-live', 'polite');
+
+  const harvestAll = document.createElement('button');
+  harvestAll.type = 'button';
+  harvestAll.className = 'garden-ui__harvest-all';
+  harvestAll.hidden = true;
+  harvestAll.addEventListener('click', () => options.onHarvestAll?.());
 
   const seedTray = document.createElement('nav');
   seedTray.className = 'garden-ui__tray';
@@ -67,33 +147,148 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     const button = document.createElement('button');
     button.className = 'garden-ui__seed';
     button.type = 'button';
-    button.textContent = species.name;
+    const swatch = document.createElement('span');
+    swatch.className = 'garden-ui__seed-swatch';
+    swatch.setAttribute('aria-hidden', 'true');
+    if (species.color) swatch.style.setProperty('--seed-color', species.color);
+    const name = document.createElement('span');
+    name.className = 'garden-ui__seed-name';
+    name.textContent = species.name;
+    const detail = document.createElement('span');
+    detail.className = 'garden-ui__seed-detail';
+    button.append(swatch, name, detail);
     button.dataset.speciesId = species.id;
-    button.addEventListener('click', () => options.onSelect(species.id));
+    button.addEventListener('click', () => {
+      if (button.getAttribute('aria-disabled') !== 'true') options.onSelect(species.id);
+    });
     seedTray.append(button);
-    return { id: species.id, button };
+    return { species, button, detail, locked: null as boolean | null };
   });
   seedTray.prepend(trayLabel);
 
-  overlay.append(coinStatus, seedTray);
+  const stamp = document.createElement('div');
+  stamp.className = 'garden-ui__stamp';
+  stamp.setAttribute('role', 'status');
+  stamp.hidden = true;
+
+  const away = document.createElement('div');
+  away.className = 'garden-ui__away';
+  away.hidden = true;
+  const awayText = document.createElement('p');
+  const awayButton = document.createElement('button');
+  awayButton.type = 'button';
+  awayButton.className = 'garden-ui__away-button';
+  awayButton.textContent = 'Harvest all';
+  away.append(awayText, awayButton);
+  let onAwayHarvest: (() => void) | null = null;
+  awayButton.addEventListener('click', () => {
+    onAwayHarvest?.();
+    away.hidden = true;
+  });
+
+  overlay.append(coinStatus, levelBadge, toggles, hint, stamp, away, seedTray);
+  seedTray.append(harvestAll);
   container.append(overlay);
 
-  const update = ({ selectedId, coins }: GardenUIUpdate) => {
-    coinAmount.textContent = String(coins);
+  // The counter rolls toward the authoritative value with an overshoot ease (motion.md 7).
+  let shownCoins = options.coins;
+  let targetCoins = options.coins;
+  let rollFrom = options.coins;
+  let rollStart = 0;
+  let rollFrame = 0;
+  let instant = false;
+  const ease = (t: number) => 1 + 2.70158 * (t - 1) ** 3 + 1.70158 * (t - 1) ** 2;
+  const roll = (now: number) => {
+    const t = Math.min(1, (now - rollStart) / 400);
+    shownCoins = Math.round(rollFrom + (targetCoins - rollFrom) * ease(t));
+    coinAmount.textContent = String(t >= 1 ? targetCoins : shownCoins);
+    rollFrame = t < 1 ? requestAnimationFrame(roll) : 0;
+  };
+
+  const update = (state: GardenUIUpdate) => {
+    instant = state.reducedMotion ?? instant;
+    if (state.coins !== targetCoins) {
+      targetCoins = state.coins;
+      if (instant || typeof requestAnimationFrame === 'undefined') {
+        coinAmount.textContent = String(targetCoins);
+      } else {
+        rollFrom = shownCoins;
+        rollStart = performance.now();
+        if (!rollFrame) rollFrame = requestAnimationFrame(roll);
+      }
+    } else if (!rollFrame) {
+      coinAmount.textContent = String(targetCoins);
+    }
+    const level = state.level ?? 1;
+    levelText.textContent = `Level ${level}`;
+    const progress = Math.round(Math.min(1, Math.max(0, state.levelProgress ?? 0)) * 100);
+    levelFill.style.width = `${progress}%`;
+    levelBar.setAttribute('aria-valuenow', String(progress));
+    hint.textContent = state.hint ?? '';
+    hint.hidden = !state.hint;
+    const ripe = state.ripeCount ?? 0;
+    harvestAll.hidden = ripe < 2 || !options.onHarvestAll;
+    harvestAll.textContent = `Harvest all ${ripe}`;
+    soundButton.setAttribute('aria-pressed', String(state.sound ?? true));
+    musicButton.setAttribute('aria-pressed', String(state.music ?? true));
     for (const seed of seedButtons) {
-      const selected = seed.id === selectedId;
+      const selected = seed.species.id === state.selectedId;
+      const locked = seed.species.unlockLevel > level;
       seed.button.setAttribute('aria-pressed', String(selected));
       seed.button.classList.toggle('is-selected', selected);
+      if (seed.locked !== locked) {
+        seed.button.setAttribute('aria-disabled', String(locked));
+        seed.button.classList.toggle('is-locked', locked);
+        seed.detail.textContent = locked ? `Level ${seed.species.unlockLevel}` : `${seed.species.cost} ${seed.species.cost === 1 ? 'coin' : 'coins'}`;
+        seed.locked = locked;
+      }
     }
   };
   update(options);
 
+  let stampTimer = 0;
   let disposed = false;
   return {
     update,
+    levelUp(level, unlocked, reducedMotion) {
+      stamp.textContent = '';
+      const title = document.createElement('strong');
+      title.textContent = `Level ${level}`;
+      stamp.append(title);
+      if (unlocked.length > 0) {
+        const detail = document.createElement('span');
+        detail.textContent = `New seed: ${unlocked.join(', ')}`;
+        stamp.append(detail);
+      }
+      stamp.hidden = false;
+      stamp.animate(reducedMotion
+        ? [{ opacity: 0 }, { opacity: 1 }]
+        : [
+          { opacity: 0, transform: 'translate(-50%, 0) scale(2.2) rotate(-8deg)' },
+          { opacity: 1, transform: 'translate(-50%, 0) scale(0.92) rotate(-3deg)', offset: 0.55 },
+          { opacity: 1, transform: 'translate(-50%, 0) scale(1) rotate(-3deg)' },
+        ], { duration: reducedMotion ? 150 : 420, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.2)', fill: 'forwards' });
+      for (const seed of seedButtons) {
+        if (seed.species.unlockLevel === level && !reducedMotion) {
+          seed.button.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' }], { duration: 420, delay: 500 });
+        }
+      }
+      clearTimeout(stampTimer);
+      stampTimer = window.setTimeout(() => { stamp.hidden = true; }, 2200);
+    },
+    showAway(ripeCount, onHarvestAll) {
+      awayText.textContent = `${ripeCount} ${ripeCount === 1 ? 'plant' : 'plants'} ripened while you were away.`;
+      onAwayHarvest = onHarvestAll;
+      away.hidden = false;
+    },
+    hideAway() {
+      away.hidden = true;
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
+      if (rollFrame) cancelAnimationFrame(rollFrame);
+      clearTimeout(stampTimer);
       overlay.remove();
     },
   };

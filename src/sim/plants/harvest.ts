@@ -1,4 +1,4 @@
-import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, SPECIES, YIELD_SIZES } from '../content/species';
+import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
@@ -50,7 +50,8 @@ export function harvest(
     const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
-    nextState = { ...nextState, coins: nextState.coins + coins, plots };
+    // XP follows the species' base value, so it never varies with luck (design.md 4.4).
+    nextState = { ...nextState, coins: nextState.coins + coins, xp: nextState.xp + species.baseValue, plots };
     totalCoins += coins;
     count += 1;
     events.push({ type: 'Harvested', plotId, speciesId: species.id, coins, size, fresh });
@@ -61,6 +62,11 @@ export function harvest(
   if (comboBonus > 0) nextState = { ...nextState, coins: nextState.coins + comboBonus };
   totalCoins += comboBonus;
   if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: totalCoins, comboBonus });
+  const levelBefore = levelForXp(state.xp);
+  const levelAfter = levelForXp(nextState.xp);
+  for (let level = levelBefore + 1; level <= levelAfter; level += 1) {
+    events.push({ type: 'LevelUp', level, unlocked: SPECIES.filter((entry) => entry.unlockLevel === level).map(({ id }) => id) });
+  }
   return { state: nextState, events };
 }
 

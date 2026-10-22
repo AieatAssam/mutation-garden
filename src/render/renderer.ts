@@ -32,6 +32,8 @@ export interface RenderSpecies {
 
 export interface RendererOptions {
   readonly species: readonly RenderSpecies[];
+  /** Presentation clock in ms; fixtures pass a manual one so frames are repeatable. Defaults to performance.now. */
+  readonly now?: () => number;
 }
 
 export interface Renderer {
@@ -50,6 +52,7 @@ export interface Renderer {
 }
 
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
+  const clock = options.now ?? (() => performance.now());
   ColorManagement.enabled = true;
   const gl = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   gl.outputColorSpace = SRGBColorSpace;
@@ -76,7 +79,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     console.error('Garden model failed to load', error);
   });
   scene.add(garden);
-  const plants = createPlantReconciler(garden.plots, materials);
+  const plants = createPlantReconciler(garden.plots, materials, { waitForModels: true });
   let plantModels: PlantModels | null = null;
   const plantsLoaded = loadPlantModels(PLANT_MODEL_URL).then((models) => {
     if (disposed) {
@@ -150,7 +153,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     if (!previousSnapshot || !currentSnapshot) return;
     camera.updateWorldMatrix(true, false);
     const facing = camera.getWorldQuaternion(new Quaternion());
-    status.update(currentSnapshot, previousSnapshot, snapshotAlpha, facing, performance.now(), currentReducedMotion);
+    status.update(currentSnapshot, previousSnapshot, snapshotAlpha, facing, clock(), currentReducedMotion);
   }
 
   const particles = createParticles();
@@ -160,7 +163,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const effectPoint = new Vector3();
 
   function playEvents(events: readonly SimEvent[], reducedMotion: boolean): void {
-    const now = performance.now();
+    const now = clock();
     for (const event of events) {
       if (!('plotId' in event) || event.type === 'CommandRejected') continue;
       const anchor = plotsById.get(event.plotId);
@@ -206,7 +209,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }
 
   function draw(): void {
-    const now = performance.now();
+    const now = clock();
     particles.update(now);
     flights.update(now);
     refreshStatus();

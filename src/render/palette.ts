@@ -176,7 +176,7 @@ export const palette = {
     "text-on-accent": "#FFF9EC",
     "accent": "#C93A24",
     "accent-pressed": "#A82E1C",
-    "misprint-shadow": "#E5482F",
+    "misprint-shadow": "#CDB28A",
     "coin": {
       "face": "#F2B632",
       "rim": "#C9861C",

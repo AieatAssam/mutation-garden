@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { startWithSave } from './garden-save';
+
+// These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
+test.beforeEach(async ({ page }) => startWithSave(page));
 
 const pageErrors = (page: import('@playwright/test').Page) => {
   const errors: string[] = [];

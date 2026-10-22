@@ -1,4 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { startWithSave } from './garden-save';
+
+// These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
+test.beforeEach(async ({ page }) => startWithSave(page));
 
 test('three seed controls and their focus ring fit the viewport safe areas', async ({ page }, testInfo) => {
   const viewport = testInfo.project.name === 'desktop' ? { width: 1280, height: 800 } : { width: 390, height: 844 };
@@ -14,7 +18,7 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
     tray.getByRole('button', { name: 'Twistroot' }),
   ];
   await expect(tray).toBeVisible();
-  await expect(tray.getByRole('button')).toHaveCount(3);
+  await expect(tray.locator('.garden-ui__seed')).toHaveCount(3);
 
   const layout = await page.evaluate(() => {
     const trayElement = document.querySelector<HTMLElement>('.garden-ui__tray');
@@ -32,13 +36,13 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
         bottom: Number.parseFloat(trayStyle.bottom),
       },
       label: rect(trayElement.querySelector('.garden-ui__tray-label')!),
-      buttons: [...trayElement.querySelectorAll('button')].map((button) => ({
+      buttons: [...trayElement.querySelectorAll<HTMLElement>('.garden-ui__seed')].map((button) => ({
         ...rect(button),
-        text: button.textContent?.trim(),
+        text: button.querySelector('.garden-ui__seed-name')?.textContent?.trim(),
         textWidth: button.scrollWidth,
         clientWidth: button.clientWidth,
       })),
-      clippingAncestors: [...trayElement.querySelectorAll('button')].map((button) => {
+      clippingAncestors: [...trayElement.querySelectorAll<HTMLElement>('.garden-ui__seed')].map((button) => {
         const clipped: string[] = [];
         let ancestor: HTMLElement | null = button;
         while (ancestor) {
@@ -94,7 +98,9 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
     };
   });
 
-  // Tab is real keyboard navigation. Check each seed's expanded outline against the safe area.
+  // Tab is real keyboard navigation. The sound and music toggles come first, then the seeds.
+  await page.keyboard.press('Tab');
+  await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   for (const [index, seed] of seeds.entries()) {
     await expect(seed).toBeFocused();

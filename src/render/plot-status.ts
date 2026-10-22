@@ -226,7 +226,7 @@ export function createPlotStatusResources(): PlotStatusResources {
   const pieMaterial = createPieMaterial();
   const tickMaterial = createTickMaterial();
   const stampMaterial = createStampMaterial();
-  const shadowMaterial = material(palette.ink['misprint-tomato']);
+  const shadowMaterial = material(palette.ui['misprint-shadow']);
   shadowMaterial.transparent = true;
   shadowMaterial.onBeforeCompile = (shader) => {
     shader.vertexShader = shader.vertexShader.replace(

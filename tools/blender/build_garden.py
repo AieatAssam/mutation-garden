@@ -426,8 +426,8 @@ for k in range(16):
     colour = rng.choice(flower_colours)
     for pk in range(5):
         a = 2 * math.pi * pk / 5
-        parts.append(prim('uv_sphere', colour, loc=(x + 0.055 * math.cos(a), y + 0.055 * math.sin(a), GROUND + h),
-                          scale=(0.05, 0.05, 0.025), segments=6, ring_count=3))
+        parts.append(prim('uv_sphere', colour, loc=(x + 0.063 * math.cos(a), y + 0.063 * math.sin(a), GROUND + h),
+                          scale=(0.058, 0.058, 0.029), segments=6, ring_count=3))
     parts.append(prim('uv_sphere', 'environment.island-rock.1', loc=(x, y, GROUND + h + 0.012),
                       scale=(0.035, 0.035, 0.03), segments=6, ring_count=3))
     for part in parts:
@@ -473,8 +473,8 @@ CLOUD_LOBES = (
     ((0, 0, 0.45), (-0.5, -0.05, 0.32), (0.45, 0.05, 0.38), (0.05, 0.32, 0.33)),
     ((0, 0, 0.42), (0.52, -0.06, 0.34), (-0.38, 0.12, 0.36), (0.22, 0.26, 0.3), (-0.75, -0.1, 0.24)),
 )
-# (game x, game y, game z, size): two in the sky band above the island on a phone, one low under it.
-CLOUD_PLACES = ((-3.0, -0.6, -8.0, 1.1), (3.5, -0.1, -9.0, 0.9), (-4.0, -6.3, -4.0, 1.3))
+# (game x, game y, game z, size): all in the sky band above the island on a phone, clear of the HUD row.
+CLOUD_PLACES = ((-3.0, -1.1, -8.0, 0.9), (3.5, -0.6, -9.0, 0.8), (9.5, -1.6, -9.5, 0.75))
 for k, (lobes, (gx, gy, gz, size)) in enumerate(zip(CLOUD_LOBES, CLOUD_PLACES)):
     root = bpy.data.objects.new(f'cloud-{k}', None)
     link(root)
@@ -482,8 +482,9 @@ for k, (lobes, (gx, gy, gz, size)) in enumerate(zip(CLOUD_LOBES, CLOUD_PLACES)):
     root.scale = (size, size, size)
     root['keep'] = True
     lit = paper_shape(f'cloud-{k}-lit', cloud_outline(lobes), 'environment.cloud.lit', 0.08, 0)
-    lower = [(cx * 0.88 + 0.1, cz - 0.1, r * 0.86) for cx, cz, r in lobes]
-    shade = paper_shape(f'cloud-{k}-shade', cloud_outline(lower, floor=-0.36), 'environment.cloud.shade', 0.08, 0.07)
+    # The shade layer sits behind and peeks out below the lit front as a band (paper-cut layering).
+    lower = [(cx * 0.92 + 0.06, cz - 0.2, r * 0.9) for cx, cz, r in lobes]
+    shade = paper_shape(f'cloud-{k}-shade', cloud_outline(lower, floor=-0.46), 'environment.cloud.shade', 0.08, 0.07)
     hull = lit.copy(); hull.data = lit.data.copy(); link(hull)
     other = shade.data.copy()
     bm = bmesh.new(); bm.from_mesh(hull.data); bm.from_mesh(other)

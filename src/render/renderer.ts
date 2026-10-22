@@ -95,6 +95,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   let scenery: Scenery | null = null;
   let ambient: Ambient | null = null;
   const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then((loaded) => {
+    if (disposed) {
+      loaded.dispose();
+      return;
+    }
     scenery = loaded;
     garden.setScenery(loaded);
     ambient = createAmbient(loaded.creatures);
@@ -261,7 +265,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
    * once, before "ready", and drop to 1× if they are slow. Deciding once keeps the picture stable.
    */
   function choosePixelRatio(): void {
-    if (gl.getPixelRatio() <= 1) return;
+    // A manual clock means a fixture wants repeatable frames; keep the resolution it asked for.
+    if (gl.getPixelRatio() <= 1 || options.now) return;
     const context = gl.getContext();
     const pixel = new Uint8Array(4);
     const wait = garden.position.y;

@@ -17,29 +17,18 @@ export interface Ambient {
 
 export const MAX_BUTTERFLIES = 2;
 export const MAX_LEAVES = 4;
-const WING_SCALE = 3.2;
+const WING_SCALE = 4.2;
 const FLAP_MS = 350;
 const LEAF_EVERY_MS = 8000;
 const LEAF_JITTER_MS = 2000;
 const LEAF_LIFE_MS = 4000;
-const LEAF_SCALE = 1.6;
+const LEAF_SCALE = 2.1;
 /** Tree crown and two rim spots (tools/blender/build_garden.py), in game coordinates. */
 const LEAF_SOURCES = [[-2.7, 1.9, -2.35], [2.9, 0.7, 1.6], [-3.2, 0.7, 1.2]] as const;
 
 function hash(n: number): number {
   const x = Math.sin(n * 91.7 + 47.3) * 43758.5453;
   return x - Math.floor(x);
-}
-
-/** Leaf spawn times near `nowMs`: one per 8 s cell, ±2 s, so gaps are 6 to 10 s. */
-function leafSpawns(nowMs: number): number[] {
-  const cell = Math.floor(nowMs / LEAF_EVERY_MS);
-  const spawns: number[] = [];
-  for (let k = cell - 1; k <= cell; k += 1) {
-    const at = k * LEAF_EVERY_MS + (hash(k) - 0.5) * 2 * LEAF_JITTER_MS;
-    if (nowMs >= at && nowMs - at < LEAF_LIFE_MS) spawns.push(k);
-  }
-  return spawns.slice(0, MAX_LEAVES);
 }
 
 function leafStart(k: number): number {
@@ -88,13 +77,14 @@ export function createAmbient(shapes: ReadonlyMap<string, BufferGeometry>): Ambi
           const dx = 2.3 * 0.11 * Math.cos(t * 0.11 + phase);
           const dz = 2.1 * 0.17 * Math.cos(t * 0.17 + phase * 1.7);
           const y = GROUND_SURFACE.y + 1.4 + 0.25 * Math.sin(t * 1.3 + phase);
-          const flap = 0.25 + 1.0 * Math.abs(Math.sin((nowMs / FLAP_MS + index * 0.37) * Math.PI));
-          for (const side of [1, -1]) {
+          const flap = 0.45 + 0.85 * Math.abs(Math.sin((nowMs / FLAP_MS + index * 0.37) * Math.PI));
+          for (let wingIndex = 0; wingIndex < 2; wingIndex += 1) {
+            const side = wingIndex === 0 ? 1 : -1;
             dummy.position.set(x, y, z);
             dummy.rotation.set(0, Math.atan2(dx, dz) + Math.PI, side * flap, 'YXZ');
             dummy.scale.set(side * WING_SCALE, WING_SCALE, WING_SCALE);
             dummy.updateMatrix();
-            wings.setMatrixAt(index * 2 + (side === 1 ? 0 : 1), dummy.matrix);
+            wings.setMatrixAt(index * 2 + wingIndex, dummy.matrix);
           }
           counts.butterflies += 1;
         }
@@ -102,7 +92,10 @@ export function createAmbient(shapes: ReadonlyMap<string, BufferGeometry>): Ambi
         wings.instanceMatrix.needsUpdate = true;
       }
       if (leaves) {
-        for (const k of leafSpawns(nowMs)) {
+        // One leaf per 8 s cell, ±2 s, so gaps are 6 to 10 s; only the current and previous cells can be alive.
+        const cell = Math.floor(nowMs / LEAF_EVERY_MS);
+        for (let k = cell - 1; k <= cell && counts.leaves < MAX_LEAVES; k += 1) {
+          if (nowMs < leafStart(k) || nowMs - leafStart(k) >= LEAF_LIFE_MS) continue;
           const age = (nowMs - leafStart(k)) / 1000;
           const [sx, sy, sz] = LEAF_SOURCES[Math.floor(hash(k + 13) * LEAF_SOURCES.length)]!;
           const gust = windAt(sx, nowMs);

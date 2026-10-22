@@ -41,7 +41,8 @@ export interface Scenery extends Group {
 
 /** Clouds drift along +x and wrap inside this span (m1-liveliness.md 4.2). */
 const CLOUD_SPEED = 0.15;
-const CLOUD_SPAN = 20;
+// Wider than the widest view (desktop, about ±8 units) plus a cloud, so the wrap is never on screen.
+const CLOUD_SPAN = 28;
 /** Grass tufts and flowers bend this many radians per unit of wind at their tip (m1-liveliness.md 4.1). */
 const GRASS_BEND = 0.15;
 

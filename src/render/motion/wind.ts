@@ -20,7 +20,7 @@ function hash(n: number): number {
  */
 export function gustAt(timeMs: number): number {
   const cell = Math.floor(timeMs / GUST_CELL_MS);
-  for (const k of [cell - 1, cell]) {
+  for (let k = cell - 1; k <= cell; k += 1) {
     const t = (timeMs - (k * GUST_CELL_MS + (hash(k) - 0.5) * 2 * GUST_JITTER_MS)) / GUST_MS;
     if (t >= 0 && t < 1) return Math.sin(t * Math.PI) ** 2;
   }

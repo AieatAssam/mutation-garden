@@ -181,6 +181,17 @@ Generated with WebAudio (no large files) where possible; a few short recorded sa
 - Music: one gentle loop per time of day, ducked under reveals.
 - Haptics (where supported): 10 ms tick on plant, 15 ms on harvest, pattern [20, 40, 20] on mutation reveal. Off with reduced motion or the setting.
 
-## 11. What we cut
+## 11. Viral and retention features
+
+Research summary and sources: [research/viral-findings.md](research/viral-findings.md). Adopted, in milestone order:
+
+- **M1-S4:** coin counter roll-up; "While you were away" summary with one-tap harvest; first plot pulses so the first plant happens within 3 s.
+- **M2:** near-miss progress ("2 of 3 conditions") on the next mutation; two-beat reveal with tier badge; weather as one gentle mutation layer (sun shower, dusk, frost morning); foil shimmer on mutated fruit; honest odds and a "First on this device" stamp in the journal.
+- **M3:** a seed stall whose stock rotates every 5 minutes from a hash of the clock, with rare seeds; surprise seed drops on harvest; a "tended days" count that never punishes a missed day; decorations as a coin sink.
+- **M5:** a daily garden from a date-hashed seed; `#seed=` links that open the same garden; a spoiler-free share card; a 3 s clip of a reveal, captured only when the player taps.
+
+Rejected: trading, stealing, gacha, paid speed-ups, energy timers, fake scarcity, guilt streaks, push notifications, fake global stats, forced sharing.
+
+## 12. What we cut
 
 From the brief's non-goals, plus: no dozens of species, no complex weather (one dusk phase only), no player-to-player anything, no premium currency, no energy system, no timers that punish absence.

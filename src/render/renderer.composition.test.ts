@@ -30,6 +30,7 @@ vi.mock('three', async (importOriginal) => {
 vi.mock('./materials', () => ({ createMaterialLibrary: () => (mocks.materials = { dispose: vi.fn(() => mocks.events.push('materials.dispose')) }) }));
 vi.mock('./garden', () => ({ createGarden: () => mocks.garden }));
 vi.mock('./scenery', () => ({ GARDEN_MODEL_URL: 'garden.glb', loadScenery: () => new Promise(() => {}) }));
+vi.mock('./plants/authored', () => ({ PLANT_MODEL_URL: 'plants.glb', loadPlantModels: () => new Promise(() => {}) }));
 vi.mock('./camera', () => ({ createGardenCamera: () => mocks.camera, resizeGardenCamera: vi.fn(), panGardenCamera: vi.fn(), zoomGardenCamera: vi.fn() }));
 vi.mock('./plants/reconcile', () => ({ createPlantReconciler: () => mocks.plants }));
 vi.mock('./plot-status', () => ({ createPlotStatusResources: () => mocks.statusResources }));

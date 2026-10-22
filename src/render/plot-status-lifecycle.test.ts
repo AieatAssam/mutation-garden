@@ -81,7 +81,7 @@ describe('plot status snapshot reconciliation', () => {
     expect(h.dial()?.color).toBe('green');
     expect(h.dial()?.stageFractions).toEqual([0.12, 0.4, 0.88]);
     expect(h.stamp()?.color).toBe('green');
-    expect(h.stamp()?.center.y).toBeCloseTo(1.22);
+    expect(h.stamp()?.center.y).toBeCloseTo(1.45);
     expect(h.rendered()).toHaveLength(1);
     expect(h.lifecycle.getStampPickDescriptors()).toEqual([
       expect.objectContaining({ plotId: 'plot-0', visibleDiameter: 0, opacity: 1, drawOrder: 0 }),

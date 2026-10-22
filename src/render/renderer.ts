@@ -2,6 +2,7 @@ import {
   AmbientLight,
   ColorManagement,
   DirectionalLight,
+  Group,
   HemisphereLight,
   NoToneMapping,
   Quaternion,
@@ -18,6 +19,7 @@ import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCame
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, SpeciesId } from '../sim';
 import { createPlantReconciler } from './plants/reconcile';
+import { createAuthoredRig, loadPlantModels, PLANT_MODEL_URL, type PlantModels } from './plants/authored';
 import { createPlotStatusResources } from './plot-status';
 import { createPlotStatusLifecycle, type PlotStatusSpecies } from './plot-status-lifecycle';
 
@@ -36,7 +38,7 @@ export interface Renderer {
   zoom(scale: number): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   pick(clientX: number, clientY: number): PickResult;
-  /** Resolves once the authored models are in the scene (or failed to load). */
+  /** Resolves once the authored island and plant models are in the scene (or failed to load). */
   whenLoaded(): Promise<void>;
   dispose(): void;
 }
@@ -67,14 +69,42 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
     console.error('Garden model failed to load', error);
   });
-  // Compile every shader before reporting ready, so the first frame with the island does not stall
-  // the main thread while the player is already tapping (slow GPUs and CI software rendering).
-  const ready = sceneryLoaded.then(() => (disposed ? undefined : gl.compileAsync(scene, camera)))
-    .then(() => undefined, (error: unknown) => {
-      console.error('Shader warm-up failed', error);
-    });
   scene.add(garden);
   const plants = createPlantReconciler(garden.plots, materials);
+  let plantModels: PlantModels | null = null;
+  const plantsLoaded = loadPlantModels(PLANT_MODEL_URL).then((models) => {
+    if (disposed) {
+      models.dispose();
+      return;
+    }
+    plantModels = models;
+    plants.setModels(models);
+  }, (error: unknown) => {
+    console.error('Plant models failed to load', error);
+  });
+  // Compile every shader, plant morph variants included, before reporting ready, so the first
+  // frames with the island and first plants do not stall the main thread while the player taps
+  // (slow GPUs and CI software rendering).
+  const ready = Promise.all([sceneryLoaded, plantsLoaded]).then(async () => {
+    if (disposed) return;
+    const warm = new Group();
+    const rigs = plantModels
+      ? (['sunny-sprout', 'bubble-berry', 'twistroot'] as const).map((species) => createAuthoredRig(species, plantModels!, materials))
+      : [];
+    for (const rig of rigs) {
+      rig.update({ speciesId: 'sunny-sprout', plantedAt: 0, stage: 'Harvestable', progress: 1 }, 0, true);
+      warm.add(rig.root);
+    }
+    scene.add(warm);
+    try {
+      await gl.compileAsync(scene, camera);
+    } finally {
+      warm.removeFromParent();
+      for (const rig of rigs) rig.dispose();
+    }
+  }).catch((error: unknown) => {
+    console.error('Shader warm-up failed', error);
+  });
   const statusResources = createPlotStatusResources();
   scene.add(statusResources.group);
   const statusSpecies: readonly PlotStatusSpecies[] = options.species.map((species) => ({
@@ -168,6 +198,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       disposed = true;
       picker.dispose();
       plants.dispose();
+      plantModels?.dispose();
       statusResources.dispose();
       garden.dispose();
       materials.dispose();

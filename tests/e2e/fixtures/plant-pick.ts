@@ -5,6 +5,7 @@ import { createGardenCamera, resizeGardenCamera } from '../../../src/render/came
 import { createGarden } from '../../../src/render/garden';
 import { createMaterialLibrary } from '../../../src/render/materials';
 import { createPlantReconciler } from '../../../src/render/plants/reconcile';
+import { loadPlantModels, PLANT_MODEL_URL } from '../../../src/render/plants/authored';
 import { createInitialState, getSnapshot, step } from '../../../src/sim';
 import { renderOptions } from './render-options';
 
@@ -23,15 +24,20 @@ renderer.resize(initialRect.width, initialRect.height);
 const materials = createMaterialLibrary();
 const garden = createGarden();
 const reconciler = createPlantReconciler(garden.plots, materials);
+reconciler.setModels(await loadPlantModels(PLANT_MODEL_URL));
+await renderer.whenLoaded();
+renderer.render(snapshot, snapshot, 1, true);
 reconciler.update(snapshot, snapshot, 1, true);
 garden.updateMatrixWorld(true);
-const fruit = garden.plots[0]!.children[0]!.getObjectByName('fruit');
-if (!fruit) throw new Error('Plant picker fixture Sunny fruit is missing');
+// The fruit sits just below the plant's top (its calyx).
+const fruitCenter = new Vector3();
+if (!reconciler.getTop('plot-0', fruitCenter)) throw new Error('Plant picker fixture Sunny plant is missing');
+fruitCenter.y -= 0.35;
 const camera = createGardenCamera();
 const rect = initialRect;
 resizeGardenCamera(camera, rect.width, rect.height);
 camera.updateMatrixWorld(true);
-const fruitPoint = fruit.getWorldPosition(new Vector3()).project(camera);
+const fruitPoint = fruitCenter.project(camera);
 const screenX = rect.left + (fruitPoint.x + 1) * rect.width / 2;
 const screenY = rect.top + (1 - fruitPoint.y) * rect.height / 2;
 const plotPoint = garden.plots[0]!.getWorldPosition(new Vector3()).project(camera);

@@ -224,6 +224,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       if (loaded.kind !== 'empty' && loaded.state) {
         loop.restore(loaded.state);
         latestSnapshot = getSnapshot(loaded.state);
+        // Unlocks and coins show now, not on the next frame, so "ready" means the HUD matches the save.
+        coins = latestSnapshot.coins;
+        refreshUI();
         showAwaySummary(loaded.state, loaded.savedAt);
       }
       if (loaded.kind === 'recovered') {

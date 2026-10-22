@@ -1,6 +1,6 @@
-import { SPECIES } from '../content/species';
+import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
-import type { Command, GardenState, SimEvent, StepResult } from '../state/types';
+import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
 type HarvestCommand = Extract<Command, { readonly type: 'Harvest' }>;
 
@@ -32,7 +32,7 @@ export function harvest(
       continue;
     }
 
-    if (getGrowthView(plot.plant.speciesId, plot.plant.plantedAt, effectiveNowMs).stage !== 'Harvestable') {
+    if (getGrowthView(plot.plant.speciesId, growthStart(plot.plant), effectiveNowMs).stage !== 'Harvestable') {
       events.push(rejection(plotId, 'not-harvestable'));
       continue;
     }
@@ -43,24 +43,24 @@ export function harvest(
       continue;
     }
 
+    const size = plot.plant.size ?? 'regular';
+    const ripeAt = growthStart(plot.plant) + species.growthDurationMs;
+    const fresh = effectiveNowMs - ripeAt <= FRESH_WINDOW_MS;
+    const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1);
+    const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
-    nextState = {
-      ...nextState,
-      coins: nextState.coins + species.baseValue,
-      plots,
-    };
-    totalCoins += species.baseValue;
+    nextState = { ...nextState, coins: nextState.coins + coins, plots };
+    totalCoins += coins;
     count += 1;
-    events.push({
-      type: 'Harvested',
-      plotId,
-      speciesId: species.id,
-      coins: species.baseValue,
-    });
+    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins, size, fresh });
   }
 
-  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: totalCoins });
+  // A swipe across several ripe plants pays a combo bonus on top (design.md 4.3).
+  const comboBonus = count > 1 ? Math.floor(totalCoins * Math.min(COMBO_CAP, COMBO_STEP * (count - 1))) : 0;
+  if (comboBonus > 0) nextState = { ...nextState, coins: nextState.coins + comboBonus };
+  totalCoins += comboBonus;
+  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: totalCoins, comboBonus });
   return { state: nextState, events };
 }
 

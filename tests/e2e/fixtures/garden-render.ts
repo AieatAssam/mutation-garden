@@ -97,4 +97,5 @@ probeWindow.gardenProbe = {
 };
 window.addEventListener('resize', onWindowResize);
 resize();
+await renderer.whenLoaded();
 document.body.dataset.render = 'complete';

@@ -1,5 +1,5 @@
 import { getGrowthView } from '../plants/growth';
-import type { GardenSnapshot, GardenState } from './types';
+import { growthStart, type GardenSnapshot, type GardenState } from './types';
 
 /** Build presentation data without adding derived fields to canonical state. */
 export function getSnapshot(state: GardenState): GardenSnapshot {
@@ -12,7 +12,7 @@ export function getSnapshot(state: GardenState): GardenSnapshot {
         ? null
         : {
             ...plot.plant,
-            ...getGrowthView(plot.plant.speciesId, plot.plant.plantedAt, state.lastNowMs),
+            ...getGrowthView(plot.plant.speciesId, growthStart(plot.plant), state.lastNowMs),
           },
     })),
   };

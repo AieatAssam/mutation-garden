@@ -17,12 +17,14 @@ const {
 vi.mock('../render/renderer', () => ({ createRenderer: (...args: unknown[]) => {
   createRenderer(...args);
   return { resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer,
-    whenLoaded: () => new Promise<void>(() => {}), dispose: disposeRenderer };
+    whenLoaded: () => new Promise<void>(() => {}), onEvents: vi.fn(), projectPlot: vi.fn(() => null), dispose: disposeRenderer };
 } }));
 vi.mock('../input/pointer', () => ({
   createPointerInput: (canvas: HTMLCanvasElement, pick: unknown, onIntent: unknown) =>
     createPointerInput(canvas, pick, onIntent),
 }));
+vi.mock('../ui/rewards', () => ({ createRewardLayer: () => ({ onEvents: vi.fn(), dispose: vi.fn() }) }));
+vi.mock('../audio/sfx', () => ({ createSfx: () => ({ unlock: vi.fn(), onEvents: vi.fn(), setMuted: vi.fn(), muted: false, dispose: vi.fn() }) }));
 vi.mock('../ui/garden-ui', () => ({
   createGardenUI: (container: HTMLElement, options: unknown) => createGardenUI(container, options),
 }));
@@ -84,8 +86,8 @@ describe('boot animation wiring', () => {
       [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }],
       1_000,
     ).state;
-    const planted = getSnapshot(plantedState);
-    onRender!({ previous: planted, current: planted, alpha: 0 });
+    const ripe = getSnapshot(step(plantedState, [], 9_000).state);
+    onRender!({ previous: ripe, current: ripe, alpha: 0 });
     nowMs = 1_001;
     onIntent({ type: 'ActivatePlot', plotId: 'plot-0' });
     expect(enqueue).toHaveBeenLastCalledWith({ type: 'Harvest', plotIds: ['plot-0'] });

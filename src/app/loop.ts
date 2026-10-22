@@ -27,9 +27,9 @@ export interface FixedStepLoop {
 }
 
 function copyCommand(command: Command): Command {
-  return command.type === 'Plant'
-    ? { ...command }
-    : { ...command, plotIds: [...command.plotIds] };
+  return command.type === 'Harvest'
+    ? { ...command, plotIds: [...command.plotIds] }
+    : { ...command };
 }
 
 /** Run sim commands at a fixed rate while rendering at the supplied frame rate. */

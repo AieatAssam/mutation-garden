@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { createHash } from 'node:crypto';
 import { Vector3 } from 'three';
 import { PLOT_ACTIVATION_GUARD_MS } from '../../src/app/commands';
+import { expectHarvestPaid } from './payout';
 import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
 
 type Point = { x: number; y: number };
@@ -151,15 +152,16 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   const beforeHarvest = await plotSignature(page, untouchedRock);
 
   // A fresh swipe crosses three ripe plants, reverses over one, and commits one batch.
-  await swipe(page, [plots[0]!, plots[2]!, plots[3]!, plots[2]!], mobile);
-  await expect(coins).toHaveText('12');
+  const harvest = await expectHarvestPaid(page, () => swipe(page, [plots[0]!, plots[2]!, plots[3]!, plots[2]!], mobile));
+  // Three fresh Sunny Sprouts in one swipe: at least 1 each, plus any combo bonus shown.
+  expect(harvest.paid).toBeGreaterThanOrEqual(3);
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
   expect(await plotSignature(page, untouchedRock)).toBe(beforeHarvest);
   const harvestAt = await page.evaluate(() => Date.now());
 
   // Repeating the same harvest cannot pay again or turn its release into planting.
   await swipe(page, [plots[0]!, plots[2]!, plots[3]!], mobile);
-  await expect(coins).toHaveText('12');
+  await expect(coins).toHaveText(String(harvest.after));
   await advanceGrowthClock(page, PLOT_ACTIVATION_GUARD_MS);
   await expect.poll(() => page.evaluate(() => Date.now()), {
     intervals: [10, 25, 50], timeout: 5_000,
@@ -170,10 +172,10 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   await expect.poll(() => page.evaluate(() => performance.now()), {
     intervals: [10, 25, 50], timeout: 5_000,
   }).toBeGreaterThan(simTickAt + 150);
-  await expect(coins).toHaveText('12');
+  await expect(coins).toHaveText(String(harvest.after));
 
   if (mobile) await page.touchscreen.tap(plots[0]!.x, plots[0]!.y);
   else await page.mouse.click(plots[0]!.x, plots[0]!.y);
-  await expect(coins).toHaveText('9');
+  await expect(coins).toHaveText(String(harvest.after - 3));
   expect(errors).toEqual([]);
 });

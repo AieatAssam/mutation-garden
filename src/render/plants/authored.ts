@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry, Color, Group, Matrix3, Matrix4, Mesh, MeshToonMaterial, Object3D, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, Group, Matrix3, Matrix4, Mesh, MeshBasicMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SpeciesId } from '../../sim';
 import type { MaterialLibrary } from '../materials';
@@ -40,6 +40,20 @@ const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroo
 /** Display size per species, tuned so each plant fills its bed at phone size. */
 export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4 };
 const RIPE_SWELL = 1.14;
+/** Harvested parts show their rolled yield size (design.md 4.3). */
+export const YIELD_SCALE = { small: 0.88, regular: 1, big: 1.2 } as const;
+const DROP_MS = 140;
+
+/** The seed falls into the soil, squashes to 0.7 and springs back (motion.md 4.1). */
+export function seedDrop(sincePlantedMs: number): { y: number; squash: number } {
+  if (!(sincePlantedMs >= 0) || sincePlantedMs > 600) return { y: 0, squash: 1 };
+  if (sincePlantedMs < DROP_MS) {
+    const t = sincePlantedMs / DROP_MS;
+    return { y: 0.55 * (1 - t * t), squash: 1 + 0.15 * t };
+  }
+  const t = sincePlantedMs - DROP_MS;
+  return { y: 0, squash: 1 - 0.3 * Math.exp(-t / 70) * Math.cos(t / 32) };
+}
 
 function vertexAt(geometry: BufferGeometry, index: number, influence: number, target: Vector3): Vector3 {
   target.fromBufferAttribute(geometry.getAttribute('position'), index);
@@ -171,7 +185,7 @@ export function createAuthoredRig(
   const unripe = new Color(fruitRamp[3]);
   const ripeColor = new Color(fruitRamp[1]);
 
-  const animated: { meshes: Mesh[]; part: PartTemplate; growth: number }[] = [];
+  const animated: { meshes: Mesh[]; part: PartTemplate; growth: number; scale: number }[] = [];
   for (const part of models.parts.get(species) ?? []) {
     const mesh = new Mesh(part.geometry, part.ripe ? fruitMaterial : materials.toon(part.color));
     mesh.name = part.name;
@@ -181,10 +195,26 @@ export function createAuthoredRig(
     hull.userData.part = `${part.name}-outline`;
     hull.renderOrder = 2;
     body.add(mesh, hull);
-    animated.push({ meshes: [mesh, hull], part, growth: 0 });
+    animated.push({ meshes: [mesh, hull], part, growth: 0, scale: 1 });
   }
   const byName = new Map(animated.map((entry) => [entry.part.name, entry]));
   const ride = new Vector3();
+
+  // Watered soil stays darker for the rest of the plant's growth (motion.md 4.6).
+  const wetGeometry = new CircleGeometry(0.62, 28);
+  const wetMaterial = new MeshBasicMaterial({ color: palette.environment['soil-wet'][1], transparent: true, opacity: 0.75,
+    depthWrite: false, toneMapped: false });
+  const wet = new Mesh(wetGeometry, wetMaterial);
+  wet.name = 'wet-soil';
+  wet.userData.part = 'blob';
+  wet.rotation.x = -Math.PI / 2;
+  wet.position.y = 0.006;
+  wet.renderOrder = 1;
+  wet.visible = false;
+  root.add(wet);
+  let lastStage: string | null = null;
+  let popStartMs = -Infinity;
+  let wetStartMs = -Infinity;
 
   const blob = materials.blob();
   blob.name = 'blob';
@@ -203,24 +233,44 @@ export function createAuthoredRig(
       // so ripeness is an obvious change rather than the end of a gradient (motion.md 4.3).
       const warm = ripe ? 1 : 0.6 * smooth(clamp01((progress - 0.5) / 0.5));
       fruitMaterial.color.copy(unripe).lerp(ripeColor, warm);
-      for (const entry of animated) entry.growth = partGrowth(entry.part, progress);
-      for (const { meshes, part, growth } of animated) {
+      const yieldScale = YIELD_SCALE[plant.size ?? 'regular'];
+      for (const entry of animated) {
+        entry.growth = partGrowth(entry.part, progress);
+        entry.scale = entry.part.fly ? yieldScale : 1;
+      }
+      for (const { meshes, part, growth, scale: partScale } of animated) {
         // Attached parts ride their parent's tip: offset by how far that tip is from its grown place.
         ride.set(0, 0, 0);
         const parent = part.attach ? byName.get(part.attach) : undefined;
-        if (parent) ride.copy(parent.part.seedTop).lerp(parent.part.grownTop, parent.growth).sub(parent.part.grownTop);
-        const size = part.morph ? 1 : growth * (ripe && part.fly ? RIPE_SWELL : 1);
+        if (parent) {
+          ride.copy(parent.part.seedTop).lerp(parent.part.grownTop, parent.growth).multiplyScalar(parent.scale)
+            .sub(parent.part.grownTop);
+        }
+        const size = (part.morph ? 1 : growth * (ripe && part.fly ? RIPE_SWELL : 1)) * partScale;
         for (const mesh of meshes) {
           if (part.morph) mesh.morphTargetInfluences![0] = growth;
-          mesh.visible = size > 0.001;
+          mesh.visible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0);
           mesh.scale.setScalar(Math.max(0.001, size));
           mesh.position.copy(part.origin).add(ride);
         }
       }
 
+      if (lastStage !== null && lastStage !== plant.stage) popStartMs = presentationNowMs;
+      lastStage = plant.stage;
+      if (plant.boostMs !== undefined && !wet.visible) {
+        wet.visible = true;
+        wetStartMs = presentationNowMs;
+      }
+      wet.scale.setScalar(reducedMotion ? 1 : 0.2 + 0.8 * smooth(clamp01((presentationNowMs - wetStartMs) / 300)));
+
       const hop = ripeHopPose(presentationNowMs, hopPhaseOffsetMs, ripe && !reducedMotion);
-      body.position.y = hop.y;
-      body.scale.set(1 / Math.sqrt(hop.scaleY), hop.scaleY, 1 / Math.sqrt(hop.scaleY));
+      const drop = reducedMotion ? { y: 0, squash: 1 } : seedDrop(presentationNowMs - plant.plantedAt);
+      // Stage crossings pop 10% and settle (motion.md 4.2); reduced motion skips the pop.
+      const popT = presentationNowMs - popStartMs;
+      const pop = reducedMotion || popT > 400 ? 1 : 1 + 0.1 * Math.exp(-popT / 70) * Math.cos(popT / 28);
+      const squash = hop.scaleY * drop.squash;
+      body.position.y = hop.y + drop.y;
+      body.scale.set(pop / Math.sqrt(squash), squash * pop, pop / Math.sqrt(squash));
       // Ripe plants wiggle every 3 s (motion.md 4.3).
       const wiggleT = (((presentationNowMs + hopPhaseOffsetMs + 1500) % 3000) + 3000) % 3000 / 400;
       body.rotation.z = ripe && !reducedMotion && wiggleT < 1 ? 0.1 * Math.sin(wiggleT * Math.PI * 3) * (1 - wiggleT) : 0;
@@ -253,6 +303,8 @@ export function createAuthoredRig(
       if (disposed) return;
       disposed = true;
       fruitMaterial.dispose();
+      wetGeometry.dispose();
+      wetMaterial.dispose();
       root.clear();
     },
   };

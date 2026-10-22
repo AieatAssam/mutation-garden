@@ -1,4 +1,6 @@
-import { SPECIES } from '../content/species';
+import { SPECIES, YIELD_SIZES } from '../content/species';
+import { nextRandom } from '../state/rng';
+import type { YieldSize } from '../state/types';
 import type { Command, GardenState, SimEvent, StepResult } from '../state/types';
 
 type PlantCommand = Extract<Command, { readonly type: 'Plant' }>;
@@ -28,15 +30,17 @@ export function plant(
     return rejected(state, command, 'insufficient-coins');
   }
 
+  const roll = nextRandom(state.rngState);
   const plots = state.plots.slice();
   plots[plotIndex] = {
     ...plot,
-    plant: { speciesId: species.id, plantedAt: effectiveNowMs },
+    plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value) },
   };
 
   const nextState: GardenState = {
     ...state,
     coins: state.coins - species.seedCost,
+    rngState: roll.nextState,
     plots,
   };
   const event: SimEvent = {
@@ -46,6 +50,15 @@ export function plant(
   };
 
   return { state: nextState, events: [event] };
+}
+
+function rollSize(value: number): YieldSize {
+  let threshold = 0;
+  for (const entry of YIELD_SIZES) {
+    threshold += entry.chance;
+    if (value < threshold) return entry.size;
+  }
+  return 'regular';
 }
 
 function rejected(

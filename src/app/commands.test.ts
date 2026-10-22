@@ -16,12 +16,16 @@ describe('commandForPlotActivation', () => {
     });
   });
 
-  it('harvests an occupied plot regardless of its current growth stage', () => {
+  it('waters a growing plant and harvests a ripe one', () => {
     const planted = step(initial, [{
       type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout',
     }], 1_000).state;
 
     expect(commandForPlotActivation(getSnapshot(planted), 'plot-0', 'sunny-sprout')).toEqual({
+      type: 'Water', plotId: 'plot-0',
+    });
+    const ripe = step(planted, [], 9_000).state;
+    expect(commandForPlotActivation(getSnapshot(ripe), 'plot-0', 'sunny-sprout')).toEqual({
       type: 'Harvest', plotIds: ['plot-0'],
     });
   });

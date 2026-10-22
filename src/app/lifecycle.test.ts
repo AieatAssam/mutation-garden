@@ -136,8 +136,8 @@ describe('page lifecycle', () => {
       { type: 'StageReached', plotId: 'plot-0', stage: 'Growing' },
       { type: 'StageReached', plotId: 'plot-0', stage: 'Mature' },
       { type: 'Harvestable', plotId: 'plot-0' },
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2 },
-      { type: 'HarvestCompleted', count: 1, coins: 2 },
+      expect.objectContaining({ type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout' }),
+      expect.objectContaining({ type: 'HarvestCompleted', count: 1 }),
     ]]);
     const resumed = h.renderFrames.at(-1)!;
     expect(resumed.previous).toEqual(resumed.current);

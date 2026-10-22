@@ -6,6 +6,7 @@ import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCame
 import { getPlotStatusDialFacing } from '../../src/render/plot-status';
 import { captureVisibleBodyMasks } from './production-body-mask';
 import { palette } from '../../src/render/palette';
+import { expectHarvestPaid } from './payout';
 import { SPECIES } from '../../src/sim';
 
 type Point = { x: number; y: number };
@@ -239,16 +240,22 @@ async function readStamp(
   if (!camera) resizeGardenCamera(projectionCamera, stageBounds!.width, stageBounds!.height);
   const radius = 0.31 * stageBounds!.width * projectionCamera.zoom / (projectionCamera.right - projectionCamera.left);
   expect(radius * 2, `${speciesLabels[speciesId]} projected stamp must be at least 26px wide`).toBeGreaterThanOrEqual(26);
-  const center = projectPlotPoint(stageBounds!, speciesPlot[speciesId], speciesStampWorldY[speciesId], camera);
-  const searchRadius = radius * 1.4;
+  // Yield size scales the plant, so search up its axis around the regular stamp height.
+  const base = speciesStampWorldY[speciesId];
+  const candidates = Array.from({ length: 15 }, (_, index) => base - 0.5 + index * 0.1)
+    .map((worldY) => projectPlotPoint(stageBounds!, speciesPlot[speciesId], worldY, camera));
+  const xs = candidates.map(({ x }) => x);
+  const ys = candidates.map(({ y }) => y);
   const clip = {
-    x: Math.max(stageBounds!.x, center.x - searchRadius),
-    y: Math.max(stageBounds!.y, center.y - searchRadius),
-    width: searchRadius * 2,
-    height: searchRadius * 2,
+    x: Math.max(stageBounds!.x, Math.min(...xs) - radius * 1.4),
+    y: Math.max(stageBounds!.y, Math.min(...ys) - radius * 1.4),
+    width: 0,
+    height: 0,
   };
+  clip.width = Math.min(stageBounds!.x + stageBounds!.width, Math.max(...xs) + radius * 1.4) - clip.x;
+  clip.height = Math.min(stageBounds!.y + stageBounds!.height, Math.max(...ys) + radius * 1.4) - clip.y;
   const image = (await page.screenshot({ clip, scale: 'css' })).toString('base64');
-  const fractions = await page.evaluate(async ({ encoded, fruit, paper, ink }) => {
+  const results = await page.evaluate(async ({ encoded, fruit, paper, ink, centers, radius: discRadius }) => {
     const picture = new Image();
     picture.src = `data:image/png;base64,${encoded}`;
     await picture.decode();
@@ -260,26 +267,37 @@ async function readStamp(
     const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
     const rgb = (hex: string) => [1, 3, 5].map((offset) => parseInt(hex.slice(offset, offset + 2), 16));
     const targets = { fruit: rgb(fruit), paper: rgb(paper), ink: rgb(ink) };
-    const counts = { fruit: 0, paper: 0, ink: 0 };
-    let total = 0;
-    for (let y = 0; y < height; y += 1) {
-      for (let x = 0; x < width; x += 1) {
-        if (Math.hypot(x - width / 2, y - height / 2) > width / 2) continue;
-        total += 1;
-        const offset = (y * width + x) * 4;
-        for (const key of ['fruit', 'paper', 'ink'] as const) {
-          const [r, g, b] = targets[key];
-          if (Math.abs(data[offset]! - r!) + Math.abs(data[offset + 1]! - g!) + Math.abs(data[offset + 2]! - b!) < 45) {
-            counts[key] += 1;
+    return centers.map(({ x: cx, y: cy }) => {
+      const counts = { fruit: 0, paper: 0, ink: 0 };
+      let total = 0;
+      for (let y = Math.max(0, Math.floor(cy - discRadius)); y < Math.min(height, Math.ceil(cy + discRadius)); y += 1) {
+        for (let x = Math.max(0, Math.floor(cx - discRadius)); x < Math.min(width, Math.ceil(cx + discRadius)); x += 1) {
+          if (Math.hypot(x - cx, y - cy) > discRadius) continue;
+          total += 1;
+          const offset = (y * width + x) * 4;
+          for (const key of ['fruit', 'paper', 'ink'] as const) {
+            const [r, g, b] = targets[key];
+            if (Math.abs(data[offset]! - r!) + Math.abs(data[offset + 1]! - g!) + Math.abs(data[offset + 2]! - b!) < 45) {
+              counts[key] += 1;
+            }
           }
         }
       }
-    }
-    return { fruit: counts.fruit / total, paper: counts.paper / total, ink: counts.ink / total };
-  }, { encoded: image, fruit: palette.plants[speciesId].fruit[1], paper: palette.ink['paper-white'], ink: palette.ink['press-ink'] });
-  if (fractions.paper < 0.05 || fractions.fruit < 0.1 || fractions.ink < 0.03) {
-    throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible at ${JSON.stringify(center)}: ${JSON.stringify(fractions)}`);
+      return total === 0 ? { fruit: 0, paper: 0, ink: 0 }
+        : { fruit: counts.fruit / total, paper: counts.paper / total, ink: counts.ink / total };
+    });
+  }, {
+    encoded: image, fruit: palette.plants[speciesId].fruit[1], paper: palette.ink['paper-white'], ink: palette.ink['press-ink'],
+    centers: candidates.map(({ x, y }) => ({ x: x - clip.x, y: y - clip.y })), radius: radius * 1.4,
+  });
+  const visible = results
+    .map((fractions, index) => ({ fractions, center: candidates[index]! }))
+    .filter(({ fractions }) => fractions.paper >= 0.05 && fractions.fruit >= 0.1 && fractions.ink >= 0.03)
+    .sort((a, b) => b.fractions.paper - a.fractions.paper)[0];
+  if (!visible) {
+    throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible above plot ${speciesPlot[speciesId]}: ${JSON.stringify(results)}`);
   }
+  const center = visible.center;
   return { center, box: { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 } };
 }
 
@@ -656,7 +674,7 @@ test('production status stamps stay visible and harvest their owning species', a
 
   await attachGardenCapture(page, info, `${info.project.name}-ripe-before-harvest.png`);
 
-  for (const [index, speciesId] of (['sunny-sprout', 'bubble-berry', 'twistroot'] as const).entries()) {
+  for (const speciesId of ['sunny-sprout', 'bubble-berry', 'twistroot'] as const) {
     const stamp = renderedStamps[speciesId];
     expect(stamp.box.width, `${speciesId} stamp width`).toBeGreaterThanOrEqual(26);
     expect(stamp.box.height, `${speciesId} stamp height`).toBeGreaterThanOrEqual(26);
@@ -666,8 +684,7 @@ test('production status stamps stay visible and harvest their owning species', a
     expect(stamp.box.y + stamp.box.height).toBeLessThanOrEqual(viewport.height);
     expect(stamp.box.y + stamp.box.height).toBeLessThan(tray!.y);
 
-    await realActivate(page, stamp.center, mobile);
-    await waitForCoins(page, [5, 11, 21][index]!);
+    await expectHarvestPaid(page, () => realActivate(page, stamp.center, mobile));
   }
   await attachGardenCapture(page, info, `${info.project.name}-after-harvest.png`);
   expect(errors).toEqual([]);
@@ -701,15 +718,16 @@ test('production stamp swipe cancellation and immediate repeat pay once without 
 
   frames = await freezeFrames(page);
   const beforeRepeat = await stageSignature(page);
-  await realSwipe(page, gesture, mobile);
-  await realSwipe(page, gesture, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  expect(await stageSignature(page), 'both repeated stamp-start swipes leave the garden and camera unchanged while frames are frozen')
-    .toBe(beforeRepeat);
-  await resumeFrames(page);
-  await waitForCoins(page, 21);
+  const harvest = await expectHarvestPaid(page, async () => {
+    await realSwipe(page, gesture, mobile);
+    await realSwipe(page, gesture, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    expect(await stageSignature(page), 'both repeated stamp-start swipes leave the garden and camera unchanged while frames are frozen')
+      .toBe(beforeRepeat);
+    await resumeFrames(page);
+  });
   await waitForSimulationOpportunity(page);
-  await waitForCoins(page, 21);
+  await waitForCoins(page, harvest.after);
 });
 
 test('production camera pan, zoom and resize keep fresh fruit picks playable', async ({ page }, info) => {
@@ -767,10 +785,11 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   expect(await stageSignature(page), 'empty-ground pan changes the rendered camera while app frames are frozen')
     .not.toBe(cameraBeforePan);
   const stampAfterPan = await readStamp(page, 'sunny-sprout', camera);
-  await realActivate(page, stampAfterPan.center, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  await resumeFrames(page);
-  await waitForCoins(page, 5);
+  await expectHarvestPaid(page, async () => {
+    await realActivate(page, stampAfterPan.center, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    await resumeFrames(page);
+  });
   frames = await freezeFrames(page);
   const stageBoundsForZoom = await stage.boundingBox();
   expect(stageBoundsForZoom).not.toBeNull();
@@ -815,10 +834,11 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   expect(stampAfterZoom.box.width,
     `fresh zoomed Bubble Berry stamp remains visible; contacts=${JSON.stringify(groundPair)}, plots=${JSON.stringify(plotsAfterPan)}, stamps=${JSON.stringify([twistrootStampBeforePan.center, stampAfterPan.center, stampForZoom.center, stampAfterZoom.center])}`)
     .toBeGreaterThanOrEqual(26);
-  await realActivate(page, stampAfterZoom.center, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  await resumeFrames(page);
-  await waitForCoins(page, 11);
+  await expectHarvestPaid(page, async () => {
+    await realActivate(page, stampAfterZoom.center, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    await resumeFrames(page);
+  });
   frames = await freezeFrames(page);
   await page.setViewportSize(mobile ? { width: 412, height: 915 } : { width: 1024, height: 768 });
   await page.evaluate(() => window.dispatchEvent(new Event('resize')));
@@ -834,11 +854,12 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
       }).__gardenTestFrames.count());
     }, { once: true, capture: true });
   });
-  await realActivate(page, stampAfterResize.center, mobile);
-  expect(await deliveredFrames(page)).toBe(frames);
-  expect(Number(await page.locator('body').getAttribute('data-pointer-down-at-frame'))).toBe(frames);
-  await resumeFrames(page);
-  await waitForCoins(page, 21);
+  await expectHarvestPaid(page, async () => {
+    await realActivate(page, stampAfterResize.center, mobile);
+    expect(await deliveredFrames(page)).toBe(frames);
+    expect(Number(await page.locator('body').getAttribute('data-pointer-down-at-frame'))).toBe(frames);
+    await resumeFrames(page);
+  });
   await session?.detach();
   expect(errors).toEqual([]);
 });

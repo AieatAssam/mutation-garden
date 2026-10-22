@@ -33,6 +33,8 @@ if (new URLSearchParams(location.search).has('reconcile')) {
   };
   function resize() { renderer.resize(innerWidth, innerHeight); }
   window.addEventListener('resize', resize); resize(); setCase('empty');
+  // Wait for the island and plant models so every case compares like with like.
+  await renderer.whenLoaded(); setCase('empty');
   status.dataset.render = 'complete'; status.textContent = 'Ready';
   (window as Window & { sunnySproutFixture?: { setCase(name: string): void; setMotion(value: boolean): void; resize(): void; dispose(): void } }).sunnySproutFixture = {
     setCase,

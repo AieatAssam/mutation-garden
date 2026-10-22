@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { expectHarvestPaid } from './payout';
 import { Vector3 } from 'three';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera } from '../../src/render/camera';
 
@@ -95,19 +96,18 @@ test('ground swipes pan while plot and planted-plant swipes keep their down owne
   await page.waitForTimeout(8_200);
 
   const translatedFruit0 = ripeSunnyFruitCenter(0, expectedCamera, rect!);
-  await swipe(page, translatedFruit0, { x: 70, y: 12 }, mobile);
-  await expect(coins).toHaveText('13');
+  const { after } = await expectHarvestPaid(page, () => swipe(page, translatedFruit0, { x: 70, y: 12 }, mobile));
   await swipe(page, translatedPlot0, { x: 70, y: 12 }, mobile);
-  await expect(coins).toHaveText('13');
+  await expect(coins).toHaveText(String(after));
 
   const translatedPlot1 = expectedPlots[1]!;
   await tap(page, translatedPlot1, mobile);
-  await expect(coins).toHaveText('12');
+  await expect(coins).toHaveText(String(after - 1));
   await swipe(page, translatedPlot1, { x: 70, y: 12 }, mobile);
-  await expect(coins).toHaveText('12');
+  await expect(coins).toHaveText(String(after - 1));
   const translatedPlot2 = expectedPlots[2]!;
   await tap(page, translatedPlot2, mobile);
-  await expect(coins).toHaveText('11');
+  await expect(coins).toHaveText(String(after - 2));
   expect(errors).toEqual([]);
 
   await page.screenshot({

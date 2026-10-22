@@ -17,7 +17,9 @@ import { createGarden } from './garden';
 import { GARDEN_MODEL_URL, loadScenery } from './scenery';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
-import type { GardenSnapshot, SpeciesId } from '../sim';
+import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
+import { createParticles } from './motion/particles';
+import { createHarvestFlights } from './harvest-flight';
 import { createPlantReconciler } from './plants/reconcile';
 import { createAuthoredRig, loadPlantModels, PLANT_MODEL_URL, type PlantModels } from './plants/authored';
 import { createPlotStatusResources } from './plot-status';
@@ -37,6 +39,10 @@ export interface Renderer {
   pan(deltaXCss: number, deltaYCss: number): void;
   zoom(scale: number): void;
   render(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
+  /** Plays planting, growth, watering and harvest effects for one batch of sim events. */
+  onEvents(events: readonly SimEvent[], reducedMotion: boolean): void;
+  /** Screen point (CSS px, viewport) just above a plot's plant, for UI rewards. */
+  projectPlot(plotId: PlotId): { x: number; y: number } | null;
   pick(clientX: number, clientY: number): PickResult;
   /** Resolves once the authored island and plant models are in the scene (or failed to load). */
   whenLoaded(): Promise<void>;
@@ -102,6 +108,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       warm.removeFromParent();
       for (const rig of rigs) rig.dispose();
     }
+    // Draw once now, so "loaded" means the models are on screen, not waiting for the next frame.
+    if (!disposed) draw();
   }).catch((error: unknown) => {
     console.error('Shader warm-up failed', error);
   });
@@ -145,7 +153,62 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     status.update(currentSnapshot, previousSnapshot, snapshotAlpha, facing, performance.now(), currentReducedMotion);
   }
 
+  const particles = createParticles();
+  scene.add(particles.mesh);
+  const flights = createHarvestFlights(() => plantModels, materials);
+  scene.add(flights.root);
+  const effectPoint = new Vector3();
+
+  function playEvents(events: readonly SimEvent[], reducedMotion: boolean): void {
+    const now = performance.now();
+    for (const event of events) {
+      if (!('plotId' in event) || event.type === 'CommandRejected') continue;
+      const anchor = plotsById.get(event.plotId);
+      if (!anchor) continue;
+      anchor.getWorldPosition(effectPoint);
+      const ramp = (species: SpeciesId) => palette.plants[species];
+      switch (event.type) {
+        case 'Planted':
+          particles.burst({ origin: effectPoint.clone().setY(effectPoint.y + 0.05), count: 9,
+            colors: palette.environment.soil.slice(0, 3), speed: 1.4, up: 1.2, gravity: 5, lifeMs: 380, size: 0.15 }, now, reducedMotion);
+          break;
+        case 'StageReached':
+        case 'Harvestable': {
+          const species = currentSnapshot?.plots.find(({ id }) => id === event.plotId)?.plant?.speciesId;
+          if (!species) break;
+          const top = new Vector3();
+          if (!plants.getTop(event.plotId, top)) top.copy(effectPoint);
+          particles.burst({ origin: top, count: event.type === 'Harvestable' ? 12 : 6,
+            colors: event.type === 'Harvestable'
+              ? [ramp(species).fruit[0], palette.ink['paper-white'], ramp(species).fruit[1]]
+              : [ramp(species).leaf[0], ramp(species).leaf[1]],
+            speed: 1.1, up: 1.6, gravity: 4, lifeMs: 450, size: 0.12 }, now, reducedMotion);
+          break;
+        }
+        case 'Watered':
+          particles.burst({ origin: effectPoint.clone().setY(effectPoint.y + 1.3), count: 14,
+            colors: [palette.environment.water[0], palette.environment.water[1]], speed: 0.5, up: -1.5, gravity: 7,
+            lifeMs: 420, size: 0.11 }, now, reducedMotion);
+          break;
+        case 'Harvested': {
+          flights.launch(event.speciesId, effectPoint, event.size, now, reducedMotion);
+          const top = new Vector3();
+          const fruit = plants.getTop(event.plotId, top) ? top.setY(top.y - 0.35) : effectPoint.clone().setY(effectPoint.y + 1);
+          particles.burst({ origin: fruit, count: 14,
+            colors: [ramp(event.speciesId).fruit[0], ramp(event.speciesId).fruit[1], ramp(event.speciesId).leaf[1]],
+            speed: 2.2, up: 1.8, gravity: 6, lifeMs: 480, size: 0.15 }, now, reducedMotion);
+          break;
+        }
+        default:
+          break;
+      }
+    }
+  }
+
   function draw(): void {
+    const now = performance.now();
+    particles.update(now);
+    flights.update(now);
     refreshStatus();
     gl.render(scene, camera);
   }
@@ -188,6 +251,17 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     whenLoaded() {
       return ready;
     },
+    onEvents(events, reducedMotion) {
+      if (!disposed) playEvents(events, reducedMotion);
+    },
+    projectPlot(plotId) {
+      const anchor = plotsById.get(plotId);
+      if (disposed || !anchor) return null;
+      const rect = canvas.getBoundingClientRect();
+      camera.updateMatrixWorld(true);
+      const point = anchor.getWorldPosition(new Vector3()).setY(anchor.position.y + 1.2).project(camera);
+      return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };
+    },
     pick(clientX, clientY) {
       if (disposed) return null;
       refreshStatus();
@@ -200,6 +274,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       plants.dispose();
       plantModels?.dispose();
       statusResources.dispose();
+      particles.dispose();
+      flights.dispose();
       garden.dispose();
       materials.dispose();
       gl.dispose();

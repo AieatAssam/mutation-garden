@@ -204,11 +204,11 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
   Object.assign(root, { clouds, creatures });
 
   root.update = (nowMs, reducedMotion) => {
+    windUniforms.windAmount.value = reducedMotion ? 0 : 1;
+    if (reducedMotion) return;
     // Seconds within a whole number of wind periods, so float precision holds over long sessions.
     windUniforms.windTime.value = (nowMs % (WIND_PERIOD_MS * 100)) / 1000;
     windUniforms.windGust.value = gustAt(nowMs);
-    windUniforms.windAmount.value = reducedMotion ? 0 : 1;
-    if (reducedMotion) return;
     for (const cloud of clouds) {
       const x = (cloud.userData.startX as number) + CLOUD_SPEED * nowMs / 1000 + CLOUD_SPAN / 2;
       cloud.position.x = ((x % CLOUD_SPAN) + CLOUD_SPAN) % CLOUD_SPAN - CLOUD_SPAN / 2;

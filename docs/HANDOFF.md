@@ -5,7 +5,7 @@ Living note for whoever picks this up next (human, Claude or Codex). Update it a
 ## Where things are (2026-10-22)
 
 - **main** has S1 (Blender island, #173), S2 (authored plants, #174) and S3 (juice, yield, combo, watering, sound, #175). CI green.
-- **In flight:** M1-S4 on branch `m1/s4-progress` (#156). Done in the branch: sim schema 2 with XP and levels (Bubble Berry at 2, Twistroot at 3), versioned IndexedDB saves with backup and recovery, autosave, settings, sound and music toggles with a generative music loop, first-minute hints, "While you were away" card, coin counter roll-up, level-up stamp, and a UX pass after the look prototype (seed cards with fruit swatch and price, a top card with level, progress and objective, a Harvest all button, tan card shadows instead of red).
+- **In flight:** M1-S4, PR #176 on branch `m1/s4-progress` (#156). Next after merge: S5 (#157). Done in the branch: sim schema 2 with XP and levels (Bubble Berry at 2, Twistroot at 3), versioned IndexedDB saves with backup and recovery, autosave, settings, sound and music toggles with a generative music loop, first-minute hints, "While you were away" card, coin counter roll-up, level-up stamp, and a UX pass after the look prototype (seed cards with fruit swatch and price, a top card with level, progress and objective, a Harvest all button, tan card shadows instead of red).
 - **E2E with later seeds:** specs call `startWithSave(page)` (`tests/e2e/garden-save.ts`), which seeds a level-3 save before the app opens IndexedDB.
 - **Research:** [research/viral-findings.md](research/viral-findings.md) and design.md section 11 map adopted ideas to milestones.
 

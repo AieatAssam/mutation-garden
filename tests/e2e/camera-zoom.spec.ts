@@ -84,14 +84,22 @@ async function renderedSignature(page: Page): Promise<string> {
     width,
     height,
   };
-  const image = await page.screenshot({
+  const capture = async () => createHash('sha256').update(await page.screenshot({
     clip,
     animations: 'disabled',
     scale: 'css',
     type: 'jpeg',
     quality: 30,
-  });
-  return createHash('sha256').update(image).digest('hex');
+  })).digest('hex');
+  // A frame captured while synthetic touches are still being processed can differ by a few edge
+  // pixels; compare the settled frame (two identical captures in a row).
+  let previous = await capture();
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const next = await capture();
+    if (next === previous) return next;
+    previous = next;
+  }
+  throw new Error('The garden frame did not settle');
 }
 
 async function readStageRect(page: Page): Promise<Rect> {

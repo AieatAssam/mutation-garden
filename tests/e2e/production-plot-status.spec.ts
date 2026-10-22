@@ -761,7 +761,8 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   expect(stageBox).not.toBeNull();
   const camera = createGardenCamera();
   resizeGardenCamera(camera, stageBox!.width, stageBox!.height);
-  const panOrigin = projectGround(stageBox!, 0, camera, mobile ? -3 : -2.5);
+  // Phone: the front lawn below the beds (the portrait view crops the island's sides). Desktop: left lawn.
+  const panOrigin = mobile ? projectGround(stageBox!, 3.3, camera, 0) : projectGround(stageBox!, 0, camera, -2.5);
   const plotsBeforePan = plotCenters(stageBox!, 0.65, camera);
   expect(Math.min(...plotsBeforePan.map((plot) => distance(panOrigin, plot))), 'camera pan begins on grass away from every plot')
     .toBeGreaterThan(48);

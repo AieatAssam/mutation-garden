@@ -146,6 +146,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
             gardenUI.levelUp(event.level, names, motion.matches);
           }
           if (event.type === 'Harvested') gardenUI.hideAway();
+          if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
         }
         r.onEvents(events, motion.matches);
         rewards.onEvents(events, motion.matches);

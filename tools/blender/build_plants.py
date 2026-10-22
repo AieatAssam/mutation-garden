@@ -186,16 +186,18 @@ stem_pts = curve_points((0, 0, 0), (0.09, 0.02, 0.45), (0, 0, STEM_H), 12)
 stem = part('sunny-sprout_stem', tube(stem_pts, [0.085 - 0.022 * i / 11 for i in range(12)], 12, cap_top=False),
             f'{P}.stem.1', root, (0, 0, 0), (0.0, 0.62))
 morph(stem, lambda co: Vector((co.x * 0.7, co.y * 0.7, co.z * 0.09)))
-# Two big round leaves low on the stem.
+# Two round leaves low on the stem, narrower together than the fruit (style guide 5).
 leaves = bmesh.new()
-for side, (length, width, height, lift) in ((-1, (0.5, 0.22, 0.1, 26)), (1, (0.46, 0.2, 0.16, 32))):
-    merge(leaves, place(leaf(length, width, cup=0.55, droop=0.12, tip=0.75),
+for side, (length, width, height, lift) in ((-1, (0.33, 0.2, 0.1, 24)), (1, (0.3, 0.18, 0.16, 30))):
+    merge(leaves, place(leaf(length, width, cup=0.55, droop=0.1, tip=0.75, rounded=True),
                         Matrix.Translation((0.03 * side, 0, height)) @ Matrix.Rotation(math.radians(90 - 90 * side + 8), 4, 'Z')
                         @ Matrix.Rotation(math.radians(-lift), 4, 'Y')))
 part('sunny-sprout_leaf', leaves, f'{P}.leaf.1', root, (0, 0, 0.12), (0.06, 0.58))
-FR = 0.31
+# Fruit on top and wider than the leaves, with 8 shallow ribs (style guide 5).
+FR = 0.36
 fruit_center = Vector((0, 0, STEM_H + FR * 0.8))
-part('sunny-sprout_fruit', fruit_sphere(FR, fruit_center, ribs=9, rib_depth=0.075, squash=0.86, dimple=0.18),
+part('sunny-sprout_fruit', fruit_sphere(FR, fruit_center, segments=48, rings=28, ribs=8, rib_depth=0.045, squash=0.86,
+                                        dimple=0.16),
      f'{P}.fruit.1', root, (0, 0, STEM_H), (0.32, 1.0), attach='sunny-sprout_stem', ripe=True, fly=True)
 cap = bmesh.new()
 top = fruit_center + Vector((0, 0, FR * 0.86 - FR * 0.16))
@@ -231,10 +233,11 @@ morph(st, lambda co: Vector((co.x * 0.3, co.y * 0.3, co.z * 0.2)))
 CLUSTER = Vector((0, 0, 0.36))
 fruit = bmesh.new()
 dots = bmesh.new()
-light = Vector((-0.45, -0.55, 0.7)).normalized()
+# Highlight dots face the key light as seen from the game camera (front right, above).
+light = Vector((0.3, -0.6, 0.74)).normalized()
 for (c, r) in berries:
     merge(fruit, fruit_sphere(r, c, 24, 16, squash=0.97))
-    d = fruit_sphere(r * 0.23, (0, 0, 0), 12, 8, squash=0.4)
+    d = fruit_sphere(r * 0.28, (0, 0, 0), 12, 8, squash=0.4)
     place(d, Matrix.Translation(Vector(c) + light * r * 0.94) @ light.to_track_quat('Z', 'Y').to_matrix().to_4x4())
     merge(dots, d)
 part('bubble-berry_fruit', fruit, f'{P}.fruit.1', root, CLUSTER, (0.38, 1.0), ripe=True, fly=True)

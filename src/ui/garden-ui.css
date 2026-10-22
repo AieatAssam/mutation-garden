@@ -324,13 +324,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-.garden-ui__seed-detail::before {
-  width: 12px;
-  height: 12px;
-  border: 2px solid var(--mg-ui-coin-outline);
-  border-radius: 50%;
-  background: var(--mg-ui-coin-face);
-  content: '';
+.garden-ui__coin-token--small {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
+  border-width: 1.5px;
 }
 
 .garden-ui__seed.is-locked {
@@ -347,7 +345,7 @@
   color: var(--mg-ui-text-muted);
 }
 
-.garden-ui__seed.is-locked .garden-ui__seed-detail::before {
+.garden-ui__seed.is-locked .garden-ui__coin-token--small {
   display: none;
 }
 
@@ -413,11 +411,25 @@
   transform: translateX(-50%);
 }
 
+/* Wide screens: the objective joins the top row, right of the level chip, so it never covers
+   back-row stamps (src/render/camera.ts keeps stamps below that row). */
+@media (min-aspect-ratio: 1/1) {
+  .garden-ui__hint {
+    top: var(--garden-safe-top);
+    right: calc(var(--garden-safe-right) + 130px);
+    left: auto;
+    max-width: calc(50% - 190px);
+    text-align: left;
+    transform: none;
+  }
+}
+
+/* Sits on its own just above the tray, so it never covers a seed card. */
 .garden-ui__harvest-all {
   position: absolute;
-  top: -22px;
+  bottom: calc(100% + 10px);
   right: 14px;
-  min-height: 44px;
+  min-height: 52px;
   padding: 0 16px;
   border: 3px solid var(--mg-ui-border);
   border-radius: 24px;
@@ -441,4 +453,30 @@
   .garden-ui__level-fill {
     transition: none;
   }
+}
+
+/* Unaffordable seed: selectable, but the price is muted. */
+.garden-ui__seed.is-short .garden-ui__seed-detail {
+  color: var(--mg-ui-text-muted);
+}
+
+/* Not enough coins: the chip shakes once (a colour flash under reduced motion). */
+.garden-ui__coins.is-short {
+  animation: garden-ui-short 360ms ease-out;
+}
+
+.garden-ui__coins.is-short-still {
+  animation: garden-ui-short-still 360ms ease-out;
+}
+
+@keyframes garden-ui-short {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  45% { transform: translateX(5px); }
+  70% { transform: translateX(-3px); }
+}
+
+@keyframes garden-ui-short-still {
+  0%, 100% { background: var(--mg-ui-panel); }
+  30% { background: var(--mg-ui-panel-sunk); }
 }

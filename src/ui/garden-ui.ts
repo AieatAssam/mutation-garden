@@ -42,6 +42,8 @@ export interface GardenUI {
   /** "While you were away" card with a one-tap harvest of everything ripe. */
   showAway(ripeCount: number, onHarvestAll: () => void): void;
   hideAway(): void;
+  /** Nudges the coin chip when a seed costs more than the player has. */
+  noCoins(reducedMotion: boolean): void;
   dispose(): void;
 }
 
@@ -156,13 +158,18 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     name.textContent = species.name;
     const detail = document.createElement('span');
     detail.className = 'garden-ui__seed-detail';
+    // Prices use the same Seed Token as the coin counter, just smaller (style guide 6).
+    const priceCoin = coinToken.cloneNode(true) as HTMLElement;
+    priceCoin.classList.add('garden-ui__coin-token--small');
+    const detailText = document.createElement('span');
+    detail.append(priceCoin, detailText);
     button.append(swatch, name, detail);
     button.dataset.speciesId = species.id;
     button.addEventListener('click', () => {
       if (button.getAttribute('aria-disabled') !== 'true') options.onSelect(species.id);
     });
     seedTray.append(button);
-    return { species, button, detail, locked: null as boolean | null };
+    return { species, button, detail: detailText, locked: null as boolean | null };
   });
   seedTray.prepend(trayLabel);
 
@@ -236,6 +243,8 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       const locked = seed.species.unlockLevel > level;
       seed.button.setAttribute('aria-pressed', String(selected));
       seed.button.classList.toggle('is-selected', selected);
+      // Unlocked but unaffordable: still selectable, but the price reads as out of reach.
+      seed.button.classList.toggle('is-short', !locked && state.coins < seed.species.cost);
       if (seed.locked !== locked) {
         seed.button.setAttribute('aria-disabled', String(locked));
         seed.button.classList.toggle('is-locked', locked);
@@ -280,6 +289,11 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       awayText.textContent = `${ripeCount} ${ripeCount === 1 ? 'plant' : 'plants'} ripened while you were away.`;
       onAwayHarvest = onHarvestAll;
       away.hidden = false;
+    },
+    noCoins(reducedMotion) {
+      coinStatus.classList.remove('is-short', 'is-short-still');
+      void coinStatus.offsetWidth;
+      coinStatus.classList.add(reducedMotion ? 'is-short-still' : 'is-short');
     },
     hideAway() {
       away.hidden = true;

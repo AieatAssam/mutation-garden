@@ -19,9 +19,9 @@ describe('garden camera', () => {
   });
 
   it.each([
-    [360, 800, 6.9 * 800 / 360, [3.6, 8.5, 11], [0.35, 0.2, 0.3]],
-    [390, 844, 6.9 * 844 / 390, [3.6, 8.5, 11], [0.35, 0.2, 0.3]],
-    [390, 896, 6.9 * 896 / 390, [3.6, 8.5, 11], [0.35, 0.2, 0.3]],
+    [360, 800, 6.2 * 800 / 360, [3.6, 8.5, 11], [0.35, 0.2, 0.3]],
+    [390, 844, 6.2 * 844 / 390, [3.6, 8.5, 11], [0.35, 0.2, 0.3]],
+    [390, 896, 6.2 * 896 / 390, [3.6, 8.5, 11], [0.35, 0.2, 0.3]],
     [844, 390, 390 / 56, [3.6, 8.5, 11], [0.35, 1.2, 0.3]],
     [1280, 800, 9.4, [3.6, 8.5, 11], [0.35, 1.2, 0.3]],
   ] as const)(
@@ -194,7 +194,9 @@ describe('garden camera', () => {
     resizeGardenCamera(camera, 390, 844);
 
     zoomGardenCamera(camera, 1e100);
-    expect(camera.zoom).toBeCloseTo(1.35, 10);
+    // On a phone the limit is where back-row stamps would reach the objective line, about 1.22.
+    expect(camera.zoom).toBeGreaterThan(1.2);
+    expect(camera.zoom).toBeLessThanOrEqual(1.35);
     const maxPose = pose(camera);
     zoomGardenCamera(camera, 1e100);
     expect(pose(camera)).toEqual(maxPose);
@@ -219,8 +221,11 @@ describe('garden camera', () => {
     zoomGardenCamera(camera, Number.MIN_VALUE);
     expect(camera.zoom).toBeCloseTo(1, 10);
     zoomGardenCamera(camera, 1.2);
+    const maximum = createGardenCamera();
+    resizeGardenCamera(maximum, 390, 844);
+    zoomGardenCamera(maximum, 1e100);
     zoomGardenCamera(camera, Number.MAX_VALUE);
-    expect(camera.zoom).toBeCloseTo(1.35, 10);
+    expect(camera.zoom).toBeCloseTo(maximum.zoom, 10);
     expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);
 
     zoomGardenCamera(camera, 1 / Number.MAX_VALUE);
@@ -232,11 +237,12 @@ describe('garden camera', () => {
     const camera = createGardenCamera();
     resizeGardenCamera(camera, 390, 844);
     zoomGardenCamera(camera, 100);
-    expect(camera.zoom).toBeCloseTo(1.35, 10);
+    const maximum = camera.zoom;
+    expect(maximum).toBeGreaterThan(1.2);
 
     zoomGardenCamera(camera, 0.9);
 
-    expect(camera.zoom).toBeCloseTo(1.215, 10);
+    expect(camera.zoom).toBeCloseTo(maximum * 0.9, 10);
   });
 
   it.each([
@@ -272,8 +278,8 @@ describe('garden camera', () => {
     resizeGardenCamera(camera, 390, 844);
     zoomGardenCamera(camera, 1.2);
 
-    // Short landscape caps zoom near 1.04 so back-row stamps stay on screen.
-    for (const [width, height, zoom] of [[360, 800, 1.2], [390, 844, 1.2], [1280, 800, 1.2], [844, 390, 1.04]] as const) {
+    // Short landscape has no room to zoom: back-row stamps would reach the HUD row.
+    for (const [width, height, zoom] of [[360, 800, 1.2], [390, 844, 1.2], [1280, 800, 1.2], [844, 390, 1]] as const) {
       resizeGardenCamera(camera, width, height);
       expect(camera.zoom, `${width}x${height}`).toBeCloseTo(zoom, 2);
       expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);

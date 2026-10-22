@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry, Color, Group, Matrix3, Mesh, MeshToonMaterial, Object3D, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, Group, Matrix3, Mesh, MeshBasicMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SpeciesId } from '../../sim';
 import type { MaterialLibrary } from '../materials';
@@ -51,7 +51,7 @@ export interface PlantModels {
 
 const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot'];
 /** Display size per species, tuned so each plant fills its bed at phone size. */
-const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.45 };
+export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.45 };
 
 /** Reads species subtrees (meshes named "<species>_<channel>[_n]") into reusable part templates. */
 export function readPlantModels(scene: Object3D): PlantModels {
@@ -105,6 +105,18 @@ export async function loadPlantModels(url: string): Promise<PlantModels> {
 export const PLANT_MODEL_URL = `${import.meta.env.BASE_URL}models/plants.glb`;
 
 const RIPE_SWELL = 1.14;
+const DROP_MS = 140;
+
+/** The seed falls into the soil, squashes to 0.7 and springs back (motion.md 4.1). */
+export function seedDrop(sincePlantedMs: number): { y: number; squash: number } {
+  if (!(sincePlantedMs >= 0) || sincePlantedMs > 600) return { y: 0, squash: 1 };
+  if (sincePlantedMs < DROP_MS) {
+    const t = sincePlantedMs / DROP_MS;
+    return { y: 0.55 * (1 - t * t), squash: 1 + 0.15 * t };
+  }
+  const t = sincePlantedMs - DROP_MS;
+  return { y: 0, squash: 1 - 0.3 * Math.exp(-t / 70) * Math.cos(t / 32) };
+}
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const smooth = (value: number) => value * value * (3 - 2 * value);
 /** Ease-out with a small overshoot, so each part pops slightly past its size and settles. */
@@ -157,6 +169,22 @@ export function createAuthoredRig(
     animated.push({ channel: part.channel, meshes: [mesh, hull], part });
   }
 
+  // Watered soil stays darker for the rest of the plant's growth (motion.md 4.6).
+  const wetGeometry = new CircleGeometry(0.62, 28);
+  const wetMaterial = new MeshBasicMaterial({ color: palette.environment['soil-wet'][1], transparent: true, opacity: 0.75,
+    depthWrite: false, toneMapped: false });
+  const wet = new Mesh(wetGeometry, wetMaterial);
+  wet.name = 'wet-soil';
+  wet.userData.part = 'blob';
+  wet.rotation.x = -Math.PI / 2;
+  wet.position.y = 0.006;
+  wet.renderOrder = 1;
+  wet.visible = false;
+  root.add(wet);
+  let lastStage: string | null = null;
+  let popStartMs = -Infinity;
+  let wetStartMs = -Infinity;
+
   const blob = materials.blob();
   blob.name = 'blob';
   blob.userData.part = 'blob';
@@ -187,9 +215,23 @@ export function createAuthoredRig(
         }
       }
 
+      if (lastStage !== null && lastStage !== plant.stage) popStartMs = presentationNowMs;
+      lastStage = plant.stage;
+      if (plant.boostMs !== undefined && !wet.visible) {
+        wet.visible = true;
+        wetStartMs = presentationNowMs;
+      }
+      const wetT = clamp01((presentationNowMs - wetStartMs) / 300);
+      wet.scale.setScalar(reducedMotion ? 1 : 0.2 + 0.8 * smooth(wetT));
+
       const hop = ripeHopPose(presentationNowMs, hopPhaseOffsetMs, ripe && !reducedMotion);
-      body.position.y = hop.y;
-      body.scale.set(1 / Math.sqrt(hop.scaleY), hop.scaleY, 1 / Math.sqrt(hop.scaleY));
+      const drop = reducedMotion ? { y: 0, squash: 1 } : seedDrop(presentationNowMs - plant.plantedAt);
+      // Stage crossings pop 10% and settle (motion.md 4.2); reduced motion skips the pop.
+      const popT = presentationNowMs - popStartMs;
+      const pop = reducedMotion || popT > 400 ? 1 : 1 + 0.1 * Math.exp(-popT / 70) * Math.cos(popT / 28);
+      const squash = hop.scaleY * drop.squash;
+      body.position.y = hop.y + drop.y;
+      body.scale.set(pop / Math.sqrt(squash), squash * pop, pop / Math.sqrt(squash));
       // Ripe plants wiggle every 3 s (motion.md 4.3).
       const wiggleT = (((presentationNowMs + hopPhaseOffsetMs + 1500) % 3000) + 3000) % 3000 / 400;
       body.rotation.z = ripe && !reducedMotion && wiggleT < 1 ? 0.1 * Math.sin(wiggleT * Math.PI * 3) * (1 - wiggleT) : 0;
@@ -215,6 +257,8 @@ export function createAuthoredRig(
       if (disposed) return;
       disposed = true;
       fruitMaterial.dispose();
+      wetGeometry.dispose();
+      wetMaterial.dispose();
       root.clear();
     },
   };

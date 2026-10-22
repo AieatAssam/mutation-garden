@@ -1,0 +1,63 @@
+.rewards {
+  position: fixed;
+  z-index: 3;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.rewards__label {
+  position: absolute;
+  font-family: 'Fraunces', Georgia, serif;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  font-weight: 800;
+  line-height: 1;
+  transform: translate(-50%, -50%);
+  white-space: nowrap;
+  -webkit-text-stroke: 5px var(--mg-ui-border);
+  paint-order: stroke fill;
+}
+
+.rewards__label--coins {
+  color: var(--mg-ui-coin-face);
+  font-size: 30px;
+}
+
+.rewards__label--note {
+  color: var(--mg-ui-panel);
+  font-size: 17px;
+  -webkit-text-stroke-width: 4px;
+}
+
+.rewards__coin {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  box-sizing: border-box;
+  border: 2px solid var(--mg-ui-coin-outline);
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 50%, var(--mg-ui-coin-emboss) 0 22%, var(--mg-ui-coin-face) 24% 100%);
+  box-shadow: inset 0 0 0 3px var(--mg-ui-coin-rim);
+  transform: translate(-50%, -50%);
+}
+
+.rewards__combo {
+  position: absolute;
+  top: calc(max(12px, env(safe-area-inset-top)) + 64px);
+  left: 50%;
+  padding: 6px 18px 8px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 14px;
+  background: var(--mg-ui-accent);
+  box-shadow: 4px 4px 0 var(--mg-ui-border);
+  color: var(--mg-ui-on-accent);
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 26px;
+  font-weight: 800;
+  transform: translate(-50%, 0) rotate(-3deg);
+  white-space: nowrap;
+}
+
+.rewards__combo span {
+  color: var(--mg-ui-coin-emboss);
+}

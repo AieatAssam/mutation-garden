@@ -1,10 +1,12 @@
-// Placeholder boot: clears the canvas to the day sky colour. No game yet (see docs/milestones/M1.md).
+// Boot: wires the sim loop to rendering, input, UI rewards and sound.
 import { createRenderer } from '../render/renderer';
 import { palette } from '../render/palette';
 import { createInitialState, getSnapshot, SPECIES } from '../sim';
 import type { GardenSnapshot, SpeciesId } from '../sim';
 import { createPointerInput } from '../input/pointer';
 import { createGardenUI } from '../ui/garden-ui';
+import { createRewardLayer } from '../ui/rewards';
+import { createSfx } from '../audio/sfx';
 import { createPageLifecycle } from './lifecycle';
 import { createFixedStepLoop } from './loop';
 import {
@@ -75,6 +77,14 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     window.addEventListener('resize', onResize);
     onResize();
 
+    const sfx = createSfx();
+    const rewards = createRewardLayer(uiRoot, {
+      projectPlot: r.projectPlot,
+      coinTarget: () => uiRoot.querySelector<HTMLElement>('.garden-ui__coins'),
+    });
+    // Audio may only start from a user gesture (autoplay rules).
+    const unlockAudio = () => sfx.unlock();
+    window.addEventListener('pointerdown', unlockAudio, { capture: true });
     const loop = createFixedStepLoop({
       initialState,
       nowMs: () => Date.now(),
@@ -85,6 +95,15 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         coins = frame.current.coins;
         gardenUI.update({ selectedId: selectedSpeciesId, coins });
         r.render(frame.previous, frame.current, frame.alpha, motion.matches);
+      },
+      onEvents: (events) => {
+        r.onEvents(events, motion.matches);
+        rewards.onEvents(events, motion.matches);
+        sfx.onEvents(events);
+        if (!motion.matches && 'vibrate' in navigator) {
+          if (events.some(({ type }) => type === 'Harvested')) navigator.vibrate(15);
+          else if (events.some(({ type }) => type === 'Planted')) navigator.vibrate(10);
+        }
       },
     });
     const input = createPointerInput(canvas, r.pick, (intent) => {
@@ -139,6 +158,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       lifecycle.dispose();
       input.dispose();
       window.removeEventListener('resize', onResize);
+      window.removeEventListener('pointerdown', unlockAudio, { capture: true });
+      rewards.dispose();
+      sfx.dispose();
       r.dispose();
       gardenUI.dispose();
       uiRoot.remove();

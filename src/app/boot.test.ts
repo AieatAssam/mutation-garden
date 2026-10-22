@@ -17,12 +17,14 @@ const {
 vi.mock('../render/renderer', () => ({ createRenderer: (...args: unknown[]) => {
   createRenderer(...args);
   return { resize: resizeRenderer, pan: panRenderer, zoom: zoomRenderer, render: renderRenderer, pick: pickRenderer,
-    whenLoaded: () => new Promise<void>(() => {}), dispose: disposeRenderer };
+    whenLoaded: () => new Promise<void>(() => {}), onEvents: vi.fn(), projectPlot: vi.fn(() => null), dispose: disposeRenderer };
 } }));
 vi.mock('../input/pointer', () => ({
   createPointerInput: (canvas: HTMLCanvasElement, pick: unknown, onIntent: unknown) =>
     createPointerInput(canvas, pick, onIntent),
 }));
+vi.mock('../ui/rewards', () => ({ createRewardLayer: () => ({ onEvents: vi.fn(), dispose: vi.fn() }) }));
+vi.mock('../audio/sfx', () => ({ createSfx: () => ({ unlock: vi.fn(), onEvents: vi.fn(), setMuted: vi.fn(), muted: false, dispose: vi.fn() }) }));
 vi.mock('../ui/garden-ui', () => ({
   createGardenUI: (container: HTMLElement, options: unknown) => createGardenUI(container, options),
 }));

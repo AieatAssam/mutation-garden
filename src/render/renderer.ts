@@ -67,6 +67,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
     console.error('Garden model failed to load', error);
   });
+  // Compile every shader before reporting ready, so the first frame with the island does not stall
+  // the main thread while the player is already tapping (slow GPUs and CI software rendering).
+  const ready = sceneryLoaded.then(() => (disposed ? undefined : gl.compileAsync(scene, camera)))
+    .then(() => undefined, (error: unknown) => {
+      console.error('Shader warm-up failed', error);
+    });
   scene.add(garden);
   const plants = createPlantReconciler(garden.plots, materials);
   const statusResources = createPlotStatusResources();
@@ -150,7 +156,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       draw();
     },
     whenLoaded() {
-      return sceneryLoaded;
+      return ready;
     },
     pick(clientX, clientY) {
       if (disposed) return null;

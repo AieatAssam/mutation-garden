@@ -6,28 +6,25 @@
 export const WIND_PERIOD_MS = 3200;
 export const WIND_SPEED = 1.2;
 const GUST_MS = 1500;
-
-/** Start of gust `index` in ms; gaps are 9 to 14 s from a fixed hash, so they look irregular. */
-function gustStart(index: number): number {
-  let start = 0;
-  for (let i = 0; i < index; i += 1) start += 9000 + 5000 * hash(i);
-  return start;
-}
+const GUST_CELL_MS = 11_500;
+const GUST_JITTER_MS = 1250;
 
 function hash(n: number): number {
   const x = Math.sin(n * 127.1 + 311.7) * 43758.5453;
   return x - Math.floor(x);
 }
 
-/** Gust strength 0..1 at time `timeMs`; rises and falls smoothly over 1.5 s. */
+/**
+ * Gust strength 0..1 at time `timeMs`; rises and falls smoothly over 1.5 s. Gust k starts at
+ * k × 11.5 s ± 1.25 s, so gaps fall between 9 and 14 s and lookup is O(1) for any clock.
+ */
 export function gustAt(timeMs: number): number {
-  if (timeMs < 0) return 0;
-  // ponytail: linear walk from 0; fine for sessions of hours (a few hundred gusts).
-  let index = Math.floor(timeMs / 11_500);
-  while (index > 0 && gustStart(index) > timeMs) index -= 1;
-  while (gustStart(index + 1) <= timeMs) index += 1;
-  const t = (timeMs - gustStart(index)) / GUST_MS;
-  return t >= 0 && t < 1 ? Math.sin(t * Math.PI) ** 2 : 0;
+  const cell = Math.floor(timeMs / GUST_CELL_MS);
+  for (const k of [cell - 1, cell]) {
+    const t = (timeMs - (k * GUST_CELL_MS + (hash(k) - 0.5) * 2 * GUST_JITTER_MS)) / GUST_MS;
+    if (t >= 0 && t < 1) return Math.sin(t * Math.PI) ** 2;
+  }
+  return 0;
 }
 
 /** Wind at world x, -1..2: the travelling sine scaled up to double by a gust that sweeps left to right. */

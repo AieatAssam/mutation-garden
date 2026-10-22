@@ -14,7 +14,7 @@ import {
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
-import { GARDEN_MODEL_URL, loadScenery } from './scenery';
+import { GARDEN_MODEL_URL, loadScenery, type Scenery } from './scenery';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
@@ -72,7 +72,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   const materials = createMaterialLibrary();
   const garden = createGarden();
-  const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
+  let scenery: Scenery | null = null;
+  const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then((loaded) => {
+    scenery = loaded;
+    garden.setScenery(loaded);
+  }, (error: unknown) => {
     console.error('Garden model failed to load', error);
   });
   scene.add(garden);
@@ -207,6 +211,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   function draw(): void {
     const now = performance.now();
+    scenery?.update(now, currentReducedMotion);
     particles.update(now);
     flights.update(now);
     refreshStatus();

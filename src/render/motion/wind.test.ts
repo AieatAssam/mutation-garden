@@ -5,7 +5,7 @@ describe('wind', () => {
   it('gusts every 9 to 14 s for 1.5 s, and doubles the wave at most', () => {
     const starts: number[] = [];
     let wasGusting = false;
-    for (let t = 0; t < 120_000; t += 50) {
+    for (let t = 1.7e12; t < 1.7e12 + 120_000; t += 50) {
       const gusting = gustAt(t) > 0;
       if (gusting && !wasGusting) starts.push(t);
       wasGusting = gusting;

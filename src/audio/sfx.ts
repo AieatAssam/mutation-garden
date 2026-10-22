@@ -5,6 +5,8 @@ export interface Sfx {
   unlock(): void;
   onEvents(events: readonly SimEvent[]): void;
   setMuted(muted: boolean): void;
+  /** A quiet generative loop; it starts once audio is unlocked. */
+  setMusic(on: boolean): void;
   readonly muted: boolean;
   dispose(): void;
 }
@@ -84,6 +86,25 @@ export function createSfx(): Sfx {
   let muted = false;
   let combo = 0;
   let lastHarvestAt = 0;
+  let musicOn = false;
+  let musicTimer = 0;
+  let musicStep = 0;
+  // A slow, soft pentatonic walk two octaves down; ducked well under the effects.
+  const playMusicNote = () => {
+    if (!context || !master || !musicOn || context.state !== 'running') return;
+    musicStep = Math.max(0, Math.min(7, musicStep + [-2, -1, 1, 1, 2][Math.floor(Math.random() * 5)]!));
+    const at = context.currentTime + 0.02;
+    tone(context, master, at, 'triangle', PENTATONIC[musicStep]! / 4, PENTATONIC[musicStep]! / 4, 0.05, 1.4);
+    if (musicStep % 3 === 0) tone(context, master, at, 'sine', PENTATONIC[(musicStep + 2) % 8]! / 2, PENTATONIC[(musicStep + 2) % 8]! / 2, 0.025, 1.8);
+  };
+  const syncMusic = () => {
+    const want = musicOn && context !== null;
+    if (want && !musicTimer) musicTimer = setInterval(playMusicNote, 720) as unknown as number;
+    if (!want && musicTimer) {
+      clearInterval(musicTimer);
+      musicTimer = 0;
+    }
+  };
 
   const play = (voice: keyof typeof VOICES, pitch = 1, delay = 0) => {
     if (!context || !master || muted || context.state !== 'running') return;
@@ -101,6 +122,7 @@ export function createSfx(): Sfx {
         master.connect(context.destination);
       }
       if (context.state === 'suspended') void context.resume();
+      syncMusic();
     },
     onEvents(events) {
       let harvested = 0;
@@ -128,10 +150,16 @@ export function createSfx(): Sfx {
     setMuted(next) {
       muted = next;
     },
+    setMusic(on) {
+      musicOn = on;
+      syncMusic();
+    },
     get muted() {
       return muted;
     },
     dispose() {
+      musicOn = false;
+      syncMusic();
       void context?.close();
       context = null;
       master = null;

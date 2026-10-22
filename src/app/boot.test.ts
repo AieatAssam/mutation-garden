@@ -24,7 +24,7 @@ vi.mock('../input/pointer', () => ({
     createPointerInput(canvas, pick, onIntent),
 }));
 vi.mock('../ui/rewards', () => ({ createRewardLayer: () => ({ onEvents: vi.fn(), dispose: vi.fn() }) }));
-vi.mock('../audio/sfx', () => ({ createSfx: () => ({ unlock: vi.fn(), onEvents: vi.fn(), setMuted: vi.fn(), muted: false, dispose: vi.fn() }) }));
+vi.mock('../audio/sfx', () => ({ createSfx: () => ({ unlock: vi.fn(), onEvents: vi.fn(), setMuted: vi.fn(), setMusic: vi.fn(), muted: false, dispose: vi.fn() }) }));
 vi.mock('../ui/garden-ui', () => ({
   createGardenUI: (container: HTMLElement, options: unknown) => createGardenUI(container, options),
 }));
@@ -45,7 +45,7 @@ describe('boot animation wiring', () => {
     const enqueue = vi.fn();
     vi.spyOn(loopModule, 'createFixedStepLoop').mockImplementation((options) => {
       onRender = options.onRender;
-      return { enqueue, catchUp: vi.fn(), stop: vi.fn(), start: vi.fn() };
+      return { enqueue, catchUp: vi.fn(), getState: vi.fn(), restore: vi.fn(), stop: vi.fn(), start: vi.fn() };
     });
     const pointerInput = { cancelGesture: vi.fn(), dispose: vi.fn() };
     createPointerInput.mockReturnValue(pointerInput);
@@ -114,7 +114,7 @@ describe('boot animation wiring', () => {
     const enqueue = vi.fn();
     vi.spyOn(loopModule, 'createFixedStepLoop').mockImplementation((options) => {
       onRender = options.onRender;
-      return { enqueue, catchUp: vi.fn(), stop: vi.fn(), start: vi.fn() };
+      return { enqueue, catchUp: vi.fn(), getState: vi.fn(), restore: vi.fn(), stop: vi.fn(), start: vi.fn() };
     });
     const pointerInput = { cancelGesture: vi.fn(), dispose: vi.fn() };
     createPointerInput.mockReturnValue(pointerInput);
@@ -182,9 +182,9 @@ describe('boot animation wiring', () => {
     const cleanup = boot({} as HTMLCanvasElement);
     expect(createGardenUI).toHaveBeenCalledWith(uiRoot, expect.objectContaining({
       species: [
-        { id: 'sunny-sprout', name: 'Sunny Sprout' },
-        { id: 'bubble-berry', name: 'Bubble Berry' },
-        { id: 'twistroot', name: 'Twistroot' },
+        expect.objectContaining({ id: 'sunny-sprout', name: 'Sunny Sprout', cost: 1, unlockLevel: 1 }),
+        expect.objectContaining({ id: 'bubble-berry', name: 'Bubble Berry', cost: 3, unlockLevel: 2 }),
+        expect.objectContaining({ id: 'twistroot', name: 'Twistroot', cost: 5, unlockLevel: 3 }),
       ],
       selectedId: 'sunny-sprout',
       coins: 12,
@@ -195,19 +195,19 @@ describe('boot animation wiring', () => {
       onSelect: (id: 'sunny-sprout' | 'bubble-berry' | 'twistroot') => void;
     };
     uiOptions.onSelect('bubble-berry');
-    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'bubble-berry', coins: 12 });
+    expect(updateGardenUI).toHaveBeenLastCalledWith(expect.objectContaining({ selectedId: 'bubble-berry', coins: 12 }));
     uiOptions.onSelect('twistroot');
-    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'twistroot', coins: 12 });
+    expect(updateGardenUI).toHaveBeenLastCalledWith(expect.objectContaining({ selectedId: 'twistroot', coins: 12 }));
     const resizeListener = windowStub.addEventListener.mock.calls.find(([type]) => type === 'resize')?.[1] as () => void;
     expect(resizeRenderer).toHaveBeenLastCalledWith(390, 844); windowStub.innerWidth = 800; windowStub.innerHeight = 600; resizeListener();
     expect(resizeRenderer).toHaveBeenLastCalledWith(800, 600); expect(windowStub.matchMedia).toHaveBeenCalledWith('(prefers-reduced-motion: reduce)');
     expect(frame).toBeTypeOf('function'); frame!(0); const nextFrame = frame!; nextFrame(216);
     const [previous, current, alpha, motion] = renderRenderer.mock.calls[0]!;
     expect(previous).toBe(current); expect((current as GardenSnapshot).plots).toHaveLength(6); expect(alpha).toBe(0); expect(motion).toBe(true);
-    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'twistroot', coins: 12 });
+    expect(updateGardenUI).toHaveBeenLastCalledWith(expect.objectContaining({ selectedId: 'twistroot', coins: 12 }));
     const [prior, latest, blend, moving] = renderRenderer.mock.calls[1]!;
     expect(prior).not.toBe(latest); expect((prior as GardenSnapshot).nowMs).toBe(1_100); expect((latest as GardenSnapshot).nowMs).toBe(1_200);
-    expect(updateGardenUI).toHaveBeenLastCalledWith({ selectedId: 'twistroot', coins: 12 });
+    expect(updateGardenUI).toHaveBeenLastCalledWith(expect.objectContaining({ selectedId: 'twistroot', coins: 12 }));
     expect(blend).toBeCloseTo(0.16); expect(moving).toBe(true);
     reduced = false; frame!(232); expect(renderRenderer.mock.calls[2]![3]).toBe(false);
     cleanup(); cleanup();
@@ -221,7 +221,7 @@ describe('boot animation wiring', () => {
     const initial: GardenSnapshot = { coins: 12, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, nowMs: 1_000, plots: [] };
     const later: GardenSnapshot = { ...initial, coins: 7, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10, nowMs: 1_100 };
     vi.spyOn(loopModule, 'createFixedStepLoop').mockImplementation((options) => ({
-      enqueue: vi.fn(), catchUp: vi.fn(), stop: vi.fn(),
+      enqueue: vi.fn(), catchUp: vi.fn(), getState: vi.fn(), restore: vi.fn(), stop: vi.fn(),
       start() {
         options.onRender({ previous: initial, current: initial, alpha: 0 });
         options.onRender({ previous: initial, current: later, alpha: 0 });
@@ -243,7 +243,7 @@ describe('boot animation wiring', () => {
     const cleanup = boot({} as HTMLCanvasElement);
 
     expect(createGardenUI).toHaveBeenCalledWith(uiRoot, expect.objectContaining({ coins: 12 }));
-    expect(updateGardenUI.mock.calls.map(([update]) => update)).toEqual([
+    expect(updateGardenUI.mock.calls.map(([update]) => ({ selectedId: update.selectedId, coins: update.coins }))).toEqual([
       { selectedId: 'sunny-sprout', coins: 12 },
       { selectedId: 'sunny-sprout', coins: 7 },
     ]);

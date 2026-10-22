@@ -240,3 +240,27 @@ describe('fixed-step app loop', () => {
     expect(h.frames.at(-1)?.current).toBe(1_000);
   });
 });
+
+describe('loop restore', () => {
+  it('replaces the state, drops queued commands and renders the restored garden', async () => {
+    const { createFixedStepLoop } = await import('./loop');
+    const { createInitialState, step } = await import('../sim');
+    const frames: ((t: number) => void)[] = [];
+    let rendered = 0;
+    const loop = createFixedStepLoop({
+      initialState: createInitialState(1, 0),
+      nowMs: () => 0,
+      requestFrame: (callback) => frames.push(callback),
+      cancelFrame: () => {},
+      onRender: (frame) => { rendered = frame.current.coins; },
+    });
+    loop.enqueue({ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' });
+    const saved = { ...step(createInitialState(2, 0), [], 0).state, coins: 40 };
+    loop.restore(saved);
+    expect(loop.getState()).toBe(saved);
+    loop.start();
+    frames.shift()!(0);
+    expect(rendered).toBe(40);
+    expect(loop.getState().plots[0]?.plant).toBeNull();
+  });
+});

@@ -98,7 +98,7 @@ Rarity order, low to high: Giant, Glowing, Golden, Crystal, Rainbow. The higher 
 | Text | `#2B1E2E` Press Ink |
 | Muted text | `#5E4A5C` Faded Ink |
 | Accent (primary buttons) | `#C93A24` Seed Red, pressed `#A82E1C` |
-| Misprint shadow | `#E5482F` |
+| Card shadow | `#CDB28A` (warm tan; was Misprint Tomato, softened 2026-10-22 after owner feedback that red shadows strain the eyes) |
 | Coin face / rim / emboss | `#F2B632` / `#C9861C` / `#FFE08A` |
 | Coin amount text | `#7A4B0C` |
 | Success | `#2F7A3A` |
@@ -170,7 +170,7 @@ Each plant must be identifiable as a solid black shape at 48 px tall.
 
 ## 6. UI style
 
-- **Labels, not windows.** Every UI element is a printed label: a Paper White rounded rectangle, a 3 px Press Ink border, an 18 px corner radius (14 px on small cards), and a 4 px offset Misprint Tomato shadow down and to the right. No blur, no glassmorphism, no gradients, no drop shadows in grey.
+- **Labels, not windows.** Every UI element is a printed label: a Paper White rounded rectangle, a 3 px Press Ink border, an 18 px corner radius (14 px on small cards), and a 4 px offset warm tan card shadow (`ui.misprint-shadow`, `#CDB28A`) down and to the right. Red offset shadows were dropped: they strain the eyes on large areas. No blur, no glassmorphism, no gradients, no drop shadows in grey.
 - **Primary buttons.** Pill shape, 56–64 px tall, Seed Red fill, Paper White label, 3 px ink border, 5 px solid ink "base" shadow below. When pressed, the button moves down 5 px and the base shadow goes to 0, as if pressing a stamp.
 - **Touch targets.** At least 48×48 px. The main actions live in the bottom third of a portrait screen. Nothing important goes in the top 60 px, which is reserved for coins and the journal button.
 - **Type pairing** (both free, SIL Open Font License, on Google Fonts):

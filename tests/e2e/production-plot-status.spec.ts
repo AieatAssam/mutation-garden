@@ -8,6 +8,10 @@ import { captureVisibleBodyMasks } from './production-body-mask';
 import { palette } from '../../src/render/palette';
 import { expectHarvestPaid } from './payout';
 import { SPECIES } from '../../src/sim';
+import { startWithSave } from './garden-save';
+
+// These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
+test.beforeEach(async ({ page }) => startWithSave(page));
 
 type Point = { x: number; y: number };
 type Box = { x: number; y: number; width: number; height: number };
@@ -293,7 +297,9 @@ async function readStamp(
   const visible = results
     .map((fractions, index) => ({ fractions, center: candidates[index]! }))
     .filter(({ fractions }) => fractions.paper >= 0.05 && fractions.fruit >= 0.1 && fractions.ink >= 0.03)
-    .sort((a, b) => b.fractions.paper - a.fractions.paper)[0];
+    // Prefer the passing candidate nearest the regular stamp height (index 5): HUD labels next to a
+    // plant can also show paper, ink and fruit colours, but never at the expected height.
+    .sort((a, b) => Math.abs(candidates.indexOf(a.center) - 5) - Math.abs(candidates.indexOf(b.center) - 5))[0];
   if (!visible) {
     throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible above plot ${speciesPlot[speciesId]}: ${JSON.stringify(results)}`);
   }
@@ -925,6 +931,7 @@ test('production plant bodies differ between Mature 0.95 and Harvestable', async
     });
     const page = await context.newPage();
     try {
+      await startWithSave(page);
       await page.emulateMedia({ reducedMotion: 'reduce' });
       const { plots } = await openGame(page, info.project.name);
       const stage = await page.locator('#stage').boundingBox();

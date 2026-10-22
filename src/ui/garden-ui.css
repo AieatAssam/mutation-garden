@@ -95,11 +95,6 @@
   stroke-width: 2.2;
 }
 
-.garden-ui__coin-amount::before {
-  color: var(--mg-ui-coin-text);
-  content: 'Coins ';
-  font-weight: 600;
-}
 
 .garden-ui__tray {
   position: absolute;
@@ -108,11 +103,12 @@
   left: var(--garden-safe-left);
   display: flex;
   justify-content: center;
-  align-items: end;
+  align-items: stretch;
   gap: 10px;
   box-sizing: border-box;
-  padding: 26px 8px 10px;
-  min-height: 98px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 22px 10px 10px;
   border: 3px solid var(--mg-ui-border);
   border-radius: 18px;
   background: var(--mg-ui-panel);
@@ -123,7 +119,7 @@
 .garden-ui__tray-label {
   position: absolute;
   top: -3px;
-  left: 50%;
+  left: 18px;
   padding: 0 11px 2px;
   border: 3px solid var(--mg-ui-border);
   border-bottom: 0;
@@ -132,72 +128,317 @@
   font-size: 15px;
   font-weight: 700;
   line-height: 20px;
-  transform: translateX(-50%);
 }
 
-.garden-ui__seed {
-  min-width: min(100%, 160px);
-  min-height: 56px;
-  padding: 0 22px;
+
+
+
+
+
+
+.garden-ui__seed-name,
+
+.garden-ui__seed-detail {
+  font: 700 13px/1.2 'Atkinson Hyperlegible', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.9;
+}
+
+
+
+
+
+.garden-ui__toggles {
+  position: absolute;
+  top: var(--garden-safe-top);
+  right: var(--garden-safe-right);
+  display: flex;
+  gap: 8px;
+}
+
+.garden-ui__toggle {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
   border: 3px solid var(--mg-ui-border);
-  border-radius: 32px;
-  background: var(--mg-ui-accent);
-  box-shadow: 0 5px 0 var(--mg-ui-border);
-  color: var(--mg-ui-on-accent);
+  border-radius: 50%;
+  background: var(--mg-ui-panel);
+  box-shadow: 3px 3px 0 var(--mg-ui-misprint);
+  color: var(--mg-ui-text);
   cursor: pointer;
-  font: 700 20px/1.15 'Fraunces', Georgia, serif;
-  font-optical-sizing: auto;
-  font-variation-settings: 'SOFT' 100, 'WONK' 1;
   pointer-events: auto;
   touch-action: manipulation;
-  transition: transform 140ms ease-out, box-shadow 140ms ease-out, background-color 140ms ease-out;
 }
 
-.garden-ui__seed:hover {
-  background: var(--mg-ui-accent-pressed);
+.garden-ui__toggle[aria-pressed='false'] {
+  background: var(--mg-ui-panel-sunk);
+  color: var(--mg-ui-text-muted);
+}
+
+.garden-ui__toggle[aria-pressed='false'] .garden-ui__icon path:nth-child(n + 2) {
+  opacity: 0.25;
+}
+
+.garden-ui__toggle:focus-visible,
+.garden-ui__away-button:focus-visible {
+  outline: 4px solid var(--mg-ui-focus);
+  outline-offset: 3px;
+}
+
+.garden-ui__icon {
+  width: 24px;
+  height: 24px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
+}
+
+
+.garden-ui__stamp {
+  position: absolute;
+  top: 22%;
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 10px 22px 12px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 16px;
+  background: var(--mg-ui-accent);
+  box-shadow: 5px 5px 0 var(--mg-ui-border);
+  color: var(--mg-ui-on-accent);
+  transform: translate(-50%, 0) rotate(-3deg);
+  white-space: nowrap;
+}
+
+.garden-ui__stamp strong {
+  font: 800 32px/1 'Fraunces', Georgia, serif;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+}
+
+.garden-ui__stamp span {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.garden-ui__away {
+  position: absolute;
+  right: var(--garden-safe-right);
+  bottom: calc(var(--garden-safe-bottom) + 150px);
+  left: var(--garden-safe-left);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 18px;
+  background: var(--mg-ui-panel);
+  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
+  pointer-events: auto;
+}
+
+.garden-ui__away p {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.garden-ui__away-button {
+  min-height: 48px;
+  padding: 0 18px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 28px;
+  background: var(--mg-ui-accent);
+  box-shadow: 0 4px 0 var(--mg-ui-border);
+  color: var(--mg-ui-on-accent);
+  cursor: pointer;
+  font: 700 17px/1 'Fraunces', Georgia, serif;
+  white-space: nowrap;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+
+/* Seed cards, after the look prototype: fruit swatch, name, price. */
+.garden-ui__seed {
+  display: grid;
+  flex: 1 1 0;
+  justify-items: center;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 160px;
+  min-height: 92px;
+  padding: 8px 6px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 14px;
+  background: var(--mg-ui-panel);
+  color: var(--mg-ui-text);
+  cursor: pointer;
+  pointer-events: auto;
+  touch-action: manipulation;
+  transition: transform 140ms ease-out, background-color 140ms ease-out;
 }
 
 .garden-ui__seed:active {
-  box-shadow: 0 0 0 var(--mg-ui-border);
-  transform: translateY(5px);
+  transform: translateY(3px) scale(0.97);
 }
 
 .garden-ui__seed:focus-visible {
   outline: 4px solid var(--mg-ui-focus);
-  outline-offset: 4px;
+  outline-offset: 3px;
 }
 
 .garden-ui__seed.is-selected {
-  background: var(--mg-ui-panel);
-  box-shadow: 0 8px 0 var(--mg-ui-border), 4px 4px 0 var(--mg-ui-misprint);
-  color: var(--mg-ui-accent);
-  transform: translateY(-3px);
+  border-color: var(--mg-ui-coin-rim);
+  background: var(--mg-ui-coin-emboss);
+  box-shadow: inset 0 0 0 2px var(--mg-ui-coin-face);
 }
 
-.garden-ui__seed.is-selected:active {
+.garden-ui__seed-swatch {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 50%;
+  background: var(--seed-color, var(--mg-ui-panel-sunk));
+}
+
+.garden-ui__seed-name {
+  font: 700 15px/1.1 'Fraunces', Georgia, serif;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  text-align: center;
+}
+
+.garden-ui__seed-detail {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mg-ui-coin-text);
+  font: 700 14px/1 'Atkinson Hyperlegible', system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.garden-ui__seed-detail::before {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--mg-ui-coin-outline);
+  border-radius: 50%;
+  background: var(--mg-ui-coin-face);
+  content: '';
+}
+
+.garden-ui__seed.is-locked {
+  background: var(--mg-ui-panel-sunk);
+  color: var(--mg-ui-text-muted);
+  cursor: default;
+}
+
+.garden-ui__seed.is-locked .garden-ui__seed-swatch {
+  opacity: 0.35;
+}
+
+.garden-ui__seed.is-locked .garden-ui__seed-detail {
+  color: var(--mg-ui-text-muted);
+}
+
+.garden-ui__seed.is-locked .garden-ui__seed-detail::before {
+  display: none;
+}
+
+/* Level chip in the top row, between the coins and the toggles. */
+.garden-ui__card {
+  position: absolute;
+  top: var(--garden-safe-top);
+  left: 50%;
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  box-sizing: border-box;
+  width: 104px;
+  min-height: 48px;
+  padding: 6px 10px 7px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 14px;
+  background: var(--mg-ui-panel);
+  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
+  transform: translateX(-50%);
+}
+
+.garden-ui__card strong {
+  font: 800 16px/1 'Fraunces', Georgia, serif;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  white-space: nowrap;
+}
+
+.garden-ui__level-bar {
+  display: block;
+  width: 100%;
+  height: 8px;
+  overflow: hidden;
+  border: 2px solid var(--mg-ui-border);
+  border-radius: 6px;
+  background: var(--mg-ui-panel-sunk);
+}
+
+.garden-ui__level-fill {
+  display: block;
+  height: 100%;
+  background: var(--mg-ui-success);
+  transition: width 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.garden-ui__hint {
+  position: absolute;
+  top: calc(var(--garden-safe-top) + 62px);
+  left: 50%;
+  box-sizing: border-box;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  margin: 0;
+  padding: 7px 14px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 14px;
+  background: var(--mg-ui-panel);
+  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
+  font-size: 15px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
+.garden-ui__harvest-all {
+  position: absolute;
+  top: -22px;
+  right: 14px;
+  min-height: 44px;
+  padding: 0 16px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 24px;
+  background: var(--mg-ui-accent);
+  box-shadow: 0 4px 0 var(--mg-ui-border);
+  color: var(--mg-ui-on-accent);
+  cursor: pointer;
+  font: 800 17px/1 'Fraunces', Georgia, serif;
+  font-variation-settings: 'SOFT' 100, 'WONK' 1;
+  pointer-events: auto;
+  touch-action: manipulation;
+}
+
+.garden-ui__harvest-all:active {
   box-shadow: 0 0 0 var(--mg-ui-border);
   transform: translateY(5px);
 }
 
-@media (max-width: 600px) {
-  .garden-ui__tray {
-    gap: 8px;
-  }
-
-  .garden-ui__seed {
-    box-sizing: border-box;
-    flex: 1 1 0;
-    width: 0;
-    min-width: 0;
-    min-height: 56px;
-    padding: 4px 6px;
-    font-size: clamp(13px, 3.6vw, 15px);
-    line-height: 1.15;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
-  .garden-ui__seed {
+  .garden-ui__seed,
+  .garden-ui__level-fill {
     transition: none;
   }
 }

@@ -76,7 +76,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     console.error('Garden model failed to load', error);
   });
   scene.add(garden);
-  const plants = createPlantReconciler(garden.plots, materials);
+  const plants = createPlantReconciler(garden.plots, materials, { waitForModels: true });
   let plantModels: PlantModels | null = null;
   const plantsLoaded = loadPlantModels(PLANT_MODEL_URL).then((models) => {
     if (disposed) {

@@ -41,6 +41,7 @@ test('reconciles visible growth, harvest and replant snapshots across layouts', 
   const canvas = page.locator('#stage'); await expect(canvas).toBeVisible();
   const renderCase = async (name: string) => {
     await page.evaluate((value) => (window as unknown as Window & { sunnySproutFixture: { setCase(name: string): void } }).sunnySproutFixture.setCase(value), name);
+    await expect(page.locator('#status')).toHaveAttribute('data-case', name);
     return canvas.screenshot();
   };
   const empty = await renderCase('empty'); const growing = await renderCase('growing'); const harvested = await renderCase('harvested');

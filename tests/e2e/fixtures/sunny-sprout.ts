@@ -30,6 +30,13 @@ if (new URLSearchParams(location.search).has('reconcile')) {
       previous = snapshot(1000, plants); current = snapshot(1100, plants);
     }
     renderer.render(previous, current, 0.5, reducedMotion);
+    // Let short presentation fades (harvested stamps fade over 120 ms) finish, then report the settled case.
+    status.dataset.case = '';
+    setTimeout(() => {
+      if (currentCase !== name) return;
+      renderer.render(current, current, 1, reducedMotion);
+      status.dataset.case = name;
+    }, 250);
   };
   function resize() { renderer.resize(innerWidth, innerHeight); }
   window.addEventListener('resize', resize); resize(); setCase('empty');

@@ -3,6 +3,10 @@ import { expect, test, type Page } from '@playwright/test';
 import { Vector3 } from 'three';
 import { PLOT_ACTIVATION_GUARD_MS } from '../../src/app/commands';
 import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
+import { startWithSave } from './garden-save';
+
+// These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
+test.beforeEach(async ({ page }) => startWithSave(page));
 
 async function firstPlotCenter(page: Page, projectName: string): Promise<{ x: number; y: number }> {
   await page.setViewportSize(projectName === 'desktop'

@@ -1,10 +1,25 @@
 import type { GardenState } from '../sim';
-import { decodeSave, encodeSave, type SaveEnvelope } from './codec';
+import { decodeSave, encodeSave, NEWER_REASON, type SaveEnvelope } from './codec';
+
+type Entries = readonly (readonly [string, unknown])[];
 
 /** A tiny key-value backend. Each set call is atomic for all its entries (one IndexedDB transaction). */
 export interface SaveBackend {
   get(key: string): Promise<unknown>;
-  set(entries: readonly (readonly [string, unknown])[]): Promise<void>;
+  set(entries: Entries): Promise<void>;
+  /**
+   * Reads `key` and writes what `decide` returns, in one transaction, so a save started on pagehide
+   * needs no second round trip. `decide` may throw to write nothing.
+   */
+  swap(key: string, decide: (current: unknown) => Entries): Promise<void>;
+}
+
+/** Another tab (or a newer build) wrote the save after this tab loaded it; this tab must stop saving. */
+export class StaleSaveError extends Error {
+  constructor() {
+    super('The save was changed elsewhere');
+    this.name = 'StaleSaveError';
+  }
 }
 
 const SLOT = 'slot-0';
@@ -15,7 +30,9 @@ export type LoadResult =
   | { readonly kind: 'empty' }
   | { readonly kind: 'loaded'; readonly state: GardenState; readonly savedAt: number }
   /** The main slot was unreadable; it is kept aside and the backup was loaded (or nothing was). */
-  | { readonly kind: 'recovered'; readonly state: GardenState | null; readonly savedAt: number; readonly reason: string };
+  | { readonly kind: 'recovered'; readonly state: GardenState | null; readonly savedAt: number; readonly reason: string }
+  /** The save is from a newer build. It is left untouched and this build must not overwrite it. */
+  | { readonly kind: 'newer' };
 
 export interface Settings {
   readonly sound: boolean;
@@ -25,32 +42,49 @@ export const DEFAULT_SETTINGS: Settings = { sound: true, music: true };
 
 export interface SaveStore {
   load(): Promise<LoadResult>;
-  /** Writes the new envelope and keeps the previous one as the backup, in one transaction. */
+  /**
+   * Writes the new envelope and keeps the previous one as the backup, in one transaction.
+   * Throws StaleSaveError, writing nothing, if the slot changed since this store last loaded or saved it.
+   */
   save(state: GardenState, savedAt: number): Promise<void>;
   loadSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<void>;
 }
 
+const checksumOf = (raw: unknown) =>
+  raw && typeof raw === 'object' ? (raw as Partial<SaveEnvelope>).checksum ?? null : null;
+
 export function createSaveStore(backend: SaveBackend, appVersion: string, nowMs: () => number): SaveStore {
+  // Checksum of the envelope this store last saw in the slot; a different one means another writer.
+  let known: string | null = null;
   return {
     async load() {
       const raw = await backend.get(SLOT);
       if (raw === undefined || raw === null) return { kind: 'empty' };
       const main = decodeSave(raw);
-      if (main.ok) return { kind: 'loaded', state: main.state, savedAt: main.savedAt };
+      if (main.ok) {
+        known = checksumOf(raw);
+        return { kind: 'loaded', state: main.state, savedAt: main.savedAt };
+      }
+      if (main.reason === NEWER_REASON) return { kind: 'newer' };
       // Never silently reset: keep the bad blob for diagnosis and fall back to the last good save.
       await backend.set([[`${SLOT}.corrupt-${nowMs()}`, raw]]);
+      // The bad blob is safe aside, so the next save may replace it.
+      known = checksumOf(raw);
       const backup = decodeSave(await backend.get(BACKUP));
       return backup.ok
         ? { kind: 'recovered', state: backup.state, savedAt: backup.savedAt, reason: main.reason }
         : { kind: 'recovered', state: null, savedAt: 0, reason: main.reason };
     },
     async save(state, savedAt) {
-      const previous = await backend.get(SLOT);
       const envelope: SaveEnvelope = encodeSave(state, savedAt, appVersion);
-      const entries: [string, unknown][] = [[SLOT, envelope]];
-      if (previous !== undefined && previous !== null && decodeSave(previous).ok) entries.push([BACKUP, previous]);
-      await backend.set(entries);
+      await backend.swap(SLOT, (previous) => {
+        if (checksumOf(previous) !== known) throw new StaleSaveError();
+        const entries: [string, unknown][] = [[SLOT, envelope]];
+        if (previous !== undefined && previous !== null && decodeSave(previous).ok) entries.push([BACKUP, previous]);
+        return entries;
+      });
+      known = envelope.checksum;
     },
     async loadSettings() {
       const raw = await backend.get(SETTINGS) as Partial<Settings> | undefined;
@@ -71,6 +105,9 @@ export function memoryBackend(): SaveBackend & { readonly data: Map<string, unkn
     data,
     async get(key) { return structuredClone(data.get(key)); },
     async set(entries) { for (const [key, value] of entries) data.set(key, structuredClone(value)); },
+    async swap(key, decide) {
+      for (const [entry, value] of decide(structuredClone(data.get(key)))) data.set(entry, structuredClone(value));
+    },
   };
 }
 
@@ -106,20 +143,44 @@ export function indexedDbBackend(factory: IDBFactory = indexedDB): SaveBackend {
         transaction.onabort = () => reject(transaction.error);
       });
     },
+    async swap(key, decide) {
+      const db = await open();
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction('saves', 'readwrite');
+        const store = transaction.objectStore('saves');
+        const request = store.get(key);
+        request.onsuccess = () => {
+          try {
+            for (const [entry, value] of decide(request.result)) store.put(value, entry);
+          } catch (error) {
+            transaction.abort();
+            reject(error);
+          }
+        };
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+      });
+    },
   };
 }
 
 /** Fallback when IndexedDB is unavailable (some private modes). Writes all entries in one go. */
 export function localStorageBackend(storage: Storage = localStorage): SaveBackend {
   const prefix = 'mutation-garden:';
+  const get = (key: string): unknown => {
+    const text = storage.getItem(prefix + key);
+    if (text === null) return undefined;
+    // Unparseable text goes back as-is, so the normal corrupt-save path keeps it aside.
+    try { return JSON.parse(text); } catch { return text; }
+  };
+  const set = (entries: Entries) => {
+    for (const [key, value] of entries) storage.setItem(prefix + key, JSON.stringify(value));
+  };
   return {
-    async get(key) {
-      const text = storage.getItem(prefix + key);
-      return text === null ? undefined : JSON.parse(text);
-    },
-    async set(entries) {
-      for (const [key, value] of entries) storage.setItem(prefix + key, JSON.stringify(value));
-    },
+    async get(key) { return get(key); },
+    async set(entries) { set(entries); },
+    async swap(key, decide) { set(decide(get(key))); },
   };
 }
 

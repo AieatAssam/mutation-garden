@@ -2,8 +2,8 @@
 import { createRenderer } from '../render/renderer';
 import { palette } from '../render/palette';
 import { createInitialState, getSnapshot, SPECIES, step } from '../sim';
-import type { GardenSnapshot, GardenState, SimEvent, SpeciesId } from '../sim';
-import { chooseBackend, createSaveStore, DEFAULT_SETTINGS, type Settings } from '../save/store';
+import type { Command, GardenSnapshot, GardenState, SimEvent, SpeciesId } from '../sim';
+import { chooseBackend, createSaveStore, DEFAULT_SETTINGS, StaleSaveError, type Settings } from '../save/store';
 import { hintFor } from './hints';
 import { createPointerInput } from '../input/pointer';
 import { createGardenUI } from '../ui/garden-ui';
@@ -64,6 +64,15 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   let harvestAll = () => {};
   let settings: Settings = DEFAULT_SETTINGS;
   let notice = '';
+  let noticeTimer = 0;
+  /** Shows a notice in the HUD; it clears after `ms` (0 keeps it). */
+  const showNotice = (text: string, ms = 6_000) => {
+    notice = text;
+    clearTimeout(noticeTimer);
+    if (ms > 0) noticeTimer = setTimeout(() => { notice = ''; }, ms) as unknown as number;
+  };
+  // Input waits for the save to load, so a tap made while IndexedDB opens is not replaced by restore().
+  let loadSettled = false;
   let reducedMotion = false;
   // ponytail: the HUD reads the latest snapshot each frame; hints are cheap pure functions of it.
   const refreshUI = () => {
@@ -116,6 +125,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     // Audio may only start from a user gesture (autoplay rules).
     const unlockAudio = () => sfx.unlock();
     window.addEventListener('pointerdown', unlockAudio, { capture: true });
+    const act = (command: Command) => { if (loadSettled) loop.enqueue(command); };
     const loop = createFixedStepLoop({
       initialState,
       nowMs: () => Date.now(),
@@ -156,12 +166,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           return;
         case 'ActivatePlot': {
           const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
-          if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
+          if (command && acceptPlotActivation(command, Date.now())) act(command);
           return;
         }
         case 'HarvestPlots': {
           const command = commandForSwipeHarvest(latestSnapshot, intent.plotIds);
-          if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
+          if (command && acceptPlotActivation(command, Date.now())) act(command);
           return;
         }
         default: {
@@ -173,7 +183,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     harvestAll = () => {
       const ripe = latestSnapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').map(({ id }) => id);
       const command = commandForSwipeHarvest(latestSnapshot, ripe);
-      if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
+      if (command && acceptPlotActivation(command, Date.now())) act(command);
     };
     const lifecycle = createPageLifecycle({
       loop,
@@ -206,30 +216,49 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         void store.saveSettings(next);
       };
       const loaded = await store.load();
+      if (loaded.kind === 'newer') {
+        // Leave the newer save alone: playing here would overwrite it with older progress.
+        showNotice('This save is from a newer version. Reload the page to update. Progress here will not be saved.');
+        return;
+      }
       if (loaded.kind !== 'empty' && loaded.state) {
         loop.restore(loaded.state);
         latestSnapshot = getSnapshot(loaded.state);
         showAwaySummary(loaded.state, loaded.savedAt);
       }
       if (loaded.kind === 'recovered') {
-        notice = loaded.state ? 'Your last save was damaged. The backup was loaded.' : 'Your save could not be read. It was kept aside.';
-        setTimeout(() => { notice = ''; }, 6_000);
+        showNotice(loaded.state ? 'Your last save was damaged. The backup was loaded.' : 'Your save could not be read. It was kept aside.');
       } else if (!persistent) {
-        notice = 'This browser cannot save. Progress lasts until you close the page.';
-        setTimeout(() => { notice = ''; }, 6_000);
+        showNotice('This browser cannot save. Progress lasts until you close the page.');
       }
       let pending = 0;
+      let failures = 0;
+      let stopped = false;
       saveNow = () => {
         clearTimeout(pending);
-        void store.save(loop.getState(), Date.now()).catch(() => {});
+        if (stopped) return;
+        store.save(loop.getState(), Date.now()).then(() => { failures = 0; }, (error: unknown) => {
+          if (error instanceof StaleSaveError) {
+            stopped = true;
+            showNotice('This garden was opened in another tab. Reload to keep playing here.', 0);
+            return;
+          }
+          failures += 1;
+          if (failures === 3) showNotice('Progress is not saving. Free some storage space, then reload.');
+        });
       };
       scheduleSave = (events) => {
         if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered')) return;
         clearTimeout(pending);
         pending = setTimeout(saveNow, 800) as unknown as number;
       };
-      saveTimer = setInterval(saveNow, 10_000) as unknown as number;
-    }).catch(() => {});
+      // Hidden tabs skip the timed save, so an idle tab never writes over the one being played.
+      saveTimer = setInterval(() => { if (!document.hidden) saveNow(); }, 10_000) as unknown as number;
+    }).catch((error: unknown) => {
+      // Don't save over a garden we could not read; say so instead of resetting quietly.
+      console.warn('Save load failed', error);
+      showNotice('Your save could not be loaded. Reload the page to try again. Progress here will not be saved.', 0);
+    }).finally(() => { loadSettled = true; });
     let saveNow = () => {};
     let scheduleSave: (events: readonly SimEvent[]) => void = () => {};
     let saveTimer = 0;
@@ -243,7 +272,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       if (ripe.length === 0 || Date.now() - savedAt < 30_000) return;
       gardenUI.showAway(ripe.length, () => {
         const command = commandForSwipeHarvest(latestSnapshot, ripe);
-        if (command && acceptPlotActivation(command, Date.now())) loop.enqueue(command);
+        if (command && acceptPlotActivation(command, Date.now())) act(command);
       });
     }
 

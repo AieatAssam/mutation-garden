@@ -39,7 +39,7 @@ describe('boot animation wiring', () => {
   });
   afterEach(() => { vi.unstubAllGlobals(); vi.restoreAllMocks(); vi.clearAllMocks(); });
 
-  it('maps plot activations from the latest snapshot and enqueues each resulting command', () => {
+  it('maps plot activations from the latest snapshot and enqueues each resulting command', async () => {
     createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI });
     let onRender: ((frame: { previous: GardenSnapshot; current: GardenSnapshot; alpha: number }) => void) | undefined;
     const enqueue = vi.fn();
@@ -65,6 +65,8 @@ describe('boot animation wiring', () => {
     const canvas = {} as HTMLCanvasElement;
 
     const cleanup = boot(canvas);
+    // Input waits for the save to load (here the memory fallback).
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(createPointerInput).toHaveBeenCalledWith(canvas, pickRenderer, expect.any(Function));
     const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
 
@@ -108,7 +110,7 @@ describe('boot animation wiring', () => {
     expect(pointerInput.dispose).toHaveBeenCalledTimes(1);
   });
 
-  it('queues one ordered swipe batch and guards every batch target against immediate replanting', () => {
+  it('queues one ordered swipe batch and guards every batch target against immediate replanting', async () => {
     createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI });
     let onRender: ((frame: { previous: GardenSnapshot; current: GardenSnapshot; alpha: number }) => void) | undefined;
     const enqueue = vi.fn();
@@ -133,6 +135,8 @@ describe('boot animation wiring', () => {
     vi.stubGlobal('document', documentStub as unknown as Document);
 
     const cleanup = boot({} as HTMLCanvasElement);
+    // Input waits for the save to load (here the memory fallback).
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(createRenderer).toHaveBeenCalledWith(expect.anything(), {
       species: [
         { id: 'sunny-sprout', stageFractions: [0.125, 0.375, 0.875] },

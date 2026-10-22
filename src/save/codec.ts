@@ -59,6 +59,8 @@ export function validateState(value: unknown): value is GardenState {
   });
 }
 
+export const NEWER_REASON = 'save is from a newer version';
+
 export function decodeSave(raw: unknown): DecodeResult {
   if (!raw || typeof raw !== 'object') return { ok: false, reason: 'not an object' };
   const envelope = raw as Partial<SaveEnvelope>;
@@ -66,7 +68,7 @@ export function decodeSave(raw: unknown): DecodeResult {
     return { ok: false, reason: 'missing fields' };
   }
   if (checksum(JSON.stringify(envelope.state)) !== envelope.checksum) return { ok: false, reason: 'checksum mismatch' };
-  if (envelope.schema! > SIM_SCHEMA_VERSION) return { ok: false, reason: 'save is from a newer version' };
+  if (envelope.schema! > SIM_SCHEMA_VERSION) return { ok: false, reason: NEWER_REASON };
   let state = envelope.state as unknown as Record<string, unknown>;
   for (let schema = envelope.schema!; schema < SIM_SCHEMA_VERSION; schema += 1) {
     const migrate = MIGRATIONS[schema];

@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { createInitialState, step } from '../sim';
+import { createInitialState, SIM_SCHEMA_VERSION, step } from '../sim';
 import { checksum, decodeSave, encodeSave } from './codec';
-import { createSaveStore, DEFAULT_SETTINGS, memoryBackend } from './store';
+import { createSaveStore, DEFAULT_SETTINGS, localStorageBackend, memoryBackend, StaleSaveError } from './store';
 
 const garden = () => step(createInitialState(42, 1_000), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 1_000).state;
 
@@ -46,6 +46,38 @@ describe('save store', () => {
     const backend = memoryBackend();
     backend.data.set('slot-0', { junk: true });
     expect(await createSaveStore(backend, 'test', () => 1).load()).toMatchObject({ kind: 'recovered', state: null });
+  });
+
+  it('refuses to overwrite a save another tab wrote, and leaves a newer build\'s save alone', async () => {
+    const backend = memoryBackend();
+    const tabA = createSaveStore(backend, 'test', () => 1);
+    const tabB = createSaveStore(backend, 'test', () => 1);
+    await tabA.load();
+    await tabB.load();
+    const played = step(garden(), [], 5_000).state;
+    await tabA.save(played, 1);
+    await expect(tabB.save(garden(), 2)).rejects.toBeInstanceOf(StaleSaveError);
+    expect(await tabA.load()).toMatchObject({ kind: 'loaded', state: played });
+
+    const newer = { ...encodeSave(played, 3, 'future'), schema: SIM_SCHEMA_VERSION + 1 };
+    backend.data.set('slot-0', newer);
+    const old = createSaveStore(backend, 'test', () => 1);
+    expect(await old.load()).toEqual({ kind: 'newer' });
+    expect(backend.data.get('slot-0')).toEqual(newer);
+    expect([...backend.data.keys()].some((key) => key.includes('corrupt'))).toBe(false);
+  });
+
+  it('keeps an unparseable localStorage save aside instead of giving up on storage', async () => {
+    const data = new Map<string, string>([['mutation-garden:slot-0', '{"cut off']]);
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => { data.set(key, value); },
+    } as Storage;
+    const store = createSaveStore(localStorageBackend(storage), 'test', () => 5);
+    expect(await store.load()).toMatchObject({ kind: 'recovered', state: null });
+    expect(data.get('mutation-garden:slot-0.corrupt-5')).toBe(JSON.stringify('{"cut off'));
+    await store.save(garden(), 6);
+    expect(await store.load()).toMatchObject({ kind: 'loaded' });
   });
 
   it('stores settings with defaults for missing values', async () => {

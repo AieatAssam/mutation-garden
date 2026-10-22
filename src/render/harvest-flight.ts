@@ -21,8 +21,8 @@ interface Flight {
 
 export interface HarvestFlights {
   readonly root: Group;
-  /** Launches the species' fruit from a plant's fruit centre to the crate (motion.md 4.4). */
-  launch(species: SpeciesId, from: Vector3, nowMs: number, reducedMotion: boolean): void;
+  /** Launches the plant's harvested parts from where they grew on the plot to the crate (motion.md 4.4). */
+  launch(species: SpeciesId, plotAnchor: Vector3, nowMs: number, reducedMotion: boolean): void;
   update(nowMs: number): void;
   readonly activeCount: number;
   dispose(): void;
@@ -42,27 +42,31 @@ export function createHarvestFlights(models: () => PlantModels | null, materials
 
   return {
     root,
-    launch(species, from, nowMs, reducedMotion) {
+    launch(species, plotAnchor, nowMs, reducedMotion) {
       const current = models();
       if (!current || reducedMotion) return;
       if (flights.length >= MAX_FLIGHTS) finish(flights.shift()!);
       const group = new Group();
       const fruitColor = palette.plants[species].fruit[1];
-      for (const part of current.parts.get(species) ?? []) {
-        if (part.channel !== 'fruit' && part.channel !== 'cap') continue;
-        const mesh = new Mesh(part.geometry, materials.toon(part.channel === 'fruit' ? fruitColor : part.color));
-        mesh.morphTargetInfluences![0] = 1;
-        // Centre the fruit on the group so it can spin and squash about itself.
-        const fruit = current.parts.get(species)!.find((candidate) => candidate.channel === 'fruit')!;
-        mesh.position.copy(fruit.grownCenter).multiplyScalar(-1);
-        mesh.renderOrder = 3;
+      const flying = (current.parts.get(species) ?? []).filter((part) => part.fly);
+      // Centre the harvested parts on the group so they spin and squash about themselves.
+      const centre = new Vector3();
+      for (const part of flying) centre.add(part.origin).add(part.grownCenter);
+      centre.divideScalar(Math.max(1, flying.length));
+      for (const part of flying) {
+        const mesh = new Mesh(part.geometry, materials.toon(part.ripe ? fruitColor : part.color));
         const hull = materials.outline(part.geometry);
-        hull.morphTargetInfluences![0] = 1;
-        hull.position.copy(mesh.position);
+        for (const item of [mesh, hull]) {
+          if (part.morph) item.morphTargetInfluences![0] = 1;
+          item.position.copy(part.origin).sub(centre);
+        }
+        mesh.renderOrder = 3;
         group.add(mesh, hull);
       }
       root.add(group);
-      flights.push({ group, from: from.clone(), to: CRATE_TOP.clone(), startMs: nowMs, scale: SPECIES_SCALE[species] * 1.14 });
+      const scale = SPECIES_SCALE[species] * 1.14;
+      const from = plotAnchor.clone().addScaledVector(centre, scale);
+      flights.push({ group, from, to: CRATE_TOP.clone(), startMs: nowMs, scale });
     },
     update(nowMs) {
       for (let index = flights.length - 1; index >= 0; index -= 1) {

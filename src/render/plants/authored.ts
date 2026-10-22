@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, Group, Matrix3, Mesh, MeshBasicMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, Group, Matrix3, Matrix4, Mesh, MeshBasicMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SpeciesId } from '../../sim';
 import type { MaterialLibrary } from '../materials';
@@ -6,42 +6,29 @@ import { palette } from '../palette';
 import { paletteColor } from '../scenery';
 import { ripeHopPose, type PlantRig } from './sunny-sprout';
 
-/** Growth channels authored in tools/blender/build_plants.py, each with one "grow" morph target. */
-type Channel = 'stem' | 'leaf' | 'fruit' | 'cap';
-
-interface PartTemplate {
-  readonly channel: Channel;
+/**
+ * One authored plant part (tools/blender/build_plants.py). Its geometry is relative to its pivot.
+ * Elongating bodies carry a "grow" morph; every other part scales up from its pivot and, when
+ * attached, rides its parent's tip so it never floats away from it while both grow.
+ */
+export interface PartTemplate {
+  readonly name: string;
   readonly geometry: BufferGeometry;
   readonly color: string;
-  /** Exact highest point of the seedling and fully grown shapes (three's morph bounds over-estimate). */
+  /** Pivot in the species' space (plot anchor at the origin). */
+  readonly origin: Vector3;
+  readonly growStart: number;
+  readonly growEnd: number;
+  /** Name of the part whose tip this part rides, or "" for the soil. */
+  readonly attach: string;
+  readonly ripe: boolean;
+  readonly fly: boolean;
+  readonly morph: boolean;
+  /** Highest vertex, local to the pivot, as a seedling (morph 0) and fully grown. */
   readonly seedTop: Vector3;
   readonly grownTop: Vector3;
-  /** Centre of the fully grown shape; ripe fruit swells about it. */
+  /** Centre of the fully grown shape, local to the pivot. */
   readonly grownCenter: Vector3;
-}
-
-function grownCenter(geometry: BufferGeometry): Vector3 {
-  const position = geometry.getAttribute('position');
-  const delta = geometry.morphAttributes.position![0]!;
-  const box = new Box3();
-  const point = new Vector3();
-  for (let index = 0; index < position.count; index += 1) {
-    box.expandByPoint(point.set(position.getX(index) + delta.getX(index), position.getY(index) + delta.getY(index),
-      position.getZ(index) + delta.getZ(index)));
-  }
-  return box.getCenter(point.clone());
-}
-
-function highestPoint(geometry: BufferGeometry, influence: number): Vector3 {
-  const position = geometry.getAttribute('position');
-  const delta = geometry.morphAttributes.position![0]!;
-  const top = new Vector3(0, -Infinity, 0);
-  for (let index = 0; index < position.count; index += 1) {
-    const y = position.getY(index) + delta.getY(index) * influence;
-    if (y > top.y) top.set(position.getX(index) + delta.getX(index) * influence, y,
-      position.getZ(index) + delta.getZ(index) * influence);
-  }
-  return top;
 }
 
 export interface PlantModels {
@@ -51,9 +38,43 @@ export interface PlantModels {
 
 const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot'];
 /** Display size per species, tuned so each plant fills its bed at phone size. */
-export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.45 };
+export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4 };
+const RIPE_SWELL = 1.14;
+const DROP_MS = 140;
 
-/** Reads species subtrees (meshes named "<species>_<channel>[_n]") into reusable part templates. */
+/** The seed falls into the soil, squashes to 0.7 and springs back (motion.md 4.1). */
+export function seedDrop(sincePlantedMs: number): { y: number; squash: number } {
+  if (!(sincePlantedMs >= 0) || sincePlantedMs > 600) return { y: 0, squash: 1 };
+  if (sincePlantedMs < DROP_MS) {
+    const t = sincePlantedMs / DROP_MS;
+    return { y: 0.55 * (1 - t * t), squash: 1 + 0.15 * t };
+  }
+  const t = sincePlantedMs - DROP_MS;
+  return { y: 0, squash: 1 - 0.3 * Math.exp(-t / 70) * Math.cos(t / 32) };
+}
+
+function vertexAt(geometry: BufferGeometry, index: number, influence: number, target: Vector3): Vector3 {
+  target.fromBufferAttribute(geometry.getAttribute('position'), index);
+  const delta = geometry.morphAttributes.position?.[0];
+  if (delta) target.addScaledVector(new Vector3().fromBufferAttribute(delta, index), influence);
+  return target;
+}
+
+/** Index of the highest vertex when fully grown: a parent's tip, which its attached parts ride. */
+function topIndex(geometry: BufferGeometry): number {
+  const point = new Vector3();
+  let best = 0;
+  let bestY = -Infinity;
+  for (let index = 0; index < geometry.getAttribute('position').count; index += 1) {
+    if (vertexAt(geometry, index, 1, point).y > bestY) {
+      bestY = point.y;
+      best = index;
+    }
+  }
+  return best;
+}
+
+/** Reads species subtrees (meshes named "<species>_<part>" with growth extras) into part templates. */
 export function readPlantModels(scene: Object3D): PlantModels {
   const parts = new Map<SpeciesId, PartTemplate[]>();
   const owned: BufferGeometry[] = [];
@@ -64,22 +85,46 @@ export function readPlantModels(scene: Object3D): PlantModels {
     const list: PartTemplate[] = [];
     root.traverse((object) => {
       if (!(object instanceof Mesh)) return;
-      const channel = /_(stem|leaf|fruit|cap)(?:_\d+)?$/.exec(object.name)?.[1] as Channel | undefined;
-      if (!channel) throw new Error(`Plant mesh "${object.name}" has no growth channel`);
+      const extras = object.userData as { grow_start?: unknown; grow_end?: unknown; attach?: unknown; ripe?: unknown; fly?: unknown };
+      if (typeof extras.grow_start !== 'number' || typeof extras.grow_end !== 'number') {
+        throw new Error(`Plant mesh "${object.name}" has no growth window`);
+      }
       const geometry = (object.geometry as BufferGeometry).clone();
-      // Bake the mesh's transform inside its species root. glTF morph targets are relative deltas,
-      // which only need the linear part of the transform.
-      geometry.applyMatrix4(object.matrix);
+      // Keep the pivot: bake only rotation and scale. Relative morph deltas follow the same linear part.
       const linear = new Matrix3().setFromMatrix4(object.matrix);
+      geometry.applyMatrix4(new Matrix4().setFromMatrix3(linear));
       for (const delta of geometry.morphAttributes.position ?? []) if (delta instanceof BufferAttribute) delta.applyMatrix3(linear);
-      if (!geometry.morphAttributes.position?.length) throw new Error(`Plant mesh "${object.name}" has no grow morph`);
       geometry.computeBoundingBox();
       geometry.computeBoundingSphere();
       owned.push(geometry);
+      const top = topIndex(geometry);
+      const grownBox = new Box3();
+      const point = new Vector3();
+      for (let index = 0; index < geometry.getAttribute('position').count; index += 1) {
+        grownBox.expandByPoint(vertexAt(geometry, index, 1, point));
+      }
       const material = Array.isArray(object.material) ? object.material[0] : object.material;
-      list.push({ channel, geometry, color: paletteColor(material?.name ?? ''),
-        seedTop: highestPoint(geometry, 0), grownTop: highestPoint(geometry, 1), grownCenter: grownCenter(geometry) });
+      list.push({
+        name: object.name,
+        geometry,
+        color: paletteColor(material?.name ?? ''),
+        origin: object.position.clone(),
+        growStart: extras.grow_start,
+        growEnd: extras.grow_end,
+        attach: typeof extras.attach === 'string' ? extras.attach : '',
+        ripe: extras.ripe === true,
+        fly: extras.fly === true,
+        morph: Boolean(geometry.morphAttributes.position?.length),
+        seedTop: vertexAt(geometry, top, 0, new Vector3()),
+        grownTop: vertexAt(geometry, top, 1, new Vector3()),
+        grownCenter: grownBox.getCenter(new Vector3()),
+      });
     });
+    for (const part of list) {
+      if (part.attach && !list.some(({ name }) => name === part.attach)) {
+        throw new Error(`Plant mesh "${part.name}" rides missing part "${part.attach}"`);
+      }
+    }
     parts.set(species, list);
   }
   return {
@@ -104,19 +149,6 @@ export async function loadPlantModels(url: string): Promise<PlantModels> {
 
 export const PLANT_MODEL_URL = `${import.meta.env.BASE_URL}models/plants.glb`;
 
-const RIPE_SWELL = 1.14;
-const DROP_MS = 140;
-
-/** The seed falls into the soil, squashes to 0.7 and springs back (motion.md 4.1). */
-export function seedDrop(sincePlantedMs: number): { y: number; squash: number } {
-  if (!(sincePlantedMs >= 0) || sincePlantedMs > 600) return { y: 0, squash: 1 };
-  if (sincePlantedMs < DROP_MS) {
-    const t = sincePlantedMs / DROP_MS;
-    return { y: 0.55 * (1 - t * t), squash: 1 + 0.15 * t };
-  }
-  const t = sincePlantedMs - DROP_MS;
-  return { y: 0, squash: 1 - 0.3 * Math.exp(-t / 70) * Math.cos(t / 32) };
-}
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 const smooth = (value: number) => value * value * (3 - 2 * value);
 /** Ease-out with a small overshoot, so each part pops slightly past its size and settles. */
@@ -125,14 +157,9 @@ const backOut = (value: number) => {
   return Math.max(0, 1 + 2.2 * t * t * t + 1.2 * t * t);
 };
 
-/** Each part grows in its own window of overall progress (overlapping action, motion.md 4.2). */
-export function channelInfluence(channel: Channel, progress: number): number {
-  switch (channel) {
-    case 'stem': return backOut(progress / 0.55);
-    case 'leaf': return backOut((progress - 0.12) / 0.55);
-    case 'fruit':
-    case 'cap': return backOut((progress - 0.4) / 0.6);
-  }
+/** Growth of one part at overall progress: its own window, eased with a small overshoot (motion.md 4.2). */
+export function partGrowth(part: Pick<PartTemplate, 'growStart' | 'growEnd'>, progress: number): number {
+  return backOut((progress - part.growStart) / Math.max(1e-6, part.growEnd - part.growStart));
 }
 
 export function createAuthoredRig(
@@ -149,25 +176,27 @@ export function createAuthoredRig(
   root.add(body);
   const scale = SPECIES_SCALE[species];
   const fruitRamp = palette.plants[species].fruit;
-  const fruitMaterial = materials.toon(fruitRamp[1]).clone() as MeshToonMaterial;
   const base = materials.toon(fruitRamp[1]);
+  const fruitMaterial = base.clone() as MeshToonMaterial;
   fruitMaterial.onBeforeCompile = base.onBeforeCompile;
   fruitMaterial.customProgramCacheKey = base.customProgramCacheKey;
   const unripe = new Color(fruitRamp[3]);
   const ripeColor = new Color(fruitRamp[1]);
 
-  const animated: { channel: Channel; meshes: Mesh[]; part: PartTemplate }[] = [];
+  const animated: { meshes: Mesh[]; part: PartTemplate; growth: number }[] = [];
   for (const part of models.parts.get(species) ?? []) {
-    const mesh = new Mesh(part.geometry, part.channel === 'fruit' ? fruitMaterial : materials.toon(part.color));
-    mesh.name = `${species}-${part.channel}`;
-    mesh.userData.part = part.channel;
+    const mesh = new Mesh(part.geometry, part.ripe ? fruitMaterial : materials.toon(part.color));
+    mesh.name = part.name;
+    mesh.userData.part = part.name;
     mesh.renderOrder = 3;
     const hull = materials.outline(part.geometry);
-    hull.userData.part = `${part.channel}-outline`;
+    hull.userData.part = `${part.name}-outline`;
     hull.renderOrder = 2;
     body.add(mesh, hull);
-    animated.push({ channel: part.channel, meshes: [mesh, hull], part });
+    animated.push({ meshes: [mesh, hull], part, growth: 0 });
   }
+  const byName = new Map(animated.map((entry) => [entry.part.name, entry]));
+  const ride = new Vector3();
 
   // Watered soil stays darker for the rest of the plant's growth (motion.md 4.6).
   const wetGeometry = new CircleGeometry(0.62, 28);
@@ -197,21 +226,23 @@ export function createAuthoredRig(
     root,
     update(plant, presentationNowMs, reducedMotion) {
       const progress = clamp01(plant.progress);
-      for (const { channel, meshes } of animated) {
-        const influence = channelInfluence(channel, progress);
-        for (const mesh of meshes) mesh.morphTargetInfluences![0] = influence;
-      }
       const ripe = plant.stage === 'Harvestable';
       // Fruit warms part way while growing and only reaches its ripe colour and size when harvestable,
       // so ripeness is an obvious change rather than the end of a gradient (motion.md 4.3).
       const warm = ripe ? 1 : 0.6 * smooth(clamp01((progress - 0.5) / 0.5));
       fruitMaterial.color.copy(unripe).lerp(ripeColor, warm);
-      const swell = ripe ? RIPE_SWELL : 1;
-      for (const { channel, meshes, part } of animated) {
-        if (channel !== 'fruit' && channel !== 'cap') continue;
+      for (const entry of animated) entry.growth = partGrowth(entry.part, progress);
+      for (const { meshes, part, growth } of animated) {
+        // Attached parts ride their parent's tip: offset by how far that tip is from its grown place.
+        ride.set(0, 0, 0);
+        const parent = part.attach ? byName.get(part.attach) : undefined;
+        if (parent) ride.copy(parent.part.seedTop).lerp(parent.part.grownTop, parent.growth).sub(parent.part.grownTop);
+        const size = part.morph ? 1 : growth * (ripe && part.fly ? RIPE_SWELL : 1);
         for (const mesh of meshes) {
-          mesh.scale.setScalar(swell);
-          mesh.position.copy(part.grownCenter).multiplyScalar(1 - swell);
+          if (part.morph) mesh.morphTargetInfluences![0] = growth;
+          mesh.visible = size > 0.001;
+          mesh.scale.setScalar(Math.max(0.001, size));
+          mesh.position.copy(part.origin).add(ride);
         }
       }
 
@@ -221,8 +252,7 @@ export function createAuthoredRig(
         wet.visible = true;
         wetStartMs = presentationNowMs;
       }
-      const wetT = clamp01((presentationNowMs - wetStartMs) / 300);
-      wet.scale.setScalar(reducedMotion ? 1 : 0.2 + 0.8 * smooth(wetT));
+      wet.scale.setScalar(reducedMotion ? 1 : 0.2 + 0.8 * smooth(clamp01((presentationNowMs - wetStartMs) / 300)));
 
       const hop = ripeHopPose(presentationNowMs, hopPhaseOffsetMs, ripe && !reducedMotion);
       const drop = reducedMotion ? { y: 0, squash: 1 } : seedDrop(presentationNowMs - plant.plantedAt);
@@ -243,13 +273,20 @@ export function createAuthoredRig(
     },
     getTop(target) {
       let found = false;
-      for (const { meshes, part } of animated) {
-        const influence = meshes[0]!.morphTargetInfluences![0]!;
-        const point = part.seedTop.clone().lerp(part.grownTop, influence);
-        meshes[0]!.updateWorldMatrix(true, false);
-        point.applyMatrix4(meshes[0]!.matrixWorld);
+      const point = new Vector3();
+      for (const { meshes, part, growth } of animated) {
+        const mesh = meshes[0]!;
+        if (!mesh.visible) continue;
+        point.copy(part.seedTop).lerp(part.grownTop, part.morph ? growth : 1);
+        mesh.updateWorldMatrix(true, false);
+        point.applyMatrix4(mesh.matrixWorld);
         if (!found || point.y > target.y) target.copy(point);
         found = true;
+      }
+      // Height of the highest part, centred over the plant so stamps sit on its axis, not a leaf tip.
+      if (found) {
+        const y = target.y;
+        root.getWorldPosition(target).setY(y);
       }
       return found;
     },

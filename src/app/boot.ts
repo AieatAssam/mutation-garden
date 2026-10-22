@@ -224,6 +224,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       if (loaded.kind !== 'empty' && loaded.state) {
         loop.restore(loaded.state);
         latestSnapshot = getSnapshot(loaded.state);
+        // Unlocks and coins show now, not on the next frame, so "ready" means the HUD matches the save.
+        coins = latestSnapshot.coins;
+        refreshUI();
         showAwaySummary(loaded.state, loaded.savedAt);
       }
       if (loaded.kind === 'recovered') {
@@ -237,14 +240,18 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       saveNow = () => {
         clearTimeout(pending);
         if (stopped) return;
-        store.save(loop.getState(), Date.now()).then(() => { failures = 0; }, (error: unknown) => {
+        store.save(loop.getState(), Date.now()).then(() => {
+          if (failures >= 3) showNotice('');
+          failures = 0;
+        }, (error: unknown) => {
           if (error instanceof StaleSaveError) {
             stopped = true;
             showNotice('This garden was opened in another tab. Reload to keep playing here.', 0);
             return;
           }
           failures += 1;
-          if (failures === 3) showNotice('Progress is not saving. Free some storage space, then reload.');
+          // Stays up until a save lands again.
+          if (failures >= 3) showNotice('Progress is not saving. Free some storage space, then reload.', 0);
         });
       };
       scheduleSave = (events) => {

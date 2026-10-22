@@ -185,10 +185,15 @@ export function localStorageBackend(storage: Storage = localStorage): SaveBacken
 }
 
 /** Picks IndexedDB when it opens, else localStorage, else memory (progress lasts this visit only). */
-export async function chooseBackend(): Promise<{ backend: SaveBackend; persistent: boolean }> {
+export async function chooseBackend(timeoutMs = 4_000): Promise<{ backend: SaveBackend; persistent: boolean }> {
+  let timer = 0;
+  // An IndexedDB open that never settles must not freeze the game; play on without saving instead,
+  // rather than writing a second save to localStorage beside one IndexedDB may still hold.
+  const hung = new Promise<'hung'>((resolve) => { timer = setTimeout(() => resolve('hung'), timeoutMs) as unknown as number; });
   try {
     const backend = indexedDbBackend();
-    await backend.get(SLOT);
+    const result = await Promise.race([backend.get(SLOT).then(() => 'ok' as const), hung]);
+    if (result === 'hung') return { backend: memoryBackend(), persistent: false };
     return { backend, persistent: true };
   } catch {
     try {
@@ -198,5 +203,7 @@ export async function chooseBackend(): Promise<{ backend: SaveBackend; persisten
     } catch {
       return { backend: memoryBackend(), persistent: false };
     }
+  } finally {
+    clearTimeout(timer);
   }
 }

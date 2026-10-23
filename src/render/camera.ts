@@ -3,8 +3,11 @@ import { OrthographicCamera, Vector3 } from 'three';
 const MAX_PAN_DISTANCE = 2.5;
 /** Highest ready stamp above a plot (tallest big plant plus the stamp lift). */
 const STAMP_TOP_Y = 3.3;
-/** Height of the top HUD row (coins, level chip, toggles); stamps stay below it. */
-const TOP_HUD_PX = 70;
+/**
+ * Height of the top HUD that ready stamps stay below. Portrait: the coin/level/toggle row plus the
+ * objective line under it. Landscape: the objective sits in that row (src/ui/garden-ui.css).
+ */
+const topHudPx = (state: CameraPanState) => (state.viewportWidth < state.viewportHeight ? 112 : 70);
 const MIN_CAMERA_ZOOM = 1;
 const MAX_CAMERA_ZOOM = 1.35;
 const PLOT_TARGET_HALF_SIZE = 24;
@@ -49,26 +52,39 @@ function maximumCameraZoom(camera: OrthographicCamera, state: CameraPanState): n
     return MAX_CAMERA_ZOOM;
   }
 
+  // Solve the limit at zoom 1 from the resting pose: screen reach grows linearly with zoom about the
+  // view centre, so repeated pinches always meet the same limit. Pan is clamped separately
+  // (keepPlotTargetsInView), so a panned view still keeps every plot on screen.
+  const offset = state.offset.clone();
+  const zoom = camera.zoom;
+  state.offset.set(0, 0, 0);
+  camera.zoom = 1;
+  camera.updateProjectionMatrix();
+  applyPose(camera, state);
   camera.updateMatrixWorld(true);
-  // Zoom scales about the view centre, so fit the farthest plot target from the centre on each axis.
   const margin = PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN;
-  let reachX = 0;
-  let reachY = 0;
+  const availableX = state.viewportWidth / 2 - margin;
+  const availableY = state.viewportHeight / 2 - margin;
+  let limit = MAX_CAMERA_ZOOM;
   for (const center of PLOT_TARGET_CENTERS) {
     const projected = new Vector3(...center).project(camera);
-    reachX = Math.max(reachX, Math.abs(projected.x) * state.viewportWidth / 2);
-    reachY = Math.max(reachY, Math.abs(projected.y) * state.viewportHeight / 2);
+    const reachX = Math.abs(projected.x) * state.viewportWidth / 2;
+    const reachY = Math.abs(projected.y) * state.viewportHeight / 2;
+    if (reachX > 0) limit = Math.min(limit, availableX / reachX);
+    if (reachY > 0) limit = Math.min(limit, availableY / reachY);
     // Keep ripe plants' ready stamps on screen and below the top HUD row, not just the plots.
     const stamp = new Vector3(center[0], STAMP_TOP_Y, center[2]).project(camera);
     const stampReach = Math.abs(stamp.y) * state.viewportHeight / 2;
-    reachY = Math.max(reachY, stamp.y > 0 ? stampReach + TOP_HUD_PX - margin : stampReach);
+    if (stampReach > 0) {
+      limit = Math.min(limit, stamp.y > 0 ? (state.viewportHeight / 2 - topHudPx(state)) / stampReach : availableY / stampReach);
+    }
   }
-
-  const availableX = state.viewportWidth / 2 - margin;
-  const availableY = state.viewportHeight / 2 - margin;
-  if (!(reachX > 0) || !(reachY > 0) || availableX <= 0 || availableY <= 0) return MIN_CAMERA_ZOOM;
-  const fitZoom = camera.zoom * Math.min(availableX / reachX, availableY / reachY);
-  return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, fitZoom));
+  state.offset.copy(offset);
+  camera.zoom = zoom;
+  camera.updateProjectionMatrix();
+  applyPose(camera, state);
+  if (availableX <= 0 || availableY <= 0 || !Number.isFinite(limit)) return MIN_CAMERA_ZOOM;
+  return Math.max(MIN_CAMERA_ZOOM, Math.min(MAX_CAMERA_ZOOM, limit));
 }
 
 function reconcileZoom(camera: OrthographicCamera, state: CameraPanState): void {
@@ -80,12 +96,37 @@ function keepPlotTargetsInView(camera: OrthographicCamera, state: CameraPanState
   if (state.viewportWidth <= 0) return;
   applyPose(camera, state);
   const [minDelta, maxDelta] = horizontalPanDeltaBounds(camera, state.viewportWidth);
-  if (minDelta > maxDelta) return;
-  const correction = Math.max(minDelta, Math.min(maxDelta, 0));
-  if (correction === 0) return;
-  const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-  const worldUnitsPerCssPixel = (camera.right - camera.left) / (state.viewportWidth * camera.zoom);
-  state.offset.addScaledVector(right, -correction * worldUnitsPerCssPixel);
+  const correction = minDelta <= maxDelta ? Math.max(minDelta, Math.min(maxDelta, 0)) : 0;
+  if (correction !== 0) {
+    const right = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+    const worldUnitsPerCssPixel = (camera.right - camera.left) / (state.viewportWidth * camera.zoom);
+    state.offset.addScaledVector(right, -correction * worldUnitsPerCssPixel);
+    applyPose(camera, state);
+  }
+  keepPlotTargetsInViewVertically(camera, state);
+}
+
+/** Pan and zoom can carry the front or back row off screen vertically; slide the view back. */
+function keepPlotTargetsInViewVertically(camera: OrthographicCamera, state: CameraPanState): void {
+  if (state.viewportHeight <= 0) return;
+  camera.updateMatrixWorld(true);
+  const margin = PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN;
+  let top = Number.POSITIVE_INFINITY;
+  let bottom = Number.NEGATIVE_INFINITY;
+  for (const center of PLOT_TARGET_CENTERS) {
+    const y = (1 - new Vector3(...center).project(camera).y) * state.viewportHeight / 2;
+    top = Math.min(top, y);
+    bottom = Math.max(bottom, y);
+  }
+  // Screen pixels to move the garden down (positive) or up so every plot target fits.
+  const lowest = margin - top;
+  const highest = state.viewportHeight - margin - bottom;
+  if (lowest > highest) return;
+  const shift = Math.max(lowest, Math.min(highest, 0));
+  if (shift === 0) return;
+  const up = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
+  state.offset.addScaledVector(up, shift * (camera.top - camera.bottom) / (state.viewportHeight * camera.zoom));
+  applyPose(camera, state);
 }
 
 /** World-space shift that brings every ready stamp below the top HUD row, or null when none is needed. */
@@ -98,7 +139,7 @@ function stampHudShift(camera: OrthographicCamera, state: CameraPanState): Vecto
     const projected = new Vector3(center[0], STAMP_TOP_Y, center[2]).project(camera);
     topY = Math.min(topY, (1 - projected.y) * state.viewportHeight / 2);
   }
-  const shortfall = TOP_HUD_PX - topY;
+  const shortfall = topHudPx(state) - topY;
   if (!(shortfall > 0)) return null;
   const up = new Vector3(0, 1, 0).applyQuaternion(camera.quaternion);
   return up.multiplyScalar(shortfall * (camera.top - camera.bottom) / (state.viewportHeight * camera.zoom));
@@ -142,7 +183,7 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   const aspect = safeWidth / safeHeight;
   const portrait = aspect < 1;
   // Portrait fits the beds plus a margin to the phone width and lets the island run off the sides.
-  const viewHeight = portrait ? Math.min(18.2, 6.9 / aspect) : Math.min(9.4, safeHeight / 56);
+  const viewHeight = portrait ? Math.min(16.4, 6.2 / aspect) : Math.min(9.4, safeHeight / 56);
 
   const state = getPanState(camera);
   state.basePosition.set(3.6, 8.5, 11);
@@ -175,6 +216,7 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   applyPose(camera, state);
   reconcileZoom(camera, state);
   keepPlotTargetsInView(camera, state);
+  keepStampsBelowHud(camera, state);
   applyPose(camera, state);
 }
 
@@ -251,6 +293,8 @@ export function panGardenCamera(
   if (inputWasBounded && state.offset.length() >= MAX_PAN_DISTANCE - 1e-9) {
     state.lastSaturatedInput = { deltaXCss, deltaYCss };
   }
+  applyPose(camera, state);
+  keepPlotTargetsInViewVertically(camera, state);
   keepStampsBelowHud(camera, state);
   applyPose(camera, state);
 }

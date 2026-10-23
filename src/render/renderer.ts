@@ -21,6 +21,7 @@ import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
 import { createParticles } from './motion/particles';
 import { createAmbient, type Ambient } from './ambient';
+import { createPlotPulse } from './plot-pulse';
 import { createHarvestFlights } from './harvest-flight';
 import { createPlantReconciler } from './plants/reconcile';
 import { createAuthoredRig, loadPlantModels, PLANT_MODEL_URL, type PlantModels } from './plants/authored';
@@ -197,6 +198,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   const particles = createParticles();
   scene.add(particles.mesh);
+  const pulse = createPlotPulse();
   const flights = createHarvestFlights(() => plantModels, materials);
   scene.add(flights.root);
   const effectPoint = new Vector3();
@@ -233,6 +235,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
             lifeMs: 420, size: 0.11 }, now, reducedMotion);
           break;
         case 'Harvested': {
+          pulse.harvested(event.plotId, now);
           flights.launch(event.speciesId, effectPoint, event.size, now, reducedMotion);
           const top = new Vector3();
           const fruit = plants.getTop(event.plotId, top) ? top.setY(top.y - 0.35) : effectPoint.clone().setY(effectPoint.y + 1);
@@ -254,6 +257,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       : introStartMs === -Infinity ? ISLAND_WAIT_Y : islandDropY(now - introStartMs);
     scenery?.update(now, currentReducedMotion);
     ambient?.update(now, currentReducedMotion);
+    pulse.update(currentSnapshot, plotsById, now, currentReducedMotion);
     particles.update(now);
     flights.update(now);
     refreshStatus();
@@ -349,6 +353,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       statusResources.dispose();
       particles.dispose();
       ambient?.dispose();
+      pulse.dispose();
       flights.dispose();
       garden.dispose();
       materials.dispose();

@@ -1,10 +1,13 @@
-// Captures the running game at phone and desktop sizes: node scripts/shoot.mjs <outDir> [url] [--plant]
+// Captures the running game at phone and desktop sizes: node scripts/shoot.mjs <outDir> [url] [--plant] [--gpu]
+// --gpu uses the real GPU (sharper: the software renderer is slow enough to drop the pixel ratio to 1).
 // --plant plants a mix on the phone and captures at 3 s, 9 s and 26 s.
 import { chromium } from '@playwright/test';
 const args = process.argv.slice(2);
 const plantMode = args.includes('--plant');
 const [out = '.', url = 'http://localhost:5173/mutation-garden/'] = args.filter((arg) => !arg.startsWith('--'));
-const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch(args.includes('--gpu')
+  ? { headless: false, args: ['--window-position=-2400,0'] }
+  : { args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
 for (const [name, viewport, scale] of [['phone', { width: 390, height: 844 }, 2], ['desktop', { width: 1280, height: 800 }, 1]]) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: scale });
   if (plantMode) {
@@ -30,7 +33,7 @@ for (const [name, viewport, scale] of [['phone', { width: 390, height: 844 }, 2]
   } else {
     // Phone plot centres (CSS px) for the current camera; desktop skips planting.
     if (name !== 'phone') { await page.close(); continue; }
-    const plots = [[157, 345], [271, 365], [124, 407], [238, 426], [91, 468], [205, 488]];
+    const plots = [[157, 314], [271, 334], [124, 378], [238, 399], [91, 443], [205, 463]];
     const order = ['Twistroot', 'Bubble Berry', 'Sunny Sprout', 'Sunny Sprout', 'Sunny Sprout', 'Sunny Sprout'];
     for (const [index, [x, y]] of plots.entries()) {
       await page.getByRole('button', { name: order[index] }).click();

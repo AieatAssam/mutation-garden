@@ -4,6 +4,7 @@ import type { SpeciesId } from '../../sim';
 import type { MaterialLibrary } from '../materials';
 import { palette } from '../palette';
 import { paletteColor } from '../scenery';
+import { windAt } from '../motion/wind';
 import { ripeHopPose, type PlantRig } from './sunny-sprout';
 
 /**
@@ -164,6 +165,8 @@ export function partGrowth(part: Pick<PartTemplate, 'growStart' | 'growEnd'>, pr
   return backOut((progress - part.growStart) / Math.max(1e-6, part.growEnd - part.growStart));
 }
 
+const WIND_LEAN = 0.025;
+
 export function createAuthoredRig(
   species: SpeciesId,
   models: PlantModels,
@@ -234,6 +237,8 @@ export function createAuthoredRig(
       const warm = ripe ? 1 : 0.6 * smooth(clamp01((progress - 0.5) / 0.5));
       fruitMaterial.color.copy(unripe).lerp(ripeColor, warm);
       const yieldScale = YIELD_SCALE[plant.size ?? 'regular'];
+      // Plants lean with the shared wind at their world x (m1-liveliness.md 4.1); last frame's matrix is close enough.
+      const wind = reducedMotion ? 0 : windAt(root.matrixWorld.elements[12]!, presentationNowMs);
       for (const entry of animated) {
         entry.growth = partGrowth(entry.part, progress);
         entry.scale = entry.part.fly ? yieldScale : 1;
@@ -247,7 +252,12 @@ export function createAuthoredRig(
             .sub(parent.part.grownTop);
         }
         const size = (part.morph ? 1 : growth * (ripe && part.fly ? RIPE_SWELL : 1)) * partScale;
+        // Leaves flutter on their pivot, faster and smaller than the whole-plant lean (motion.md 2, Wind).
+        const flutter = !reducedMotion && part.name.includes('_leaf')
+          ? 0.05 * Math.sin(((presentationNowMs + phaseOffsetMs) / 400) * Math.PI * 2) * (0.5 + 0.5 * Math.abs(wind))
+          : 0;
         for (const mesh of meshes) {
+          mesh.rotation.z = flutter;
           if (part.morph) mesh.morphTargetInfluences![0] = growth;
           mesh.visible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0);
           mesh.scale.setScalar(Math.max(0.001, size));
@@ -273,7 +283,9 @@ export function createAuthoredRig(
       body.scale.set(pop / Math.sqrt(squash), squash * pop, pop / Math.sqrt(squash));
       // Ripe plants wiggle every 3 s (motion.md 4.3).
       const wiggleT = (((presentationNowMs + hopPhaseOffsetMs + 1500) % 3000) + 3000) % 3000 / 400;
-      body.rotation.z = ripe && !reducedMotion && wiggleT < 1 ? 0.1 * Math.sin(wiggleT * Math.PI * 3) * (1 - wiggleT) : 0;
+      const wiggle = ripe && !reducedMotion && wiggleT < 1 ? 0.1 * Math.sin(wiggleT * Math.PI * 3) * (1 - wiggleT) : 0;
+      // Wind blows along +x, so a plant leans towards -z rotation; the ripe wiggle adds on top.
+      body.rotation.z = wiggle - WIND_LEAN * wind;
       const breathing = reducedMotion ? 1 : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
       root.scale.set(scale, scale * breathing, scale);
       const size = 0.35 + 0.65 * smooth(progress);

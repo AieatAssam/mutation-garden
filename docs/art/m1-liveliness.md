@@ -135,21 +135,21 @@ Everything here is render-only and driven by presentation time. All of it pauses
 ### 4.1 Wind
 
 - One shared `windAt(x, z, timeMs)`: a sine wave with a 3.2 s period travelling along +x at 1.2 units/s, plus a gust every 9 to 14 s that doubles the amplitude for 1.5 s.
-- Grass tufts bend in the vertex shader: angle = 0.06 rad × wind × (vertex height / tuft height)².
+- Grass tufts and flowers bend in the vertex shader: offset = 0.15 × wind × weight × height above the grass, where weight = (vertex height / 0.26)² is baked into a `_wind` vertex attribute in Blender. Rocks, beds and the tree never bend. (0.06 rad was too small to see at phone scale.)
 - Plants lean their root group 0.025 rad × wind. Ripe hop and the lean add together.
 - Picking still uses the rest pose. A 0.025 rad lean moves a plant under 2 CSS px.
 
 ### 4.2 Sky
 
-- **Clouds:** 3 paper-cut clouds (flat extruded rounded shapes, 0.08 deep, `cloud.lit` front, `cloud.shade` lower lobe, ink outline). They drift along +x at 0.15 units/s behind the island and wrap. They never cross in front of the island. 6 draw calls.
+- **Clouds:** 3 paper-cut clouds (flat extruded shapes, 0.08 deep, `cloud.lit` front, `cloud.shade` lower lobe, ink outline), authored in `build_garden.py`. Unlit, so the key light never greys them. Two sit in the sky band above the island on a phone, one under it. They drift along +x at 0.15 units/s behind the island and wrap. They never cross in front of the island. 6 draw calls.
 - **Birds:** 2 paper-cut V shapes in `faded-ink`, 0.18 wide. Wings flap by y scale, 0.5 s cycle. One pair crosses the upper sky every 25 to 40 s. 1 draw call, instanced.
 - **Day tint:** the sky `mid` and `horizon` colours lerp up to 12% towards the dusk values and back on a 240 s sine. Lights don't change. Dusk as a full preset stays out of M1.
 
 ### 4.3 Garden creatures
 
 - **Bees:** one bee per ripe plant, at most 3 on screen. Body `ui.coin.face` with two `press-ink` stripes, wings `paper-white` at 70% opacity. 0.10 units long. A bee flies a figure-8 of radius 0.35 around the fruit at 0.6 loops per second, then moves to another ripe plant after 6 to 10 s. With no ripe plants, bees leave the island. 2 draw calls instanced.
-- **Butterflies:** at most 2, wandering between the flower props and ripe plants. Wings `paper-white` with a `press-ink` edge and one `misprint-tomato` dot, flapping on a 0.35 s cycle. 1 draw call instanced.
-- **Falling leaves:** at most 4 alive. One spawns every 6 to 10 s from a rim tuft or the tree, spins down past the island edge for 4 s while fading out. Colours `grass[1]` and `wood-crate[0]`. 1 draw call instanced.
+- **Butterflies:** at most 2, wandering over the island on slow looping paths (built: Lissajous loops; steering to flowers and ripe plants is a later polish). Wings `paper-white` with a `press-ink` edge and one `misprint-tomato` dot, flapping on a 0.35 s cycle. 1 draw call instanced.
+- **Falling leaves:** at most 4 alive. One spawns every 6 to 10 s from the tree or a rim spot, spins down past the island edge for 4 s while fading out. Colours `grass[1]` and `wood-crate[0]`. 1 draw call instanced.
 - Creatures are not pickable and never block a tap.
 
 ### 4.4 Checks

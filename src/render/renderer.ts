@@ -8,17 +8,19 @@ import {
   Quaternion,
   Scene,
   SRGBColorSpace,
+  Vector2,
   Vector3,
   WebGLRenderer,
 } from 'three';
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
-import { GARDEN_MODEL_URL, loadScenery } from './scenery';
+import { GARDEN_MODEL_URL, loadScenery, type Scenery } from './scenery';
 import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
 import { createParticles } from './motion/particles';
+import { createAmbient, type Ambient } from './ambient';
 import { createHarvestFlights } from './harvest-flight';
 import { createPlantReconciler } from './plants/reconcile';
 import { createAuthoredRig, loadPlantModels, PLANT_MODEL_URL, type PlantModels } from './plants/authored';
@@ -51,6 +53,19 @@ export interface Renderer {
   dispose(): void;
 }
 
+const INTRO_MS = 900;
+const PIXEL_RATIO_PROBE_FRAMES = 3;
+/** A frame slower than this at full resolution (60 fps leaves 16.7 ms) drops the pixel ratio to 1. */
+const SLOW_FRAME_MS = 14;
+const ISLAND_WAIT_Y = 60;
+
+/** Island height offset during the drop-in: falls 3.5 units in 450 ms, then one small bounce. */
+export function islandDropY(elapsedMs: number): number {
+  if (!(elapsedMs >= 0) || elapsedMs >= INTRO_MS) return 0;
+  if (elapsedMs < 450) return 3.5 * (1 - (elapsedMs / 450) ** 2);
+  return 0.16 * Math.sin(Math.PI * (elapsedMs - 450) / 450);
+}
+
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
   const clock = options.now ?? (() => performance.now());
   ColorManagement.enabled = true;
@@ -75,7 +90,20 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   const materials = createMaterialLibrary();
   const garden = createGarden();
-  const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then(garden.setScenery, (error: unknown) => {
+  let introStartMs = -Infinity;
+  let islandLanded = false;
+  let scenery: Scenery | null = null;
+  let ambient: Ambient | null = null;
+  const sceneryLoaded = loadScenery(GARDEN_MODEL_URL, materials).then((loaded) => {
+    if (disposed) {
+      loaded.dispose();
+      return;
+    }
+    scenery = loaded;
+    garden.setScenery(loaded);
+    ambient = createAmbient(loaded.creatures);
+    scene.add(ambient.group);
+  }, (error: unknown) => {
     console.error('Garden model failed to load', error);
   });
   scene.add(garden);
@@ -111,9 +139,20 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       warm.removeFromParent();
       for (const rig of rigs) rig.dispose();
     }
-    // Draw once now, so "loaded" means the models are on screen, not waiting for the next frame.
+    if (disposed) return;
+    choosePixelRatio();
+    // The island drops in once everything is ready (design.md 3, 0 s); "loaded" waits for it to land,
+    // so the first tap never meets a moving garden. Reduced motion skips the drop.
+    if (disposed) return;
+    introStartMs = clock();
+    draw();
+    if (!currentReducedMotion) await new Promise((resolve) => setTimeout(resolve, INTRO_MS));
+    introStartMs = -Infinity;
+    islandLanded = true;
+    // Draw once now, so "loaded" means the models are on screen at rest, not waiting for the next frame.
     if (!disposed) draw();
   }).catch((error: unknown) => {
+    islandLanded = true;
     console.error('Shader warm-up failed', error);
   });
   const statusResources = createPlotStatusResources();
@@ -210,10 +249,41 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   function draw(): void {
     const now = clock();
+    // Until the drop starts the island waits far above the view (still compiled, just off screen).
+    garden.position.y = islandLanded || currentReducedMotion ? 0
+      : introStartMs === -Infinity ? ISLAND_WAIT_Y : islandDropY(now - introStartMs);
+    scenery?.update(now, currentReducedMotion);
+    ambient?.update(now, currentReducedMotion);
     particles.update(now);
     flights.update(now);
     refreshStatus();
     gl.render(scene, camera);
+  }
+
+  /**
+   * Adaptive resolution (architecture.md, performance): time a few synced frames of the full island
+   * once, before "ready", and drop to 1× if they are slow. Deciding once keeps the picture stable.
+   */
+  function choosePixelRatio(): void {
+    // A manual clock means a fixture wants repeatable frames; keep the resolution it asked for.
+    if (gl.getPixelRatio() <= 1 || options.now) return;
+    const context = gl.getContext();
+    const pixel = new Uint8Array(4);
+    const wait = garden.position.y;
+    garden.position.y = 0;
+    gl.render(scene, camera);
+    context.readPixels(0, 0, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+    const start = performance.now();
+    for (let frame = 0; frame < PIXEL_RATIO_PROBE_FRAMES; frame += 1) {
+      gl.render(scene, camera);
+      context.readPixels(0, 0, 1, 1, context.RGBA, context.UNSIGNED_BYTE, pixel);
+    }
+    garden.position.y = wait;
+    if ((performance.now() - start) / PIXEL_RATIO_PROBE_FRAMES > SLOW_FRAME_MS) {
+      const size = gl.getSize(new Vector2());
+      gl.setPixelRatio(1);
+      gl.setSize(size.x, size.y, false);
+    }
   }
 
   function layout(width: number, height: number): void {
@@ -278,6 +348,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       plantModels?.dispose();
       statusResources.dispose();
       particles.dispose();
+      ambient?.dispose();
       flights.dispose();
       garden.dispose();
       materials.dispose();

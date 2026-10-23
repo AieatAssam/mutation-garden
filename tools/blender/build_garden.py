@@ -408,26 +408,134 @@ for k in range(70):
         a = 2 * math.pi * bl / blades + rng.uniform(-0.3, 0.3)
         h = rng.uniform(0.14, 0.26)
         tilt = rng.uniform(0.25, 0.5)
-        prim('cone', shade, loc=(x + 0.03 * math.cos(a), y + 0.03 * math.sin(a), GROUND + h / 2 - 0.01),
-             vertices=4, radius1=0.035, radius2=0, depth=h, rot=(tilt * math.sin(a) * -1, tilt * math.cos(a), 0),
-             smooth=False)
+        tuft = prim('cone', shade, loc=(x + 0.03 * math.cos(a), y + 0.03 * math.sin(a), GROUND + h / 2 - 0.01),
+                    vertices=4, radius1=0.035, radius2=0, depth=h, rot=(tilt * math.sin(a) * -1, tilt * math.cos(a), 0),
+                    smooth=False)
+        tuft['wind'] = True
 
-flower_colours = ('plants.bubble-berry.fruit.0', 'ink.paper-white', 'plants.twistroot.fruit.0',
-                  'plants.bubble-berry.fruit.1')
+# Decor keeps species fruit hues off the island (style guide, decor rule): paper and sky petals, rock centres.
+flower_colours = ('ink.paper-white', 'environment.sky-day.mid', 'ink.paper-white')
 for k in range(16):
     p = scatter_point(0.3, 0.95)
     if not p:
         continue
     x, y = p
     h = rng.uniform(0.16, 0.26)
-    prim('cylinder', 'plants.sunny-sprout.stem.1', loc=(x, y, GROUND + h / 2), vertices=4, radius=0.018, depth=h)
+    parts = [prim('cylinder', 'plants.sunny-sprout.stem.1', loc=(x, y, GROUND + h / 2), vertices=4, radius=0.018,
+                  depth=h)]
     colour = rng.choice(flower_colours)
     for pk in range(5):
         a = 2 * math.pi * pk / 5
-        prim('uv_sphere', colour, loc=(x + 0.055 * math.cos(a), y + 0.055 * math.sin(a), GROUND + h),
-             scale=(0.05, 0.05, 0.025), segments=6, ring_count=3)
-    prim('uv_sphere', 'plants.sunny-sprout.fruit.1', loc=(x, y, GROUND + h + 0.012), scale=(0.035, 0.035, 0.03),
-         segments=6, ring_count=3)
+        parts.append(prim('uv_sphere', colour, loc=(x + 0.063 * math.cos(a), y + 0.063 * math.sin(a), GROUND + h),
+                          scale=(0.058, 0.058, 0.029), segments=6, ring_count=3))
+    parts.append(prim('uv_sphere', 'environment.island-rock.1', loc=(x, y, GROUND + h + 0.012),
+                      scale=(0.035, 0.035, 0.03), segments=6, ring_count=3))
+    for part in parts:
+        part['wind'] = True
+
+# ---------------------------------------------------------------- paper clouds (m1-liveliness.md 4.2)
+# Each cloud is an empty "cloud-N" with a lit front, a shade lobe behind and below it, and one hull.
+# They are kept out of the merge so the game can drift them.
+
+def cloud_outline(circles, n=56, floor=-0.28):
+    """Boundary of a union of circles (cx, cz, r), as seen from the origin, with a flat paper-cut base."""
+    points = []
+    for k in range(n):
+        t = 2 * math.pi * k / n
+        dx, dz = math.cos(t), math.sin(t)
+        far = 0.0
+        for cx, cz, r in circles:
+            b = dx * cx + dz * cz
+            disc = b * b - (cx * cx + cz * cz - r * r)
+            if disc >= 0:
+                far = max(far, b + math.sqrt(disc))
+        px, pz = far * dx, max(floor, far * dz)
+        points.append((px, pz))
+    return points
+
+
+def paper_shape(name, points, material, depth, y_offset):
+    bm = bmesh.new()
+    front = [bm.verts.new((px, y_offset - depth / 2, pz)) for px, pz in points]
+    face = bm.faces.new(front)
+    ext = bmesh.ops.extrude_face_region(bm, geom=[face])
+    moved = [v for v in ext['geom'] if isinstance(v, bmesh.types.BMVert)]
+    bmesh.ops.translate(bm, verts=moved, vec=(0, depth, 0))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    o = mesh_obj(name, bm, material)
+    o['keep'] = True
+    return o
+
+
+CLOUD_LOBES = (
+    ((0, 0, 0.5), (-0.55, -0.08, 0.36), (0.58, -0.06, 0.4), (0.2, 0.3, 0.42), (-0.28, 0.22, 0.34)),
+    ((0, 0, 0.45), (-0.5, -0.05, 0.32), (0.45, 0.05, 0.38), (0.05, 0.32, 0.33)),
+    ((0, 0, 0.42), (0.52, -0.06, 0.34), (-0.38, 0.12, 0.36), (0.22, 0.26, 0.3), (-0.75, -0.1, 0.24)),
+)
+# (game x, game y, game z, size): all in the sky band above the island on a phone, clear of the HUD row.
+CLOUD_PLACES = ((-3.0, -1.1, -8.0, 0.9), (3.5, -0.6, -9.0, 0.8), (9.5, -1.6, -9.5, 0.75))
+for k, (lobes, (gx, gy, gz, size)) in enumerate(zip(CLOUD_LOBES, CLOUD_PLACES)):
+    root = bpy.data.objects.new(f'cloud-{k}', None)
+    link(root)
+    root.location = (gx, -gz, gy)
+    root.scale = (size, size, size)
+    root['keep'] = True
+    lit = paper_shape(f'cloud-{k}-lit', cloud_outline(lobes), 'environment.cloud.lit', 0.08, 0)
+    # The shade layer sits behind and peeks out below the lit front as a band (paper-cut layering).
+    lower = [(cx * 0.92 + 0.06, cz - 0.2, r * 0.9) for cx, cz, r in lobes]
+    shade = paper_shape(f'cloud-{k}-shade', cloud_outline(lower, floor=-0.46), 'environment.cloud.shade', 0.08, 0.07)
+    hull = lit.copy(); hull.data = lit.data.copy(); link(hull)
+    other = shade.data.copy()
+    bm = bmesh.new(); bm.from_mesh(hull.data); bm.from_mesh(other)
+    bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.002)
+    bm.to_mesh(hull.data); bm.free()
+    bpy.data.meshes.remove(other)
+    hull.data.materials.clear()
+    hull.data.materials.append(mat('ink.press-ink'))
+    hull.data.shade_smooth()
+    hull.name = f'cloud-{k}-outline'
+    hull['keep'] = True
+    for child in (lit, shade, hull):
+        child.parent = root
+
+# ---------------------------------------------------------------- creatures (m1-liveliness.md 4.3)
+# Shapes only, at the origin; the game instances and animates them. Kept out of the merge.
+
+def flat_polygon(name, points, material, z=0.0, depth=0.012):
+    bm = bmesh.new()
+    face = bm.faces.new([bm.verts.new((px, py, z)) for px, py in points])
+    ext = bmesh.ops.extrude_face_region(bm, geom=[face])
+    bmesh.ops.translate(bm, verts=[v for v in ext['geom'] if isinstance(v, bmesh.types.BMVert)], vec=(0, 0, depth))
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    bmesh.ops.triangulate(bm, faces=bm.faces)
+    o = mesh_obj(name, bm, material)
+    o['keep'] = True
+    return o
+
+
+def ellipse(cx, cy, rx, ry, n=14):
+    return [(cx + rx * math.cos(2 * math.pi * k / n), cy + ry * math.sin(2 * math.pi * k / n)) for k in range(n)]
+
+
+# One right wing, hinged on the body axis (x = 0), 0.1 long: a big fore lobe and a small hind lobe.
+wing_points = []
+for k in range(24):
+    t = math.pi * k / 23 - math.pi / 2          # -90° (hind) .. +90° (fore)
+    r = 0.055 + 0.03 * math.sin(t) + 0.012 * math.cos(3 * t)
+    wing_points.append((max(0.0, r * math.cos(t)) + 0.004, r * math.sin(t) * 0.9))
+wing = flat_polygon('creature-wing', wing_points, 'ink.paper-white')
+dot = flat_polygon('creature-wing-dot', ellipse(0.045, 0.02, 0.012, 0.012, 10), 'ink.misprint-tomato', z=0.011,
+                   depth=0.003)
+edge = flat_polygon('creature-wing-edge', [(x * 1.12, y * 1.12) for x, y in wing_points], 'ink.press-ink', z=-0.004,
+                    depth=0.004)
+for part in (dot, edge):
+    part['keep'] = True
+
+# A falling leaf: pointed ellipse, 0.12 long.
+leaf_points = [(0.06 * math.cos(t), 0.028 * math.sin(t) * (1 - 0.35 * math.cos(t))) for t in
+               (2 * math.pi * k / 16 for k in range(16))]
+flat_polygon('creature-leaf', leaf_points, 'environment.grass.1', depth=0.006)
 
 # ---------------------------------------------------------------- join by material, build hulls
 
@@ -467,9 +575,17 @@ for thickness, objs in hull_parts.items():
     # Flat normals would crack the hull: force smooth normals through the exporter.
     hull.data.shade_smooth()
 
+# Wind weights (m1-liveliness.md 4.1): grass tufts and flowers bend in the vertex shader, more towards
+# the tip. Every mesh gets the attribute so joins keep it; exported as "_wind" (custom glTF attribute).
+for o in [o for o in bpy.data.objects if o.type == 'MESH']:
+    attribute = o.data.attributes.get('_wind') or o.data.attributes.new('_wind', 'FLOAT', 'POINT')
+    for v in o.data.vertices:
+        height = (o.matrix_world @ v.co).z - GROUND
+        attribute.data[v.index].value = min(1.0, max(0.0, height / 0.26)) ** 2 if o.get('wind') else 0.0
+
 # Split every non-hull mesh by material, then join per material.
 by_mat = {}
-for o in [o for o in bpy.data.objects if o.type == 'MESH' and not o.name.startswith('outline-')]:
+for o in [o for o in bpy.data.objects if o.type == 'MESH' and not o.name.startswith('outline-') and not o.get('keep')]:
     bpy.ops.object.select_all(action='DESELECT')
     o.select_set(True)
     bpy.context.view_layer.objects.active = o
@@ -479,7 +595,7 @@ for o in [o for o in bpy.data.objects if o.type == 'MESH' and not o.name.startsw
         bpy.ops.mesh.select_all(action='SELECT')
         bpy.ops.mesh.separate(type='MATERIAL')
         bpy.ops.object.mode_set(mode='OBJECT')
-for o in [o for o in bpy.data.objects if o.type == 'MESH' and not o.name.startswith('outline-')]:
+for o in [o for o in bpy.data.objects if o.type == 'MESH' and not o.name.startswith('outline-') and not o.get('keep')]:
     by_mat.setdefault(o.active_material.name, []).append(o)
 for name, objs in by_mat.items():
     bpy.ops.object.select_all(action='DESELECT')
@@ -505,5 +621,6 @@ if os.environ.get('GARDEN_NO_EXPORT') != '1':
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=False, export_apply=True,
                               export_materials='EXPORT', export_normals=True, export_texcoords=False,
-                              export_cameras=False, export_lights=False, export_yup=True)
+                              export_cameras=False, export_lights=False, export_yup=True,
+                              export_attributes=True)
     print('exported', OUT, os.path.getsize(OUT))

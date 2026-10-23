@@ -108,19 +108,23 @@ All plants are authored in Blender with shape keys for growth (ADR 0009).
 The brief requires that players can influence mutations and that randomness is never the only path. Every mutation has **one learnable rule** that makes it likely, plus a **small natural chance** for surprise, plus **bad-luck protection**.
 
 | Mutation | Value | Learnable rule (shown in journal once discovered or hinted) | Natural chance | Guarantee |
-|---|---|---|---|---|
-| Giant | ×2 | Water the plant twice while it grows (second water unlocks at Level 4). | 3% | Scripted: first Twistroot after Lv 3 |
-| Golden | ×4 | Plant between two ripe-or-growing Sunny Sprouts ("full sun"). 40% when the rule holds. | 1% | Every 25 rule-qualifying harvests without one |
-| Glowing | ×3 | Grows through a dusk phase, or next to a Puffcap. 50% when the rule holds. | 1% | Every 20 qualifying |
-| Crystal | ×6 | Plant on a pond-side plot right after harvesting a Glowing fruit from it. 30% when the rule holds. | 0.3% | Every 40 qualifying |
-| Rainbow | ×10 | Harvest a Golden, Glowing and Crystal in one swipe; the next seed planted on any of those plots is Rainbow. Deterministic. | 0.1% | Rule is already deterministic |
+|---|---:|---|---:|---|
+| Giant | ×2 | Water twice while growing. The second water unlocks at Level 4. | 3% | Scripted: the first Twistroot planted at Level 3 or above |
+| Golden | ×4 | At Mature, at least two orthogonal neighbours are Sunny Sprouts, at any stage. 40% when the rule holds. | 1% | Guaranteed after 25 rule-qualifying Matures without one |
+| Glowing | ×3 | Growth overlaps a dusk window. 50% when the rule holds. Puffcap adds a second route in M3. | 1% | Guaranteed after 20 rule-qualifying Matures without one |
+| Crystal | ×6 | Plant on pond-side plot-0 or plot-2 immediately after harvesting a Glowing fruit from that plot. 30% when the rule holds. | 0.3% | Guaranteed after 40 rule-qualifying Matures without one |
+| Rainbow | ×10 | Harvest Golden, Glowing and Crystal in one swipe; the next seed planted on any of those plots is Rainbow. Deterministic. | — | The rule is deterministic |
 
 Rules:
-- At **planting time** the sim draws one uniform number `u` from its seeded RNG and stores it on the plant. When the plant reaches **Mature**, the sim evaluates each trait's conditions (watering, neighbours, dusk, pond) and the plant mutates if `u` is below that trait's chance. One stored draw means reloading never re-rolls and offline growth is exact, while conditions met after planting (a second watering, a dusk phase) still count.
-- Once a trait's condition holds and `u` passes, the plant shows a subtle tell (a glint, a hum, a size wobble) so the player can anticipate it. The full material change happens at Mature with the reveal.
-- **Stacking:** two mutations combine (Giant + Golden = golden at giant scale; value multiplies). Max two per plant in M2; combinations count as their own journal entries (5 traits, 10 pairs).
+- A separate mutation RNG stream is initialised from a hash of the game seed, so mutation rolls never shift M1 size rolls. At planting, draw one 32-bit `mutationSeed` for the plant. Each trait gets its own uniform value from `hash(mutationSeed, traitId)`.
+- At **Mature**, evaluate each trait once, then store up to two results on the plant in descending value order. Use the rule chance when one is specified and its rule holds; otherwise use the natural chance. Reloading never re-rolls. Bad-luck counters are per trait and count rule-qualifying Matures without that trait.
+- The scripted Giant is assigned to the first Twistroot planted at Level 3 or above; store the one-time flag in garden state. It is fixed at Mature like other results.
+- A Sprout-stage tell is computed from current snapshot conditions. It can disappear if a condition breaks; only the Mature result is fixed.
+- Golden checks the six-plot 2×3 grid by orthogonal adjacency: plot-0 is front-left; columns are x = −1.05 and +1.05, rows z = 2, 0 and −2. Corners have two neighbours; the middle-row plots have three.
+- Dusk is the final 60 seconds of each 240-second cycle, derived from `nowMs` (the cycle phase is `nowMs mod 240,000 ms`). Glowing qualifies when `[growthStart, matureAt]` overlaps a dusk window, including during offline growth.
+- **Stacking:** at most two traits per plant; value multipliers combine. Pairs count as their own journal entries (5 traits, 10 pairs).
 - **Journal:** a printed seed catalogue. Rows are species, columns are traits. Undiscovered entries show a silhouette with a hint line once the player has met a prerequisite. Entries never hint at something unobtainable.
-- **First discovery reward:** coins equal to 10× the mutated value and XP, plus a card (M5: shareable).
+- **First discovery reward:** coins equal to 10× the mutated value and XP, paid once per journal entry. A shareable card is M5.
 
 ## 7. Progression and economy (M3)
 
@@ -130,9 +134,9 @@ Rules:
 |---|---|---|
 | 2 | Bubble Berry | seed |
 | 3 | Twistroot | seed |
-| 4 | Plot 7 (island grows west), water twice | plot, rule |
+| 4 | Plot 7 (island grows west), water twice, dusk cycle | plot, mutation rule, world |
 | 5 | Plant all, order board slot 2 | tool, UI |
-| 6 | Puffcap, dusk cycle | seed, world |
+| 6 | Puffcap | seed |
 | 7 | Plot 8, sprinkler upgrade | plot, tool |
 | 8 | Bee hive (pollinates adjacent pairs: +rule chance) | decoration with effect |
 | 9 | Lantern Pod | seed |
@@ -186,7 +190,7 @@ Generated with WebAudio (no large files) where possible; a few short recorded sa
 Research summary and sources: [research/viral-findings.md](research/viral-findings.md). Adopted, in milestone order:
 
 - **M1-S4:** coin counter roll-up; "While you were away" summary with one-tap harvest; first plot pulses so the first plant happens within 3 s.
-- **M2:** near-miss progress ("2 of 3 conditions") on the next mutation; two-beat reveal with tier badge; weather as one gentle mutation layer (sun shower, dusk, frost morning); foil shimmer on mutated fruit; honest odds and a "First on this device" stamp in the journal.
+- **M2:** near-miss progress ("2 of 3 conditions") on the next mutation; two-beat reveal with tier badge; foil shimmer on mutated fruit; honest odds and a "First on this device" stamp in the journal. Cut the weather layer because complex weather is a non-goal (brief section 16); M2 uses dusk for the time-based mutation rule.
 - **M3:** a seed stall whose stock rotates every 5 minutes from a hash of the clock, with rare seeds; surprise seed drops on harvest; a "tended days" count that never punishes a missed day; decorations as a coin sink.
 - **M5:** a daily garden from a date-hashed seed; `#seed=` links that open the same garden; a spoiler-free share card; a 3 s clip of a reveal, captured only when the player taps.
 

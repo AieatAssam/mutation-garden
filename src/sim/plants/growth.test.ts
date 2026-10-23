@@ -48,11 +48,12 @@ describe('timestamp-derived plant growth', () => {
       stage: previousStage,
       progress: (startsAtMs - 1) / species.growthDurationMs,
     });
-    expect(at.events).toEqual([
+    expect(at.events.slice(0, 1)).toEqual([
       stage === 'Harvestable'
         ? { type: 'Harvestable', plotId: 'plot-0' }
         : { type: 'StageReached', plotId: 'plot-0', stage },
     ]);
+    if (stage === 'Mature' && species.id === 'twistroot') expect(at.events.at(-1)?.type).toBe('Mutated');
     expect(getSnapshot(at.state).plots[0]?.plant).toMatchObject({
       stage,
       progress: startsAtMs / species.growthDurationMs,
@@ -86,7 +87,8 @@ describe('timestamp-derived plant growth', () => {
       );
     });
 
-    expect(grown.events).toEqual(expected);
+    expect(grown.events.slice(0, expected.length)).toEqual(expected);
+    expect(grown.events.slice(expected.length).every((event) => event.type === 'Mutated')).toBe(true);
   });
 
   it('emits existing-plant growth events before successful and rejected plant command events', () => {
@@ -122,6 +124,7 @@ describe('timestamp-derived plant growth', () => {
       levelStartXp: 90,
       nextLevelXp: 150,
       nowMs: 100,
+      nearMiss: null,
       plots: Array.from({ length: 6 }, (_, index) => ({ id: `plot-${index}`, plant: null })),
     });
 
@@ -135,8 +138,8 @@ describe('timestamp-derived plant growth', () => {
       stage: 'Seed',
       progress: 0,
     });
-    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'xp', 'plots']);
-    expect(Object.keys(planted.state.plots[0]!.plant!)).toEqual(['speciesId', 'plantedAt', 'size']);
+    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'badLuck', 'discoveries', 'rewardsPaid', 'xp', 'plots']);
+    expect(Object.keys(planted.state.plots[0]!.plant!)).toEqual(['speciesId', 'plantedAt', 'size', 'mutationSeed']);
 
     const half = step(planted.state, [], 4_100);
     expect(getSnapshot(half.state).plots[0]?.plant).toMatchObject({ stage: 'Growing', progress: 0.5 });

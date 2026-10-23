@@ -4,6 +4,7 @@ export interface Sfx {
   /** Creates or resumes the audio context; call from a user gesture (autoplay rules). */
   unlock(): void;
   onEvents(events: readonly SimEvent[]): void;
+  mutation(firstDiscovery: boolean): void;
   setMuted(muted: boolean): void;
   /** A quiet generative loop; it starts once audio is unlocked. */
   setMusic(on: boolean): void;
@@ -77,6 +78,11 @@ const VOICES = {
     noise(context, out, at, 'bandpass', 1400 * pitch, 0.25, 0.35);
     tone(context, out, at + 0.05, 'sine', 900 * pitch, 1500 * pitch, 0.06, 0.12);
   },
+  reveal: (context, out, at, pitch) => {
+    tone(context, out, at, 'sine', 440 * pitch, 880 * pitch, 0.14, 0.34);
+    tone(context, out, at + 0.12, 'triangle', 660 * pitch, 1320 * pitch, 0.1, 0.32);
+  },
+  chime: (context, out, at, pitch) => tone(context, out, at, 'sine', 880 * pitch, 1174.66 * pitch, 0.08, 0.2),
 } satisfies Record<string, Voice>;
 
 /** Synthesised garden sounds: pleasant on repeat, varied by small random pitch shifts. */
@@ -146,6 +152,9 @@ export function createSfx(): Sfx {
           default: break;
         }
       }
+    },
+    mutation(firstDiscovery) {
+      play(firstDiscovery ? 'reveal' : 'chime');
     },
     setMuted(next) {
       muted = next;

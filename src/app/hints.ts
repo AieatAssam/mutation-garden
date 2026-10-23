@@ -12,11 +12,13 @@ export function hintFor(snapshot: GardenSnapshot, selected: SpeciesId): string {
 
   if (ripe >= 2 && learning) return 'Swipe across ripe plants to harvest.';
   if (ripe === 1 && learning) return 'Tap the ripe plant to harvest it.';
+  if (learning && snapshot.nearMiss) return snapshot.nearMiss;
   if (ripe === 0 && growing === 0 && empty > 0 && snapshot.coins < seed.seedCost) {
     return snapshot.coins >= 1 ? 'Too few coins. Try a Sunny Sprout.' : '';
   }
   if (snapshot.xp === 0 && growing === 0) return 'Tap a plot to plant.';
   if (snapshot.xp === 0 && ripe === 0) return 'Tap a growing plant to water it.';
+  if (snapshot.nearMiss) return snapshot.nearMiss;
   const next = SPECIES.find(({ unlockLevel }) => unlockLevel === snapshot.level + 1);
   if (next) return `Level ${snapshot.level + 1} unlocks ${next.name}.`;
   // Everything in M1 is unlocked: keep a standing goal so the top line never goes blank.

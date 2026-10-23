@@ -4,6 +4,7 @@ export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestabl
 
 /** Fruit size rolled at planting (design.md 4.3). Absent means regular. */
 export type YieldSize = 'small' | 'regular' | 'big';
+export type TraitId = 'giant' | 'golden' | 'glowing' | 'crystal' | 'rainbow';
 
 export interface PlantState {
   readonly speciesId: SpeciesId;
@@ -12,6 +13,10 @@ export interface PlantState {
   readonly size?: YieldSize;
   /** Growth time skipped by watering; growth runs from plantedAt - boostMs. */
   readonly boostMs?: number;
+  readonly mutationSeed: number;
+  readonly waterCount?: number;
+  readonly mutations?: readonly TraitId[];
+  readonly scriptedGiant?: boolean;
 }
 
 /** The timestamp growth is measured from. */
@@ -24,7 +29,7 @@ export interface GrowthView {
   readonly progress: number;
 }
 
-export interface PlantSnapshot extends PlantState, GrowthView {}
+export interface PlantSnapshot extends Omit<PlantState, 'mutationSeed' | 'scriptedGiant'>, GrowthView { readonly tell?: TraitId | null }
 
 export interface PlotState {
   readonly id: PlotId;
@@ -45,13 +50,19 @@ export interface GardenSnapshot {
   readonly nextLevelXp: number;
   readonly nowMs: number;
   readonly plots: readonly PlotSnapshot[];
+  readonly nearMiss?: string | null;
 }
 
 export interface GardenState {
-  readonly schema: 2;
+  readonly schema: 3;
   readonly coins: number;
   readonly lastNowMs: number;
   readonly rngState: number;
+  readonly mutationRngState: number;
+  readonly scriptedGiantUsed: boolean;
+  readonly badLuck: Readonly<Record<TraitId, number>>;
+  readonly discoveries: readonly string[];
+  readonly rewardsPaid: readonly string[];
   /** Garden XP; the level is derived from it (design.md 4.4). */
   readonly xp: number;
   readonly plots: readonly PlotState[];
@@ -99,6 +110,7 @@ export type SimEvent =
       readonly comboBonus: number;
     }
   | { readonly type: 'Watered'; readonly plotId: PlotId }
+  | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean }
   | { readonly type: 'LevelUp'; readonly level: number; readonly unlocked: readonly SpeciesId[] }
   | {
       readonly type: 'CommandRejected';

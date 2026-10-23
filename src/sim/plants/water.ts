@@ -1,4 +1,4 @@
-import { SPECIES, WATER_SPEEDUP } from '../content/species';
+import { levelForXp, SPECIES, WATER_SPEEDUP } from '../content/species';
 import { getGrowthView } from './growth';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
@@ -14,7 +14,8 @@ export function water(state: GardenState, command: WaterCommand, effectiveNowMs:
   if (plotIndex < 0 || plot === undefined) return rejected(state, command, 'unknown-plot');
   const plantState = plot.plant;
   if (plantState === null) return rejected(state, command, 'empty');
-  if (plantState.boostMs !== undefined) return rejected(state, command, 'already-watered');
+  const waterCount = plantState.waterCount ?? (plantState.boostMs === undefined ? 0 : 1);
+  if (waterCount >= 1 && (levelForXp(state.xp) < 4 || waterCount >= 2)) return rejected(state, command, 'already-watered');
   const species = SPECIES.find((entry) => entry.id === plantState.speciesId)!;
   const start = growthStart(plantState);
   const before = getGrowthView(plantState.speciesId, start, effectiveNowMs);
@@ -23,9 +24,9 @@ export function water(state: GardenState, command: WaterCommand, effectiveNowMs:
   if (before.stage === 'Seed') return rejected(state, command, 'too-early');
 
   const remainingMs = start + species.growthDurationMs - effectiveNowMs;
-  const boostMs = Math.round(remainingMs * WATER_SPEEDUP);
+  const boostMs = (plantState.boostMs ?? 0) + Math.round(remainingMs * WATER_SPEEDUP);
   const plots = state.plots.slice();
-  plots[plotIndex] = { ...plot, plant: { ...plantState, boostMs } };
+  plots[plotIndex] = { ...plot, plant: { ...plantState, boostMs, waterCount: waterCount + 1 } };
 
   const events: SimEvent[] = [{ type: 'Watered', plotId: plot.id }];
   const elapsedBefore = effectiveNowMs - start;

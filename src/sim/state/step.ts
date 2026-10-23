@@ -3,6 +3,7 @@ import { plant } from '../plants/plant';
 import { harvest } from '../plants/harvest';
 import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
+import { evaluateMature } from '../plants/mutate';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -25,6 +26,12 @@ export function step(
     ? state
     : { ...state, lastNowMs: effectiveNowMs };
 
+  if (commands.some((command) => command.type === 'Harvest')) {
+    const mature = evaluateMature(nextState, effectiveNowMs);
+    nextState = mature.state;
+    events.push(...mature.events);
+  }
+
   for (const command of commands) {
     const result = command.type === 'Plant'
       ? plant(nextState, command, effectiveNowMs)
@@ -34,6 +41,10 @@ export function step(
     nextState = result.state;
     events.push(...result.events);
   }
+
+  const mutationResult = evaluateMature(nextState, effectiveNowMs);
+  nextState = mutationResult.state;
+  events.push(...mutationResult.events);
 
   return { state: nextState, events };
 }

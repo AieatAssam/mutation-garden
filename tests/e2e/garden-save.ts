@@ -7,8 +7,20 @@ import { encodeSave } from '../../src/save/codec';
  * The save is written before the app opens IndexedDB, and only if no save exists yet, so reloads
  * keep whatever the spec did.
  */
-export async function startWithSave(page: Page, xp = 25): Promise<void> {
-  const envelope = encodeSave(createInitialState(20261022, 0, { xp }), 0, 'e2e');
+export async function startWithSave(page: Page, xp = 25, options: {
+  scriptedGiantUsed?: boolean; twistrootPlantedAt?: number; extraRipeSunny?: boolean; savedAt?: number;
+} = {}): Promise<void> {
+  const initial = createInitialState(20261022, 0, { xp });
+  const plots = initial.plots.map((plot) => {
+    if (options.twistrootPlantedAt !== undefined && plot.id === 'plot-0') return { ...plot,
+      plant: { speciesId: 'twistroot' as const, plantedAt: options.twistrootPlantedAt, size: 'regular' as const,
+        mutationSeed: 7, waterCount: 0, scriptedGiant: true } };
+    if (options.extraRipeSunny && plot.id === 'plot-1') return { ...plot,
+      plant: { speciesId: 'sunny-sprout' as const, plantedAt: options.twistrootPlantedAt! - 20_000,
+        size: 'regular' as const, mutationSeed: 11, mutations: [] } };
+    return plot;
+  });
+  const envelope = encodeSave({ ...initial, plots, scriptedGiantUsed: options.scriptedGiantUsed ?? true }, options.savedAt ?? 0, 'e2e');
   await page.addInitScript((save) => {
     const request = indexedDB.open('mutation-garden', 1);
     request.onupgradeneeded = () => request.result.createObjectStore('saves');

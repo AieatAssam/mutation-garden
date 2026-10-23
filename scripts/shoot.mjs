@@ -12,12 +12,13 @@ for (const [name, viewport, scale] of [['phone', { width: 390, height: 844 }, 2]
   const page = await browser.newPage({ viewport, deviceScaleFactor: scale });
   if (plantMode) {
     // Start from a level-3 garden so every seed is unlocked (same envelope format as src/save/codec.ts).
-    const state = { schema: 2, coins: 12, lastNowMs: 0, rngState: 7, xp: 25,
+    const state = { schema: 3, coins: 12, lastNowMs: 0, rngState: 7, mutationRngState: 2492178918, scriptedGiantUsed: true,
+      badLuck: { giant: 0, golden: 0, glowing: 0, crystal: 0, rainbow: 0 }, discoveries: [], rewardsPaid: [], xp: 25,
       plots: Array.from({ length: 6 }, (_, index) => ({ id: `plot-${index}`, plant: null })) };
     const text = JSON.stringify(state);
     let hash = 0x811c9dc5;
     for (let index = 0; index < text.length; index += 1) { hash ^= text.charCodeAt(index); hash = Math.imul(hash, 0x01000193) >>> 0; }
-    const save = { schema: 2, savedAt: 0, appVersion: 'shoot', checksum: hash.toString(16).padStart(8, '0'), state };
+    const save = { schema: 3, savedAt: 0, appVersion: 'shoot', checksum: hash.toString(16).padStart(8, '0'), state };
     await page.addInitScript((envelope) => {
       const request = indexedDB.open('mutation-garden', 1);
       request.onupgradeneeded = () => request.result.createObjectStore('saves');

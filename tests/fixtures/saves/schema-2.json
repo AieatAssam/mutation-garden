@@ -1,0 +1,44 @@
+{
+  "schema": 2,
+  "savedAt": 10000,
+  "appVersion": "fixture",
+  "checksum": "3d322d90",
+  "state": {
+    "schema": 2,
+    "coins": 8,
+    "lastNowMs": 10000,
+    "rngState": 123,
+    "xp": 0,
+    "plots": [
+      {
+        "id": "plot-0",
+        "plant": {
+          "speciesId": "twistroot",
+          "plantedAt": 10000,
+          "size": "regular",
+          "boostMs": 3000
+        }
+      },
+      {
+        "id": "plot-1",
+        "plant": null
+      },
+      {
+        "id": "plot-2",
+        "plant": null
+      },
+      {
+        "id": "plot-3",
+        "plant": null
+      },
+      {
+        "id": "plot-4",
+        "plant": null
+      },
+      {
+        "id": "plot-5",
+        "plant": null
+      }
+    ]
+  }
+}

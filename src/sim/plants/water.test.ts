@@ -19,8 +19,11 @@ describe('Water commands', () => {
     expect(getSnapshot(step(watered.state, [], start + 19_000).state).plots[0]?.plant?.stage).toBe('Harvestable');
 
     const again = step(watered.state, [{ type: 'Water', plotId: 'plot-0' }], start + 6_000);
-    expect(again.events).toEqual([{ type: 'CommandRejected', command: 'Water', plotId: 'plot-0', reason: 'already-watered' }]);
-    expect(again.state.plots).toBe(watered.state.plots);
+    expect(again.events).toEqual([{ type: 'Watered', plotId: 'plot-0' }]);
+    expect(again.state.plots[0]?.plant).toMatchObject({ waterCount: 2 });
+    const third = step(again.state, [{ type: 'Water', plotId: 'plot-0' }], start + 7_000);
+    expect(third.events).toEqual([{ type: 'CommandRejected', command: 'Water', plotId: 'plot-0', reason: 'already-watered' }]);
+    expect(third.state.plots).toBe(again.state.plots);
   });
 
   it('emits stages the jump crosses so presentation never misses one', () => {

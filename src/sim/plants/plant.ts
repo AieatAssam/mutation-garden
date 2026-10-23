@@ -35,16 +35,20 @@ export function plant(
   }
 
   const roll = nextRandom(state.rngState);
+  const mutationRoll = nextRandom(state.mutationRngState);
+  const scriptedGiant = species.id === 'twistroot' && levelForXp(state.xp) >= 3 && !state.scriptedGiantUsed;
   const plots = state.plots.slice();
   plots[plotIndex] = {
     ...plot,
-    plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value) },
+    plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value), mutationSeed: mutationRoll.value === 0 ? 0 : Math.floor(mutationRoll.value * 0x1_0000_0000), ...(scriptedGiant ? { scriptedGiant: true } : {}) },
   };
 
   const nextState: GardenState = {
     ...state,
     coins: state.coins - species.seedCost,
     rngState: roll.nextState,
+    mutationRngState: mutationRoll.nextState,
+    ...(scriptedGiant ? { scriptedGiantUsed: true } : {}),
     plots,
   };
   const event: SimEvent = {

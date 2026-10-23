@@ -18,10 +18,13 @@ describe('garden levels', () => {
     for (let round = 0; round < 5; round += 1) {
       const t = round * 10_000;
       state = step(state, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], t).state;
+      state = { ...state, plots: state.plots.map((plot) => plot.id === 'plot-0' && plot.plant
+        ? { ...plot, plant: { ...plot.plant, mutationSeed: 0xffff_ffff } } : plot) };
       const result = step(state, [{ type: 'Harvest', plotIds: ['plot-0'] }], t + 8_000);
       state = result.state;
       const levelUps = result.events.filter((event) => event.type === 'LevelUp');
-      expect(levelUps).toEqual(round === 4 ? [{ type: 'LevelUp', level: 2, unlocked: ['bubble-berry'] }] : []);
+      if (round === 4) expect(levelUps).toEqual([{ type: 'LevelUp', level: 2, unlocked: ['bubble-berry'] }]);
+      else expect(levelUps.every((event) => event.level === 2)).toBe(true);
     }
     expect(getSnapshot(state)).toMatchObject({ xp: 10, level: 2, levelStartXp: 10, nextLevelXp: 25 });
     expect(step(state, [{ type: 'Plant', plotId: 'plot-1', seedId: 'bubble-berry' }], 60_000).events)

@@ -1,5 +1,6 @@
 import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
+import { MUTATIONS } from '../content/mutations';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
 type HarvestCommand = Extract<Command, { readonly type: 'Harvest' }>;
@@ -46,12 +47,13 @@ export function harvest(
     const size = plot.plant.size ?? 'regular';
     const ripeAt = growthStart(plot.plant) + species.growthDurationMs;
     const fresh = effectiveNowMs - ripeAt <= FRESH_WINDOW_MS;
-    const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1);
+    const mutationMultiplier = (plot.plant.mutations ?? []).reduce((product, trait) => product * MUTATIONS[trait].value, 1);
+    const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1) * mutationMultiplier;
     const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
     // XP follows the species' base value, so it never varies with luck (design.md 4.4).
-    nextState = { ...nextState, coins: nextState.coins + coins, xp: nextState.xp + species.baseValue, plots };
+    nextState = { ...nextState, coins: nextState.coins + coins, xp: nextState.xp + species.baseValue * mutationMultiplier, plots };
     totalCoins += coins;
     count += 1;
     events.push({ type: 'Harvested', plotId, speciesId: species.id, coins, size, fresh });

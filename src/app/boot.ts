@@ -8,6 +8,7 @@ import { hintFor } from './hints';
 import { createPointerInput } from '../input/pointer';
 import { createGardenUI } from '../ui/garden-ui';
 import { createRewardLayer } from '../ui/rewards';
+import { createMutationReveal } from '../ui/mutation-reveal';
 import { createSfx } from '../audio/sfx';
 import { createPageLifecycle } from './lifecycle';
 import { createFixedStepLoop } from './loop';
@@ -122,6 +123,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       projectPlot: r.projectPlot,
       coinTarget: () => uiRoot.querySelector<HTMLElement>('.garden-ui__coins'),
     });
+    const mutationReveal = createMutationReveal(uiRoot, r.projectPlot);
     // Audio may only start from a user gesture (autoplay rules).
     const unlockAudio = () => sfx.unlock();
     window.addEventListener('pointerdown', unlockAudio, { capture: true });
@@ -151,6 +153,11 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         r.onEvents(events, motion.matches);
         rewards.onEvents(events, motion.matches);
         sfx.onEvents(events);
+        for (const event of events) if (event.type === 'Mutated') {
+          mutationReveal.show(event, motion.matches);
+          sfx.mutation(event.firstDiscovery);
+          if (event.firstDiscovery && !motion.matches && 'vibrate' in navigator) navigator.vibrate([20, 40, 20]);
+        }
         if (!motion.matches && 'vibrate' in navigator) {
           if (events.some(({ type }) => type === 'Harvested')) navigator.vibrate(15);
           else if (events.some(({ type }) => type === 'Planted')) navigator.vibrate(10);
@@ -301,6 +308,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       clearInterval(saveTimer);
       saveNow();
       rewards.dispose();
+      mutationReveal.dispose();
       sfx.dispose();
       r.dispose();
       gardenUI.dispose();

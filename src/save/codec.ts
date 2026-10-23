@@ -1,5 +1,5 @@
 import { SIM_SCHEMA_VERSION, SPECIES } from '../sim';
-import type { GardenState } from '../sim';
+import type { GardenState, TraitId } from '../sim';
 
 /** The stored and exported save format (docs/architecture.md, Saves). Keep it stable. */
 export interface SaveEnvelope {
@@ -32,6 +32,16 @@ export function encodeSave(state: GardenState, savedAt: number, appVersion: stri
 export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>) => Record<string, unknown>>> = {
   // Schema 2 adds garden XP (M1-S4).
   1: (state) => ({ ...state, schema: 2, xp: 0 }),
+  2: (state) => ({ ...state, schema: 3, mutationRngState: 0, scriptedGiantUsed: false,
+    badLuck: { giant: 0, golden: 0, glowing: 0, crystal: 0, rainbow: 0 }, discoveries: [], rewardsPaid: [],
+    plots: Array.isArray(state.plots) ? state.plots.map((plot) => {
+      if (!plot || typeof plot !== 'object') return plot;
+      const entry = plot as Record<string, unknown>;
+      if (!entry.plant || typeof entry.plant !== 'object') return entry;
+      const plant = entry.plant as Record<string, unknown>;
+      return { ...entry, plant: { ...plant, mutationSeed: 0xffff_ffff, ...(plant.boostMs === undefined ? {} : { waterCount: 1 }) } };
+    }) : state.plots,
+  }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
@@ -45,6 +55,10 @@ export function validateState(value: unknown): value is GardenState {
   if (state.schema !== SIM_SCHEMA_VERSION || !isCount(state.coins) || !isCount(state.lastNowMs)) return false;
   if (!Number.isInteger(state.rngState) || (state.rngState as number) < 0 || (state.rngState as number) > 0xffff_ffff) return false;
   if (!isCount(state.xp)) return false;
+  if (!Number.isInteger(state.mutationRngState) || (state.mutationRngState as number) < 0 || (state.mutationRngState as number) > 0xffff_ffff) return false;
+  if (typeof state.scriptedGiantUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string')) return false;
+  const traits: TraitId[] = ['giant', 'golden', 'glowing', 'crystal', 'rainbow'];
+  if (!state.badLuck || typeof state.badLuck !== 'object' || !traits.every((trait) => isCount((state.badLuck as Record<string, unknown>)[trait]))) return false;
   if (!Array.isArray(state.plots) || state.plots.length === 0) return false;
   return state.plots.every((plot: unknown) => {
     if (!plot || typeof plot !== 'object') return false;
@@ -52,8 +66,13 @@ export function validateState(value: unknown): value is GardenState {
     if (typeof id !== 'string') return false;
     if (plant === null) return true;
     if (!plant || typeof plant !== 'object') return false;
-    const { speciesId, plantedAt, size, boostMs } = plant as Record<string, unknown>;
+    const { speciesId, plantedAt, size, boostMs, mutationSeed, waterCount, mutations, scriptedGiant } = plant as Record<string, unknown>;
     return typeof speciesId === 'string' && SPECIES_IDS.has(speciesId) && isCount(plantedAt)
+      && Number.isInteger(mutationSeed) && (mutationSeed as number) >= 0 && (mutationSeed as number) <= 0xffff_ffff
+      && (waterCount === undefined || isCount(waterCount))
+      && (waterCount === undefined || (waterCount as number) <= 2)
+      && (mutations === undefined || (Array.isArray(mutations) && mutations.length <= 2 && new Set(mutations).size === mutations.length && mutations.every((trait) => traits.includes(trait as TraitId))))
+      && (scriptedGiant === undefined || typeof scriptedGiant === 'boolean')
       && (size === undefined || (typeof size === 'string' && SIZES.has(size)))
       && (boostMs === undefined || isCount(boostMs));
   });

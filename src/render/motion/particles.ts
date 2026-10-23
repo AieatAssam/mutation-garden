@@ -90,13 +90,14 @@ export function createParticles(capacity = PARTICLE_CAPACITY): Particles {
         const particle = live[index]!;
         const age = nowMs - particle.bornMs;
         if (age >= particle.lifeMs) continue;
+        const persistent = particle.lifeMs > 10_000;
         particle.velocity.y -= particle.gravity * dt;
         particle.position.addScaledVector(particle.velocity, dt);
         const t = age / particle.lifeMs;
         // Pop in fast, shrink out: reads as a puff without transparency sorting.
-        const scale = particle.size * Math.min(1, t * 6) * (1 - t * t);
+        const scale = persistent ? particle.size : particle.size * Math.min(1, t * 6) * (1 - t * t);
         dummy.position.copy(particle.position);
-        dummy.rotation.set(particle.spin * t, particle.spin * t * 0.7, 0);
+        dummy.rotation.set(persistent ? 0 : particle.spin * t, persistent ? 0 : particle.spin * t * 0.7, 0);
         dummy.scale.setScalar(Math.max(0.0001, scale));
         dummy.updateMatrix();
         live[write] = particle;

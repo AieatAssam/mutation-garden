@@ -107,6 +107,8 @@ All plants are authored in Blender with shape keys for growth (ADR 0009).
 
 The brief requires that players can influence mutations and that randomness is never the only path. Every mutation has **one learnable rule** that makes it likely, plus a **small natural chance** for surprise, plus **bad-luck protection**.
 
+No natural mutations before Level 2, so the first minute stays about planting and harvesting.
+
 | Mutation | Value | Learnable rule (shown in journal once discovered or hinted) | Natural chance | Guarantee |
 |---|---:|---|---:|---|
 | Giant | ×2 | Water twice while growing. The second water unlocks at Level 4. | 3% | Scripted: the first Twistroot planted at Level 3 or above |

@@ -24,7 +24,8 @@ vi.mock('../input/pointer', () => ({
     createPointerInput(canvas, pick, onIntent),
 }));
 vi.mock('../ui/rewards', () => ({ createRewardLayer: () => ({ onEvents: vi.fn(), dispose: vi.fn() }) }));
-vi.mock('../audio/sfx', () => ({ createSfx: () => ({ unlock: vi.fn(), onEvents: vi.fn(), setMuted: vi.fn(), setMusic: vi.fn(), muted: false, dispose: vi.fn() }) }));
+vi.mock('../ui/mutation-reveal', () => ({ createMutationReveal: () => ({ show: vi.fn(), dispose: vi.fn() }) }));
+vi.mock('../audio/sfx', () => ({ createSfx: () => ({ unlock: vi.fn(), onEvents: vi.fn(), mutation: vi.fn(), setMuted: vi.fn(), setMusic: vi.fn(), muted: false, dispose: vi.fn() }) }));
 vi.mock('../ui/garden-ui', () => ({
   createGardenUI: (container: HTMLElement, options: unknown) => createGardenUI(container, options),
 }));

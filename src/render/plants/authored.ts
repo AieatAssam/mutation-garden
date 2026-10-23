@@ -218,6 +218,11 @@ export function createAuthoredRig(
   let lastStage: string | null = null;
   let popStartMs = -Infinity;
   let wetStartMs = -Infinity;
+  let giant: boolean | null = null;
+  let giantStartMs = -Infinity;
+  let giantFrom = 1;
+  let shiverStartMs = -Infinity;
+  let shiverDurationMs = 0;
 
   const blob = materials.blob();
   blob.name = 'blob';
@@ -231,6 +236,13 @@ export function createAuthoredRig(
     root,
     update(plant, presentationNowMs, reducedMotion) {
       const progress = clamp01(plant.progress);
+      const hasGiant = plant.mutations?.includes('giant') ?? false;
+      if (giant === null) giant = hasGiant;
+      else if (giant !== hasGiant) {
+        giantFrom = hasGiant ? 1 : 1.8;
+        giant = hasGiant;
+        giantStartMs = presentationNowMs;
+      }
       const ripe = plant.stage === 'Harvestable';
       // Fruit warms part way while growing and only reaches its ripe colour and size when harvestable,
       // so ripeness is an obvious change rather than the end of a gradient (motion.md 4.3).
@@ -287,10 +299,32 @@ export function createAuthoredRig(
       // Wind blows along +x, so a plant leans towards -z rotation; the ripe wiggle adds on top.
       body.rotation.z = wiggle - WIND_LEAN * wind;
       const breathing = reducedMotion ? 1 : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
-      root.scale.set(scale, scale * breathing, scale);
+      let giantScale = hasGiant ? 1.8 : 1;
+      if (giantStartMs !== -Infinity) {
+        const duration = reducedMotion ? 300 : 600;
+        const t = clamp01((presentationNowMs - giantStartMs) / duration);
+        if (t >= 1) giantStartMs = -Infinity;
+        else if (reducedMotion) giantScale = giantFrom + (hasGiant ? 1.8 - giantFrom : 1 - giantFrom) * smooth(t);
+        else {
+          const target = hasGiant ? 1.8 : 1;
+          const direction = target >= giantFrom ? 1 : -1;
+          giantScale = giantFrom + (target - giantFrom) * smooth(t)
+            + direction * 0.14 * Math.sin(t * Math.PI * 4) * (1 - t);
+          giantScale = Math.max(0.1, giantScale);
+        }
+      }
+      const shiver = !reducedMotion && presentationNowMs - shiverStartMs < shiverDurationMs
+        ? 0.055 * Math.sin(((presentationNowMs - shiverStartMs) / 42) * Math.PI * 2)
+          * (1 - clamp01((presentationNowMs - shiverStartMs) / shiverDurationMs)) : 0;
+      root.rotation.z = shiver;
+      root.scale.set(scale * giantScale, scale * giantScale * breathing, scale * giantScale);
       const size = 0.35 + 0.65 * smooth(progress);
       const lift = 1 - 0.25 * Math.min(1, hop.y / 0.05);
       blob.scale.set(0.95 * size * lift, 0.95 * size * lift, 1);
+    },
+    shiver(presentationNowMs, durationMs) {
+      shiverStartMs = presentationNowMs;
+      shiverDurationMs = durationMs;
     },
     getTop(target) {
       let found = false;

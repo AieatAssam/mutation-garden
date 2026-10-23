@@ -23,6 +23,29 @@ describe('save codec', () => {
     expect(result.ok).toBe(true);
     if (result.ok) expect(result.state.plots[0]?.plant).toMatchObject({ speciesId: 'sunny-sprout' });
   });
+
+  it('continues a saved mature mutation without rerolling it', () => {
+    const state = step(createInitialState(44, 0, { xp: 25 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], 0).state;
+    const matured = step(state, [], 22_000).state;
+    const decoded = decodeSave(encodeSave(matured, 22_000, 'test'));
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok) {
+      const resumed = step(decoded.state, [], 30_000);
+      expect(resumed.events).not.toContainEqual(expect.objectContaining({ type: 'Mutated' }));
+      expect(resumed.state.plots[0]?.plant?.mutations).toEqual(['giant']);
+    }
+  });
+
+  it('migrates schema 2 plants without mutation rerolls', () => {
+    const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-2.json', 'utf8'));
+    const result = decodeSave(fixture);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.state.plots[0]?.plant).toMatchObject({ mutationSeed: 0xffff_ffff, waterCount: 1 });
+      const matured = step(result.state, [], 40_000);
+      expect(matured.state.plots[0]?.plant?.mutations).toEqual([]);
+    }
+  });
 });
 
 describe('save store', () => {

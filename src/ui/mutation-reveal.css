@@ -1,0 +1,17 @@
+.mutation-reveal { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+.mutation-reveal--full { pointer-events: auto; display: grid; place-items: center; background: radial-gradient(ellipse at center, transparent 45%, color-mix(in srgb, var(--mg-ui-misprint), transparent 70%) 100%); }
+.mutation-reveal__flash { position: absolute; inset: 0; pointer-events: none; background: var(--mg-ui-panel); opacity: 0; }
+.mutation-reveal__flash--active { animation: mutation-flash 100ms ease-out both; }
+.mutation-reveal__panel { padding: 1.1rem 1.4rem; max-width: min(86vw, 24rem); color: var(--mg-ui-text); text-align: center; background: var(--mg-ui-panel); border: 2px solid var(--mg-ui-border); border-radius: 1rem; box-shadow: 4px 5px 0 var(--mg-ui-misprint); animation: mutation-stamp 180ms ease-out both; }
+.mutation-reveal__title { font-size: 1.35rem; font-weight: 800; }
+.mutation-reveal__details { display: grid; gap: .4rem; margin-top: .5rem; }
+.mutation-reveal__stars { color: var(--mg-ui-coin-emboss); letter-spacing: .18em; }
+.mutation-reveal__line { font-size: .95rem; }
+.mutation-reveal__repeat { position: fixed; transform: translate(-50%, -50%); padding: .35rem .7rem; color: var(--mg-ui-text); background: var(--mg-ui-panel); border-radius: 1rem; font-weight: 700; animation: mutation-repeat 900ms ease-out both; }
+.mutation-reveal--reduced { background: transparent; }
+.mutation-reveal--reduced .mutation-reveal__panel { animation: mutation-fade 180ms ease-out both; }
+@keyframes mutation-stamp { from { opacity: 0; transform: scale(.7); } to { opacity: 1; transform: scale(1); } }
+@keyframes mutation-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes mutation-flash { 0% { opacity: 0; } 25% { opacity: .9; } 100% { opacity: 0; } }
+@keyframes mutation-repeat { 0% { opacity: 0; transform: translate(-50%, 0) scale(.7); } 15%, 70% { opacity: 1; transform: translate(-50%, -50%) scale(1); } 100% { opacity: 0; transform: translate(-50%, -90%) scale(.95); } }
+@media (prefers-reduced-motion: reduce) { .mutation-reveal__panel, .mutation-reveal__repeat { animation-duration: 1ms; } }

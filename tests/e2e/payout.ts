@@ -4,7 +4,7 @@ import { expect, type Page } from '@playwright/test';
  * Harvest payouts vary with yield size, the fresh bonus and swipe combos (design.md 4.3), so specs
  * check the counter against what the game showed: every "+N" label plus any combo bonus.
  */
-export async function expectHarvestPaid(page: Page, act: () => Promise<void>): Promise<{ before: number; after: number; paid: number }> {
+export async function expectHarvestPaid(page: Page, act: () => Promise<void>): Promise<{ before: number; after: number; paid: number; payouts: number[] }> {
   const coins = page.getByRole('status', { name: 'Coins' });
   const before = Number((await coins.textContent())?.trim());
   await page.evaluate(() => {
@@ -37,5 +37,5 @@ export async function expectHarvestPaid(page: Page, act: () => Promise<void>): P
     return paid > 0 && shown === before + paid;
   }, { message: 'the counter moved by exactly the payout shown', timeout: 5_000 }).toBe(true);
   const { paid, shown: after } = await read();
-  return { before, after, paid };
+  return { before, after, paid, payouts: await page.evaluate(() => (window as unknown as { __payouts?: number[] }).__payouts ?? []) };
 }

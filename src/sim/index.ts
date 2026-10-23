@@ -1,6 +1,7 @@
 // Public simulation API. Keep this module free of browser and renderer imports.
 export { SIM_SCHEMA_VERSION, createInitialState, INITIAL_COINS } from './state/initial';
 export { levelForXp, xpForLevel, LEVEL_XP, COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, SPECIES, WATER_SPEEDUP, YIELD_SIZES } from './content/species';
+export { MUTATIONS, mutationRoll } from './content/mutations';
 export type { GrowthStageDefinition, SpeciesDefinition } from './content/species';
 export { nextRandom } from './state/rng';
 export { step } from './state/step';
@@ -23,4 +24,5 @@ export type {
   SpeciesId,
   StepResult,
   YieldSize,
+  TraitId,
 } from './state/types';

@@ -48,6 +48,7 @@ export interface Renderer {
   onEvents(events: readonly SimEvent[], reducedMotion: boolean): void;
   /** Screen point (CSS px, viewport) just above a plot's plant, for UI rewards. */
   projectPlot(plotId: PlotId): { x: number; y: number } | null;
+  shiver(plotId: PlotId, durationMs: number): void;
   pick(clientX: number, clientY: number): PickResult;
   /** Resolves once the authored island and plant models are in the scene (or failed to load). */
   whenLoaded(): Promise<void>;
@@ -197,6 +198,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }
 
   const particles = createParticles();
+  const lastTell = new Map<PlotId, number>();
   scene.add(particles.mesh);
   const pulse = createPlotPulse();
   const flights = createHarvestFlights(() => plantModels, materials);
@@ -242,6 +244,19 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
           particles.burst({ origin: fruit, count: 14,
             colors: [ramp(event.speciesId).fruit[0], ramp(event.speciesId).fruit[1], ramp(event.speciesId).leaf[1]],
             speed: 2.2, up: 1.8, gravity: 6, lifeMs: 480, size: 0.15 }, now, reducedMotion);
+          break;
+        }
+        case 'Mutated': {
+          const top = new Vector3();
+          if (plants.getTop(event.plotId, top)) {
+            if (event.firstDiscovery && !reducedMotion) plants.shiver(event.plotId, currentSnapshot?.nowMs ?? 0, 300);
+            const trait = event.mutations[0];
+            const colors = trait === 'giant' ? [palette.ui.coin.emboss, palette.ink['paper-white']]
+              : trait === 'golden' ? palette.plants[event.speciesId].fruit.slice(0, 2)
+                : [palette.environment.water[0], palette.environment.water[1]];
+            particles.burst({ origin: top, count: event.firstDiscovery ? 16 : 7, colors,
+              speed: 0.8, up: 1.1, gravity: 2, lifeMs: event.firstDiscovery ? 1000 : 500, size: 0.1 }, now, reducedMotion);
+          }
           break;
         }
         default:
@@ -323,6 +338,21 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       snapshotAlpha = Math.min(1, Math.max(0, alpha));
       currentReducedMotion = reducedMotion;
       plants.update(previous, current, alpha, reducedMotion);
+      const activeTells = new Set<PlotId>();
+      for (const plot of current.plots) {
+        const plant = plot.plant;
+        if (!plant?.tell || (plant.stage !== 'Sprout' && plant.stage !== 'Growing' && plant.stage !== 'Mature' && plant.stage !== 'Harvestable')) continue;
+        activeTells.add(plot.id);
+        const last = lastTell.get(plot.id) ?? -Infinity;
+        if ((reducedMotion && lastTell.has(plot.id)) || last + 4000 > clock()) continue;
+        const top = new Vector3();
+        if (plants.getTop(plot.id, top)) particles.burst({ origin: top, count: 1,
+          colors: plant.tell === 'giant' ? [palette.ui.coin.emboss] : [palette.environment.water[0]],
+          speed: 0, up: reducedMotion ? 0 : 0.18, gravity: reducedMotion ? 0 : 0.1,
+          lifeMs: reducedMotion ? 1_000_000_000 : 600, size: 0.055 }, clock(), reducedMotion);
+        lastTell.set(plot.id, clock());
+      }
+      for (const plotId of lastTell.keys()) if (!activeTells.has(plotId)) lastTell.delete(plotId);
       draw();
     },
     whenLoaded() {
@@ -338,6 +368,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       camera.updateMatrixWorld(true);
       const point = anchor.getWorldPosition(new Vector3()).setY(anchor.position.y + 1.2).project(camera);
       return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };
+    },
+    shiver(plotId, durationMs) {
+      if (!disposed && !currentReducedMotion) plants.shiver(plotId, currentSnapshot?.nowMs ?? 0, durationMs);
     },
     pick(clientX, clientY) {
       if (disposed) return null;

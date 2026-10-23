@@ -21,7 +21,7 @@ function stateWithPlants(
 }
 
 function plantAt(speciesId: SpeciesId, plantedAt: number) {
-  return { speciesId, plantedAt };
+  return { speciesId, plantedAt, mutationSeed: 0xffff_ffff };
 }
 
 function harvest(...plotIds: string[]): Command {
@@ -41,7 +41,7 @@ describe('Harvest commands', () => {
         plantedAt + species.growthDurationMs - 1,
       );
       expect(beforeMaturity.state.coins).toBe(planted.coins);
-      expect(beforeMaturity.state.plots[0]?.plant).toEqual(plantAt(species.id, plantedAt));
+      expect(beforeMaturity.state.plots[0]?.plant).toEqual({ ...plantAt(species.id, plantedAt), mutations: [] });
       expect(beforeMaturity.events).toContainEqual({
         type: 'CommandRejected', command: 'Harvest', plotId: 'plot-0', reason: 'not-harvestable',
       });
@@ -84,7 +84,7 @@ describe('Harvest commands', () => {
     expect(result.state.plots.map(({ plant }) => plant)).toEqual([
       null,
       null,
-      plantAt('bubble-berry', startTime - 14_999),
+      { ...plantAt('bubble-berry', startTime - 14_999), mutations: [] },
       null,
       null,
       null,
@@ -113,7 +113,8 @@ describe('Harvest commands', () => {
     const state = stateWithPlants({ 'plot-0': plantAt('sunny-sprout', startTime - 8_000) });
     const result = step(state, [harvest()], startTime);
 
-    expect(result).toEqual({ state, events: [] });
+    expect(result.events).toEqual([]);
+    expect(result.state.plots[0]?.plant).toMatchObject({ mutations: [] });
   });
 
   it('pays once when duplicate Harvest commands target the same plot in one step', () => {
@@ -147,7 +148,8 @@ describe('Harvest commands', () => {
     }], startTime);
 
     expect(result.state.coins).toBe(state.coins + 2 - 3);
-    expect(result.state.plots[0]?.plant).toMatchObject(plantAt('bubble-berry', startTime));
+    expect(result.state.plots[0]?.plant).toMatchObject({ speciesId: 'bubble-berry', plantedAt: startTime });
+    expect(result.state.plots[0]?.plant?.mutationSeed).toEqual(expect.any(Number));
     expect(result.events).toEqual([
       { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true },
       { type: 'HarvestCompleted', count: 1, coins: 2, comboBonus: 0 },
@@ -261,8 +263,8 @@ describe('Harvest commands', () => {
 
   it('pays yield size and drops the fresh bonus after the fresh window', () => {
     const state = stateWithPlants({
-      'plot-0': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_001, size: 'big' },
-      'plot-1': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_000, size: 'small' },
+      'plot-0': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_001, size: 'big', mutationSeed: 0xffff_ffff },
+      'plot-1': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_000, size: 'small', mutationSeed: 0xffff_ffff },
     });
     const result = step(state, [harvest('plot-0'), harvest('plot-1')], startTime);
 

@@ -11,6 +11,7 @@ export interface PlantReconciler {
   update(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   /** Writes the highest visible semantic plant surface in world space. */
   getTop(plotId: PlotId, target: Vector3): boolean;
+  shiver(plotId: PlotId, nowMs: number, durationMs: number): void;
   /** Switches to the authored Blender plants; existing rigs are rebuilt on the next update. */
   setModels(models: PlantModels): void;
   dispose(): void;
@@ -133,6 +134,10 @@ export function createPlantReconciler(
       const entry = entries.get(plotId);
       if (!entry) return false;
       return entry.rig.getTop ? entry.rig.getTop(target) : getSemanticTop(entry.rig.root, target);
+    },
+    shiver(plotId, nowMs, durationMs) {
+      const entry = entries.get(plotId);
+      entry?.rig.shiver?.(nowMs, durationMs);
     },
     dispose() {
       if (disposed) return;

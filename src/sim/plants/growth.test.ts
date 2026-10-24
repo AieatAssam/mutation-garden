@@ -127,6 +127,11 @@ describe('timestamp-derived plant growth', () => {
       plantCount: 0,
       owned: [],
       fertiliser: 0,
+      crate: [],
+      crateCount: 0,
+      crateCapacity: 12,
+      selling: false,
+      nextSaleTime: null,
       scriptedGiantUsed: false,
       scriptedGoldenUsed: false,
       nearMiss: null,
@@ -143,7 +148,7 @@ describe('timestamp-derived plant growth', () => {
       stage: 'Seed',
       progress: 0,
     });
-    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'scriptedGoldenUsed', 'plantCount', 'badLuck', 'discoveries', 'rewardsPaid', 'owned', 'fertiliser', 'xp', 'plots']);
+    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'scriptedGoldenUsed', 'plantCount', 'badLuck', 'discoveries', 'rewardsPaid', 'owned', 'fertiliser', 'xp', 'crate', 'sellingSince', 'plots']);
     expect(Object.keys(planted.state.plots[0]!.plant!)).toEqual(['speciesId', 'plantedAt', 'size', 'mutationSeed']);
 
     const half = step(planted.state, [], 4_100);

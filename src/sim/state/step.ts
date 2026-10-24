@@ -5,6 +5,7 @@ import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
 import { evaluateMature } from '../plants/mutate';
 import { buy, waterAll } from '../plants/shop';
+import { levelForXp, SPECIES } from '../content/species';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -20,12 +21,24 @@ export function step(
 ): StepResult {
   assertTimestamp(nowMs);
   const effectiveNowMs = Math.max(state.lastNowMs, nowMs);
-  const events: StepResult['events'][number][] = [
-    ...collectGrowthEvents(state, state.lastNowMs, effectiveNowMs),
-  ];
+  const events: StepResult['events'][number][] = [...collectGrowthEvents(state, state.lastNowMs, effectiveNowMs)];
   let nextState = effectiveNowMs === state.lastNowMs
     ? state
     : { ...state, lastNowMs: effectiveNowMs };
+  if (nextState.sellingSince !== null && nextState.crate.length) {
+    const sales = Math.min(nextState.crate.length, Math.floor((effectiveNowMs - nextState.sellingSince) / 1_200));
+    if (sales) {
+      const crate = nextState.crate.slice(sales);
+      const sold = nextState.crate.slice(0, sales);
+      const coins = nextState.coins + sold.reduce((sum, fruit) => sum + fruit.value, 0);
+      const xp = nextState.xp + sold.reduce((sum, fruit) => sum + fruit.xp, 0);
+      for (const fruit of sold) events.push({ type: 'FruitSold', value: fruit.value, speciesId: fruit.speciesId, mutations: fruit.mutations });
+      nextState = { ...nextState, crate, coins, xp, sellingSince: crate.length ? nextState.sellingSince + sales * 1_200 : null };
+      for (let level = levelForXp(state.xp) + 1; level <= levelForXp(nextState.xp); level += 1) {
+        events.push({ type: 'LevelUp', level, unlocked: SPECIES.filter((entry) => entry.unlockLevel === level).map(({ id }) => id) });
+      }
+    }
+  }
 
   if (commands.some((command) => command.type === 'Harvest')) {
     const mature = evaluateMature(nextState, effectiveNowMs);
@@ -34,7 +47,9 @@ export function step(
   }
 
   for (const command of commands) {
-    const result = command.type === 'Plant'
+    const result = command.type === 'StartSelling'
+      ? { state: nextState.crate.length ? { ...nextState, sellingSince: nextState.sellingSince ?? effectiveNowMs } : nextState, events: [] }
+      : command.type === 'Plant'
       ? plant(nextState, command, effectiveNowMs)
       : command.type === 'Water'
         ? water(nextState, command, effectiveNowMs)

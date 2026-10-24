@@ -49,11 +49,18 @@ describe('save codec', () => {
     }
   });
 
-  it('migrates schema 2 saves into the shop fields in schema 3', () => {
+  it('migrates schema 2 saves through the shop and crate fields', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-2.json', 'utf8'));
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
-    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 3, owned: [], fertiliser: 0, plantCount: 1 });
+    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 4, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null });
+  });
+
+  it('migrates the previous schema fixture to an empty, idle crate', () => {
+    const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-3.json', 'utf8'));
+    const decoded = decodeSave(fixture);
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 4, crate: [], sellingSince: null });
   });
 });
 

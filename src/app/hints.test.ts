@@ -13,7 +13,7 @@ describe('first-minute hints', () => {
     const two = step(step(ripe, [{ type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' }], 8_000).state, [], 16_000).state;
     expect(hintFor(getSnapshot(two), 'sunny-sprout')).toBe('Swipe across ripe plants to harvest.');
     const harvested = step(two, [{ type: 'Harvest', plotIds: ['plot-0', 'plot-1'] }], 16_000).state;
-    expect(hintFor(getSnapshot(harvested), 'sunny-sprout')).toBe('Plant an empty plot.');
+    expect(hintFor(getSnapshot(harvested), 'sunny-sprout')).toBe('Tap a plot to plant.');
   });
 
   it('keeps a standing goal once every seed is unlocked', () => {

@@ -45,6 +45,7 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
       return { ...entry, plant: { ...plant, mutationSeed: 0xffff_ffff, ...(plant.boostMs === undefined ? {} : { waterCount: 1 }) } };
     }) : state.plots,
   }),
+  3: (state) => ({ ...state, schema: 4, crate: [], sellingSince: null }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
@@ -58,6 +59,16 @@ export function validateState(value: unknown): value is GardenState {
   if (state.schema !== SIM_SCHEMA_VERSION || !isCount(state.coins) || !isCount(state.lastNowMs)) return false;
   if (!Number.isInteger(state.rngState) || (state.rngState as number) < 0 || (state.rngState as number) > 0xffff_ffff) return false;
   if (!isCount(state.xp)) return false;
+  const validFruit = (fruit: unknown): boolean => {
+    if (!fruit || typeof fruit !== 'object') return false;
+    const item = fruit as Record<string, unknown>;
+    const traits: TraitId[] = ['giant', 'golden', 'glowing', 'crystal', 'rainbow'];
+    return SPECIES_IDS.has(item.speciesId as string) && SIZES.has(item.size as string)
+      && isCount(item.value) && isCount(item.xp) && Array.isArray(item.mutations)
+      && new Set(item.mutations).size === item.mutations.length && item.mutations.every((trait) => traits.includes(trait as TraitId));
+  };
+  if (!Array.isArray(state.crate) || state.crate.length > 12 || !state.crate.every(validFruit)
+    || !(state.sellingSince === null || (isCount(state.sellingSince) && state.sellingSince <= (state.lastNowMs as number)))) return false;
   if (!Number.isInteger(state.mutationRngState) || (state.mutationRngState as number) < 0 || (state.mutationRngState as number) > 0xffff_ffff) return false;
   if (!isCount(state.plantCount) || !isCount(state.fertiliser) || !Array.isArray(state.owned) || !state.owned.every((item) => ['plot-6', 'plot-7', 'big-can', 'lucky-charm'].includes(item as string)) || new Set(state.owned).size !== state.owned.length || typeof state.scriptedGiantUsed !== 'boolean' || typeof state.scriptedGoldenUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string')) return false;
   const traits: TraitId[] = ['giant', 'golden', 'glowing', 'crystal', 'rainbow'];

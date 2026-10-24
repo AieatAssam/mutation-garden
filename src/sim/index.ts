@@ -10,6 +10,7 @@ export { getSnapshot } from './state/snapshot';
 export { getGrowthView } from './plants/growth';
 export type {
   Command,
+  Fruit,
   GardenState,
   GardenSnapshot,
   GrowthView,

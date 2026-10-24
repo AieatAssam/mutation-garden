@@ -58,10 +58,15 @@ export interface GardenSnapshot {
   readonly nearMiss?: string | null;
   readonly owned?: readonly ShopItemId[];
   readonly fertiliser?: number;
+  readonly crate?: readonly Fruit[];
+  readonly crateCount?: number;
+  readonly crateCapacity?: 12;
+  readonly selling?: boolean;
+  readonly nextSaleTime?: number | null;
 }
 
 export interface GardenState {
-  readonly schema: 3;
+  readonly schema: 4;
   readonly coins: number;
   readonly lastNowMs: number;
   readonly rngState: number;
@@ -76,15 +81,20 @@ export interface GardenState {
   readonly fertiliser: number;
   /** Garden XP; the level is derived from it (design.md 4.4). */
   readonly xp: number;
+  readonly crate: readonly Fruit[];
+  readonly sellingSince: number | null;
   readonly plots: readonly PlotState[];
 }
+
+export interface Fruit { readonly speciesId: SpeciesId; readonly size: YieldSize; readonly mutations: readonly TraitId[]; readonly value: number; readonly xp: number }
 
 export type Command =
   | { readonly type: 'Plant'; readonly plotId: PlotId; readonly seedId: SpeciesId }
   | { readonly type: 'Harvest'; readonly plotIds: readonly PlotId[] }
   | { readonly type: 'Water'; readonly plotId: PlotId }
   | { readonly type: 'WaterAll' }
-  | { readonly type: 'Buy'; readonly item: ShopItemId };
+  | { readonly type: 'Buy'; readonly item: ShopItemId }
+  | { readonly type: 'StartSelling' };
 
 export type RejectionReason =
   | 'unknown-plot'
@@ -97,7 +107,8 @@ export type RejectionReason =
   | 'too-early'
   | 'already-watered'
   | 'locked'
-  | 'owned';
+  | 'owned'
+  | 'crate-full';
 
 export type SimEvent =
   | { readonly type: 'Planted'; readonly plotId: PlotId; readonly speciesId: SpeciesId }
@@ -121,7 +132,7 @@ export type SimEvent =
   | {
       readonly type: 'HarvestCompleted';
       readonly count: number;
-      /** Total paid, including the combo bonus. */
+      /** Always zero: fruit is paid when sold. */
       readonly coins: number;
       readonly comboBonus: number;
     }
@@ -129,6 +140,7 @@ export type SimEvent =
   | { readonly type: 'Watered'; readonly plotId: PlotId }
   | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean; readonly bonusCoins: number }
   | { readonly type: 'Bought'; readonly item: ShopItemId }
+  | { readonly type: 'FruitSold'; readonly value: number; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[] }
   | { readonly type: 'LevelUp'; readonly level: number; readonly unlocked: readonly SpeciesId[] }
   | {
       readonly type: 'CommandRejected';

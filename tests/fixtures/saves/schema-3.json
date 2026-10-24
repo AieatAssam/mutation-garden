@@ -1,0 +1,61 @@
+{
+  "schema": 3,
+  "savedAt": 10000,
+  "appVersion": "fixture",
+  "checksum": "d92f6dec",
+  "state": {
+    "schema": 3,
+    "coins": 8,
+    "lastNowMs": 10000,
+    "rngState": 123,
+    "xp": 0,
+    "plots": [
+      {
+        "id": "plot-0",
+        "plant": {
+          "speciesId": "twistroot",
+          "plantedAt": 10000,
+          "size": "regular",
+          "boostMs": 3000,
+          "mutationSeed": 4294967295,
+          "waterCount": 1
+        }
+      },
+      {
+        "id": "plot-1",
+        "plant": null
+      },
+      {
+        "id": "plot-2",
+        "plant": null
+      },
+      {
+        "id": "plot-3",
+        "plant": null
+      },
+      {
+        "id": "plot-4",
+        "plant": null
+      },
+      {
+        "id": "plot-5",
+        "plant": null
+      }
+    ],
+    "mutationRngState": 0,
+    "scriptedGiantUsed": false,
+    "badLuck": {
+      "giant": 0,
+      "golden": 0,
+      "glowing": 0,
+      "crystal": 0,
+      "rainbow": 0
+    },
+    "discoveries": [],
+    "rewardsPaid": [],
+    "owned": [],
+    "fertiliser": 0,
+    "plantCount": 1,
+    "scriptedGoldenUsed": false
+  }
+}

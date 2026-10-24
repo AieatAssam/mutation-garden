@@ -24,6 +24,11 @@ export function getSnapshot(state: GardenState): GardenSnapshot {
     scriptedGoldenUsed: state.scriptedGoldenUsed,
     owned: state.owned,
     fertiliser: state.fertiliser,
+    crate: state.crate,
+    crateCount: state.crate.length,
+    crateCapacity: 12,
+    selling: state.sellingSince !== null,
+    nextSaleTime: state.sellingSince === null ? null : state.sellingSince + 1_200,
     plots,
     nearMiss: plots.some(({ id, plant }) => plant && plant.stage !== 'Mature' && plant.stage !== 'Harvestable' && goldenNeighbours(state, id) === 1)
       ? 'Plant one more Sunny Sprout beside it for Golden.'

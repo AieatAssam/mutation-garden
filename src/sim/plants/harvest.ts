@@ -1,8 +1,7 @@
-import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
+import { FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
 import { MUTATIONS } from '../content/mutations';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
-import { nextRandom } from '../state/rng';
 
 type HarvestCommand = Extract<Command, { readonly type: 'Harvest' }>;
 
@@ -13,7 +12,6 @@ export function harvest(
   effectiveNowMs: number,
 ): StepResult {
   let nextState = state;
-  let totalCoins = 0;
   let count = 0;
   const events: SimEvent[] = [];
   const seenPlotIds = new Set<string>();
@@ -44,31 +42,25 @@ export function harvest(
       events.push(rejection(plotId, 'not-harvestable'));
       continue;
     }
+    if (nextState.crate.length >= 12) { events.push(rejection(plotId, 'crate-full')); continue; }
 
     const size = plot.plant.size ?? 'regular';
     const ripeAt = growthStart(plot.plant) + species.growthDurationMs;
     const fresh = effectiveNowMs - ripeAt <= FRESH_WINDOW_MS;
     const mutationMultiplier = (plot.plant.mutations ?? []).reduce((product, trait) => product * MUTATIONS[trait].value, 1);
     const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1) * mutationMultiplier;
-    const luckyRoll = nextRandom(nextState.rngState);
-    const lucky = luckyRoll.value < 0.1;
-    const coins = Math.max(1, Math.floor(species.baseValue * multiplier)) * (lucky ? 3 : 1);
+    const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
+    const mutations = plot.plant.mutations ?? [];
+    const fruit = { speciesId: species.id, size, mutations, value: coins, xp: Math.floor(species.baseValue * mutationMultiplier) };
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
-    // XP follows the species' base value, so it never varies with luck (design.md 4.4).
-    nextState = { ...nextState, coins: nextState.coins + coins, xp: nextState.xp + species.baseValue * mutationMultiplier, plots, rngState: luckyRoll.nextState };
-    totalCoins += coins;
+    nextState = { ...nextState, crate: [...nextState.crate, fruit], plots };
     count += 1;
-    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins, size, fresh, lucky,
-      ...((plot.plant.mutations?.length ?? 0) > 0 ? { mutations: plot.plant.mutations } : {}) });
-    if (lucky) events.push({ type: 'LuckyHarvest', plotId });
+    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins: 0, size, fresh, lucky: false,
+      ...(mutations.length ? { mutations } : {}) });
   }
 
-  // A swipe across several ripe plants pays a combo bonus on top (design.md 4.3).
-  const comboBonus = count > 1 ? Math.max(count - 2, Math.floor(totalCoins * Math.min(COMBO_CAP, COMBO_STEP * (count - 1)))) : 0;
-  if (comboBonus > 0) nextState = { ...nextState, coins: nextState.coins + comboBonus };
-  totalCoins += comboBonus;
-  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: totalCoins, comboBonus });
+  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: 0, comboBonus: 0 });
   const levelBefore = levelForXp(state.xp);
   const levelAfter = levelForXp(nextState.xp);
   for (let level = levelBefore + 1; level <= levelAfter; level += 1) {
@@ -79,7 +71,7 @@ export function harvest(
 
 function rejection(
   plotId: string,
-  reason: 'unknown-plot' | 'empty' | 'not-harvestable',
+  reason: 'unknown-plot' | 'empty' | 'not-harvestable' | 'crate-full',
 ): SimEvent {
   return { type: 'CommandRejected', command: 'Harvest', plotId, reason };
 }

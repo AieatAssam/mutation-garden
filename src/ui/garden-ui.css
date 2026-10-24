@@ -67,6 +67,22 @@
   background: var(--mg-ui-coin-face);
 }
 
+.garden-ui__crate-amount {
+  position: absolute;
+  top: var(--garden-safe-top);
+  left: calc(var(--garden-safe-left) + 122px);
+  display: grid;
+  min-height: 48px;
+  place-items: center;
+  padding: 0 12px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 16px;
+  background: var(--mg-ui-panel);
+  box-shadow: 4px 4px 0 var(--mg-ui-misprint);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
 .garden-ui__coin-mark {
   width: 100%;
   height: 100%;
@@ -459,10 +475,10 @@
 }
 
 /* Sits on its own just above the tray, so it never covers a seed card. */
-.garden-ui__harvest-all {
+.garden-ui__harvest-all,
+.garden-ui__sell {
   position: absolute;
   bottom: calc(100% + 46px);
-  right: 14px;
   min-height: 52px;
   padding: 0 16px;
   border: 3px solid var(--mg-ui-border);
@@ -476,6 +492,10 @@
   pointer-events: auto;
   touch-action: manipulation;
 }
+
+.garden-ui__harvest-all { right: 14px; }
+.garden-ui__sell { left: 14px; }
+.garden-ui__sell[hidden] { display: none; }
 
 .garden-ui__harvest-all:active {
   box-shadow: 0 0 0 var(--mg-ui-border);

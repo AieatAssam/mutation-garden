@@ -2,7 +2,7 @@
   "schema": 3,
   "savedAt": 10000,
   "appVersion": "fixture",
-  "checksum": "d92f6dec",
+  "checksum": "f09ccbb7",
   "state": {
     "schema": 3,
     "coins": 8,
@@ -18,7 +18,10 @@
           "size": "regular",
           "boostMs": 3000,
           "mutationSeed": 4294967295,
-          "waterCount": 1
+          "waterCount": 1,
+          "mutations": [
+            "golden"
+          ]
         }
       },
       {

@@ -1,8 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 
 /**
- * Harvest payouts vary with yield size, the fresh bonus and swipe combos (design.md 4.3), so specs
- * check the counter against what the game showed: every "+N" label plus any combo bonus.
+ * Sale values vary with fruit size and mutations, so specs compare the counter with the sold labels.
  */
 export async function expectHarvestPaid(page: Page, act: () => Promise<void>): Promise<{ before: number; after: number; paid: number; payouts: number[]; labels: string[] }> {
   const coins = page.getByRole('status', { name: 'Coins' });
@@ -19,16 +18,6 @@ export async function expectHarvestPaid(page: Page, act: () => Promise<void>): P
             record.__payouts!.push(Number(node.textContent!.match(/^\+(\d+)/)?.[1]));
             record.__payoutLabels!.push(node.textContent!.trim());
           }
-          if (node.classList.contains('mutation-reveal__line') && /^\+\d+ coins first-find bonus$/.test(node.textContent!.trim())) {
-            record.__payouts!.push(Number(node.textContent!.match(/\d+/)![0]));
-          }
-          for (const line of node.querySelectorAll?.('.mutation-reveal__line') ?? []) {
-            if (/^\+\d+ coins first-find bonus$/.test(line.textContent!.trim())) record.__payouts!.push(Number(line.textContent!.match(/\d+/)![0]));
-          }
-          if (node.classList.contains('rewards__combo')) {
-            const bonus = node.querySelector('span')?.textContent;
-            if (bonus) record.__payouts!.push(Number(bonus.replace('+', '')));
-          }
         }
       }
     });
@@ -37,6 +26,18 @@ export async function expectHarvestPaid(page: Page, act: () => Promise<void>): P
     (window as unknown as { __payoutObserver?: MutationObserver }).__payoutObserver = observer;
   });
   await act();
+  const sell = page.getByRole('button', { name: 'Sell', exact: true });
+  await expect(sell).toBeVisible();
+  await sell.click();
+  await expect(page.getByRole('button', { name: 'Selling', exact: true })).toBeVisible();
+  const crateCount = Number((await page.getByRole('status', { name: 'Crate' }).textContent())?.match(/(\d+)\//)?.[1] ?? 1);
+  await page.evaluate((deltaMs) => {
+    const clocks = window as unknown as {
+      __gardenTestClock?: { advance(deltaMs: number): void };
+      __gardenSwipeClock?: { advance(deltaMs: number): void };
+    };
+    (clocks.__gardenTestClock ?? clocks.__gardenSwipeClock)?.advance(deltaMs);
+  }, crateCount * 1_200);
   const read = () => page.evaluate(() => ({
     paid: ((window as unknown as { __payouts?: number[] }).__payouts ?? []).reduce((sum, value) => sum + value, 0),
     shown: Number(document.querySelector('[aria-label="Coins"]')?.textContent?.trim()),

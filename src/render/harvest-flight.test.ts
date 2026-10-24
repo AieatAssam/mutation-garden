@@ -39,4 +39,30 @@ describe('harvest flights', () => {
     expect(flights.activeCount).toBe(0);
     library.dispose();
   });
+
+  it('arcs one authored fruit from the crate to the stall and reuses the capped flight pool', () => {
+    const library = createMaterialLibrary();
+    const flights = createHarvestFlights(() => models, library);
+    const counter = new Vector3(-2.55, 0.92, -1.06);
+    flights.sell('sunny-sprout', CRATE_TOP, counter, 0, false);
+    const fruitGroup = flights.root.children[0]!;
+    flights.update(300);
+    expect(fruitGroup.position.y).toBeGreaterThan(Math.max(CRATE_TOP.y, counter.y));
+    flights.update(700);
+    expect(flights.activeCount).toBe(0);
+    expect(flights.root.children).toHaveLength(0);
+    flights.sell('sunny-sprout', CRATE_TOP, counter, 710, false);
+    expect(flights.root.children[0]).toBe(fruitGroup);
+    library.dispose();
+  });
+
+  it('uses a short fade flight when reduced motion is enabled', () => {
+    const library = createMaterialLibrary();
+    const flights = createHarvestFlights(() => models, library);
+    flights.sell('sunny-sprout', CRATE_TOP, new Vector3(0, 1, 0), 0, true);
+    expect(flights.activeCount).toBe(1);
+    flights.update(300);
+    expect(flights.activeCount).toBe(0);
+    library.dispose();
+  });
 });

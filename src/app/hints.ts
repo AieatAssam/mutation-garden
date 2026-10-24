@@ -7,9 +7,12 @@ export function hintFor(snapshot: GardenSnapshot, selected: SpeciesId): string {
   const ripe = plants.filter((plant) => plant?.stage === 'Harvestable').length;
   const growing = plants.filter((plant) => plant && plant.stage !== 'Harvestable').length;
   const empty = plants.filter((plant) => !plant).length;
+  const crateCount = snapshot.crateCount ?? 0;
+  const crateCapacity = snapshot.crateCapacity ?? 12;
   const owned = snapshot.owned ?? [];
   const seed = SPECIES.find(({ id }) => id === selected)!;
   if (snapshot.xp === 0 && growing === 0 && ripe === 0) return 'Tap a plot to plant.';
+  if (crateCount >= crateCapacity / 2) return `Tap the stall to sell ${crateCount} fruit.`;
   if (ripe > 0 && snapshot.xp < 6) return ripe > 1 ? 'Swipe across ripe plants to harvest.' : 'Tap the ripe plant to harvest.';
   if (growing > 0 && plants.some((plant) => plant && (plant.waterCount ?? 0) === 1)) return 'Water it again to grow a Giant.';
   if (growing > 0 && snapshot.xp < 6) return 'Tap a growing plant to water it.';

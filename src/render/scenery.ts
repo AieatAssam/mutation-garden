@@ -32,6 +32,8 @@ function repairHullNormals(geometry: BufferGeometry): void {
 export interface Scenery extends Group {
   /** Paper clouds, kept apart from the merged island so they can drift. */
   readonly clouds: readonly Group[];
+  /** Authored stall subtree, available for sale animation and picking. */
+  readonly stall: Group | null;
   /** Creature shapes by name ("wing", "leaf"), vertex coloured, for the ambient layer to instance. */
   readonly creatures: ReadonlyMap<string, BufferGeometry>;
   setExpanded(expanded: boolean, nowMs: number, reducedMotion: boolean): void;
@@ -46,6 +48,7 @@ const CLOUD_SPEED = 0.15;
 const CLOUD_SPAN = 28;
 /** Grass tufts and flowers bend this many radians per unit of wind at their tip (m1-liveliness.md 4.1). */
 const GRASS_BEND = 0.15;
+let warnedMissingStall = false;
 
 interface WindUniforms {
   readonly windTime: { value: number };
@@ -124,13 +127,23 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
   };
 
   const cloudRoots: Object3D[] = [];
+  let stallSource: Object3D | null = null;
   const chunkRoots: Object3D[] = [];
   source.traverse((object) => {
     if (/^cloud-\d+$/.test(object.name)) cloudRoots.push(object);
+    if (object.name === 'stall') stallSource = object;
     if (object.name === 'chunk-west') chunkRoots.push(object);
   });
+  if (!stallSource && !warnedMissingStall) {
+    console.warn('Scenery model has no "stall" node; selling interaction is unavailable.');
+    warnedMissingStall = true;
+  }
   const inCloud = (object: Object3D) => {
     for (let parent = object.parent; parent; parent = parent.parent) if (cloudRoots.includes(parent)) return true;
+    return false;
+  };
+  const inStall = (object: Object3D) => {
+    for (let parent = object.parent; parent; parent = parent.parent) if (parent === stallSource) return true;
     return false;
   };
   const inChunk = (object: Object3D) => { for (let parent = object.parent; parent; parent = parent.parent) if (chunkRoots.includes(parent)) return true; return false; };
@@ -155,7 +168,7 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
 
   const printed: BufferGeometry[] = [];
   source.traverse((object) => {
-    if (!(object instanceof Mesh) || inCloud(object) || inChunk(object) || object.name.startsWith('creature-')) return;
+    if (!(object instanceof Mesh) || inCloud(object) || inStall(object) || object === stallSource || inChunk(object) || object.name.startsWith('creature-')) return;
     // glTF strips dots from node names, so hull thickness is in thousandths: outline-60 = 0.06.
     const hull = /^outline-(\d+)$/.exec(object.name);
     if (hull) {
@@ -187,6 +200,36 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     });
     if (geometries.length) { const printed = printedMesh(geometries, false); printed.name = 'chunk-west-printed'; chunk.add(printed); }
     chunk.visible = false; chunks.push(chunk); root.add(chunk);
+  }
+
+  let stall: Group | null = null;
+  const authoredStall = stallSource as Object3D | null;
+  if (authoredStall) {
+    const stallGroup = new Group();
+    stall = stallGroup;
+    stallGroup.name = 'stall';
+    stallGroup.userData.role = 'stall';
+    authoredStall.matrixWorld.decompose(stallGroup.position, stallGroup.quaternion, stallGroup.scale);
+    const inverse = authoredStall.matrixWorld.clone().invert();
+    const geometries: BufferGeometry[] = [];
+    authoredStall.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const local = inverse.clone().multiply(object.matrixWorld);
+      const hull = /^(?:stall-)?outline-(\d+)$/.exec(object.name);
+      if (hull) {
+        const mesh = hullOf(object, local, Number(hull[1]) / 1000);
+        mesh.name = object.name;
+        mesh.userData.role = 'scenery-outline';
+        stallGroup.add(mesh);
+      } else geometries.push(vertexColored(object, local));
+    });
+    if (geometries.length > 0) {
+      const mesh = printedMesh(geometries, false);
+      mesh.name = 'stall-printed';
+      mesh.userData.role = 'stall';
+      stallGroup.add(mesh);
+    }
+    root.add(stallGroup);
   }
   let expandStart = -Infinity; let expanded = false; let expandReduced = false;
   (root as Scenery).setExpanded = (value, nowMs, reducedMotion) => {
@@ -233,7 +276,7 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     clouds.push(cloud);
     root.add(cloud);
   }
-  Object.assign(root, { clouds, creatures });
+  Object.assign(root, { clouds, creatures, stall });
 
   root.update = (nowMs, reducedMotion) => {
     windUniforms.windAmount.value = reducedMotion ? 0 : 1;

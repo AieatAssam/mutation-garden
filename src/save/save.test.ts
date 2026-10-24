@@ -56,11 +56,14 @@ describe('save codec', () => {
     if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 4, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null });
   });
 
-  it('migrates the previous schema fixture to an empty, idle crate', () => {
+  it('migrates the M2 schema 3 fixture with mutations to an empty, idle crate', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-3.json', 'utf8'));
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
-    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 4, crate: [], sellingSince: null });
+    if (decoded.ok) {
+      expect(decoded.state).toMatchObject({ schema: 4, crate: [], sellingSince: null });
+      expect(decoded.state.plots[0]?.plant).toMatchObject({ mutations: ['golden'] });
+    }
   });
 });
 

@@ -4,6 +4,8 @@ export type InputIntent = {
   readonly type: 'ActivatePlot';
   readonly plotId: PlotId;
 } | {
+  readonly type: 'Sell';
+} | {
   readonly type: 'HarvestPlots';
   readonly plotIds: readonly PlotId[];
 } | {

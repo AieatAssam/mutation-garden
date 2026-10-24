@@ -19,6 +19,7 @@ export interface GardenUIOptions {
   readonly onToggleSound?: () => void;
   readonly onToggleMusic?: () => void;
   readonly onHarvestAll?: () => void;
+  readonly onSell?: () => void;
   readonly onBuy?: (item: ShopItemId) => void;
   readonly onWaterAll?: () => void;
 }
@@ -38,6 +39,9 @@ export interface GardenUIUpdate {
   readonly ripeCount?: number;
   readonly owned?: readonly ShopItemId[];
   readonly fertiliser?: number;
+  readonly crateCount?: number;
+  readonly crateCapacity?: number;
+  readonly selling?: boolean;
 }
 
 export interface GardenUI {
@@ -49,6 +53,7 @@ export interface GardenUI {
   hideAway(): void;
   /** Nudges the coin chip when a seed costs more than the player has. */
   noCoins(reducedMotion: boolean): void;
+  crateFull(reducedMotion: boolean): void;
   dispose(): void;
 }
 
@@ -99,6 +104,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   coinToken.append(coinMark);
   const coinAmount = document.createElement('span');
   coinAmount.className = 'garden-ui__coin-amount';
+  const crateAmount = document.createElement('span');
+  crateAmount.className = 'garden-ui__crate-amount';
+  crateAmount.setAttribute('role', 'status');
+  crateAmount.setAttribute('aria-label', 'Crate');
   coinStatus.append(coinToken, coinAmount);
 
   // Top card: level, progress and the current objective (brief section 8; prototype title card).
@@ -171,6 +180,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   harvestAll.className = 'garden-ui__harvest-all';
   harvestAll.hidden = true;
   harvestAll.addEventListener('click', () => options.onHarvestAll?.());
+  const sell = document.createElement('button');
+  sell.type = 'button';
+  sell.className = 'garden-ui__sell';
+  sell.addEventListener('click', () => options.onSell?.());
 
   const seedTray = document.createElement('nav');
   seedTray.className = 'garden-ui__tray';
@@ -226,8 +239,8 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     away.hidden = true;
   });
 
-  overlay.append(coinStatus, levelBadge, toggles, hint, stamp, away, seedTray);
-  seedTray.append(harvestAll);
+  overlay.append(coinStatus, crateAmount, levelBadge, toggles, hint, stamp, away, seedTray);
+  seedTray.append(harvestAll, sell);
   // Main actions live in the bottom third (AGENTS.md): Shop is a tab on the seed tray.
   seedTray.append(shopButton);
   container.append(overlay);
@@ -271,6 +284,12 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     // Objectives fit one line; rare long notices (saves) wrap so nothing is cut off.
     hint.classList.toggle('is-long', (state.hint ?? '').length > 40);
     const ripe = state.ripeCount ?? 0;
+    const crateCount = state.crateCount ?? 0;
+    const crateCapacity = state.crateCapacity ?? 12;
+    crateAmount.textContent = `${crateCount >= crateCapacity ? '▣ ' : ''}${crateCount}/${crateCapacity}`;
+    sell.hidden = crateCount === 0 || !options.onSell;
+    sell.disabled = crateCount === 0;
+    sell.textContent = state.selling ? 'Selling' : 'Sell';
     harvestAll.hidden = ripe < 2 || !options.onHarvestAll;
     harvestAll.textContent = `Harvest all ${ripe}`;
     soundButton.setAttribute('aria-pressed', String(state.sound ?? true));
@@ -343,6 +362,17 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       coinStatus.classList.remove('is-short', 'is-short-still');
       void coinStatus.offsetWidth;
       coinStatus.classList.add(reducedMotion ? 'is-short-still' : 'is-short');
+    },
+    crateFull(reducedMotion) {
+      crateAmount.classList.remove('is-shaking');
+      if (reducedMotion) return;
+      void crateAmount.offsetWidth;
+      crateAmount.classList.add('is-shaking');
+      crateAmount.animate([
+        { transform: 'translateX(0)' }, { transform: 'translateX(-5px)', offset: 0.15 },
+        { transform: 'translateX(5px)', offset: 0.3 }, { transform: 'translateX(-4px)', offset: 0.5 },
+        { transform: 'translateX(2px)', offset: 0.75 }, { transform: 'translateX(0)' },
+      ], { duration: 300, easing: 'ease-out' }).onfinish = () => crateAmount.classList.remove('is-shaking');
     },
     hideAway() {
       away.hidden = true;

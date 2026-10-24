@@ -5,6 +5,7 @@ import { createSwipePathCollector, type SwipeCanvasBounds, type SwipePathCollect
 export type PickResult =
   | { readonly kind: 'plot'; readonly plotId: PlotId }
   | { readonly kind: 'ground' }
+  | { readonly kind: 'stall' }
   | null;
 
 export const POINTER_TAP_MOVE_THRESHOLD_CSS_PX = 10;
@@ -13,7 +14,7 @@ type PointerTrack = {
   readonly pointerId: number;
   readonly pointerType: string;
   readonly origin: 'canvas' | 'outside';
-  readonly startKind: 'plot' | 'ground' | 'miss' | 'ui';
+  readonly startKind: 'plot' | 'ground' | 'stall' | 'miss' | 'ui';
   readonly plotId: PlotId | null;
   x: number;
   y: number;
@@ -211,6 +212,8 @@ export function createPointerInput(
           if (plotIds.length > 0) intent = { type: 'HarvestPlots', plotIds };
         } else if (!gesture.swiping && gesture.plotId !== null) {
           intent = { type: 'ActivatePlot', plotId: gesture.plotId };
+        } else if (!gesture.swiping && gesture.startKind === 'stall') {
+          intent = { type: 'Sell' };
         }
       }
       gesture = null;

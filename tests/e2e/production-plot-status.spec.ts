@@ -77,14 +77,20 @@ async function findEmptyGroundPair(
   // These world points lie on the production ground ellipse; screen-space canvas
   // ownership alone also includes sky and cannot establish an eligible pinch.
   const worldPoints = [-3, -2.5, -2, -1, 0, 1, 2, 2.5, 3].flatMap((x) =>
-    [-2.5, -2, -1, 0, 1, 2, 2.5].filter((z) => (x * x + z * z) < 3.3 ** 2).map((z) => ({ x, z })));
+    [-2.5, -2, -1, 0, 1, 2, 2.5].filter((z) => (x * x + z * z) < 3.3 ** 2
+      && (x + 2.55) ** 2 + (z + 1.3) ** 2 > 1.15 ** 2).map((z) => ({ x, z })));
   const candidates = worldPoints.map(({ x, z }) => projectGround(stage, z, camera, x));
+  const stallCenter = projectGround(stage, -1.3, camera, -2.55);
+  const bedClearances = worldPoints.map(({ x, z }) => Math.min(...[-1.05, 1.05].flatMap((plotX) =>
+    [-2, 0, 2].map((plotZ) => Math.hypot(x - plotX, z - plotZ)))));
   const canvasOwned = await page.evaluate((points) => {
     const canvas = document.querySelector('#stage');
     return points.map(({ x, y }) => document.elementFromPoint(x, y) === canvas);
   }, candidates);
   const clearances = candidates.map((point) => Math.min(...plots.map((plot) => distance(point, plot))));
   const emptyGround = candidates.filter((point, index) => canvasOwned[index] && clearances[index]! > 48
+    && bedClearances[index]! > 1.25
+    && distance(point, stallCenter) > 110
     && point.x - 32 > stage.x && point.x + 32 < stage.x + stage.width
     && point.y - 32 > stage.y && point.y + 32 < stage.y + stage.height);
   const pairs: [Point, Point][] = [];

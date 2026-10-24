@@ -10,11 +10,10 @@ export interface RewardLayer {
 export interface RewardLayerOptions {
   /** Screen point above a plot, or null when it is off screen. */
   readonly projectPlot: (plotId: PlotId) => { x: number; y: number } | null;
+  readonly projectStall: () => { x: number; y: number } | null;
   /** The coin counter the flying coins head for. */
   readonly coinTarget: () => HTMLElement | null;
 }
-
-const MAX_FLYING_COINS = 8;
 
 /** DOM overlay for rewards: it only reacts to sim events and never decides them. */
 export function createRewardLayer(container: HTMLElement, options: RewardLayerOptions): RewardLayer {
@@ -22,8 +21,8 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
   layer.className = 'rewards';
   layer.setAttribute('aria-hidden', 'true');
   container.append(layer);
-  let flying = 0;
   const luckyPool: { coin: HTMLSpanElement; active: boolean }[] = [];
+  const saleCoins: { coin: HTMLSpanElement; active: boolean }[] = [];
 
   function floatLabel(text: string, x: number, y: number, kind: string, reducedMotion: boolean): void {
     const label = document.createElement('span');
@@ -43,36 +42,6 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
     animation.onfinish = () => label.remove();
   }
 
-  function flyCoins(count: number, x: number, y: number, reducedMotion: boolean): void {
-    const target = options.coinTarget()?.getBoundingClientRect();
-    if (!target || reducedMotion) {
-      bumpCounter(reducedMotion);
-      return;
-    }
-    const tx = target.left + 26;
-    const ty = target.top + target.height / 2;
-    for (let index = 0; index < Math.min(count, 5); index += 1) {
-      if (flying >= MAX_FLYING_COINS) break;
-      flying += 1;
-      const coin = document.createElement('span');
-      coin.className = 'rewards__coin';
-      coin.style.left = `${x}px`;
-      coin.style.top = `${y}px`;
-      layer.append(coin);
-      const spread = (index - (Math.min(count, 5) - 1) / 2) * 16;
-      const animation = coin.animate([
-        { transform: 'translate(-50%, -50%) scale(0.4) rotateY(0deg)' },
-        { transform: `translate(calc(-50% + ${spread}px), calc(-50% - 46px)) scale(1.1) rotateY(180deg)`, offset: 0.3 },
-        { transform: `translate(calc(-50% + ${tx - x}px), calc(-50% + ${ty - y}px)) scale(0.7) rotateY(360deg)` },
-      ], { duration: 620, delay: 120 + index * 45, easing: 'cubic-bezier(0.5, 0, 0.7, 1)', fill: 'backwards' });
-      animation.onfinish = () => {
-        coin.remove();
-        flying -= 1;
-        bumpCounter(false);
-      };
-    }
-  }
-
   function bumpCounter(reducedMotion: boolean): void {
     if (reducedMotion) return;
     options.coinTarget()?.animate([
@@ -83,16 +52,16 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
   return {
     onEvents(events, reducedMotion) {
       for (const event of events) {
-        if (event.type === 'Harvested') {
+        if (event.type === 'CommandRejected' && event.reason === 'crate-full') {
+          const point = options.projectPlot(event.plotId);
+          if (point) floatLabel('▣', point.x, point.y - 54, 'note', reducedMotion);
+        } else if (event.type === 'Harvested') {
           const point = options.projectPlot(event.plotId);
           if (!point) continue;
           // Labels sit above the plant so the fruit's flight to the crate stays visible.
-          const mutations = event.mutations ?? [];
-          const label = mutations.length ? `+${event.coins} ${mutations.map((id) => `${id[0]!.toUpperCase()}${id.slice(1)}`).join(' + ')} x${mutations.reduce((v, id) => v * ({ giant: 2, golden: 4, glowing: 3, crystal: 6, rainbow: 10 } as const)[id], 1)}` : `+${event.coins}`;
-          floatLabel(label, point.x, point.y - 44, 'coins', reducedMotion);
+          floatLabel('Crated', point.x, point.y - 44, 'note', reducedMotion);
           const note = event.size === 'big' ? 'Big' : event.fresh ? 'Fresh' : null;
           if (note) floatLabel(note, point.x, point.y - 74, 'note', reducedMotion);
-          flyCoins(event.coins, point.x, point.y, reducedMotion);
           if (event.lucky) {
             if (reducedMotion) floatLabel('Lucky!', point.x, point.y - 98, 'note', true);
             else for (let i = 0; i < 12; i += 1) {
@@ -119,6 +88,32 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
               animation.onfinish = () => { animation.cancel(); coin.style.opacity = '0'; pooled.active = false; };
             }
           }
+        } else if (event.type === 'FruitSold') {
+          if (!reducedMotion) {
+            const start = options.projectStall();
+            const target = options.coinTarget()?.getBoundingClientRect();
+            if (start && target) {
+              let pooled = saleCoins.find(({ active }) => !active);
+              if (!pooled && saleCoins.length < 8) {
+                const coin = document.createElement('span'); coin.className = 'rewards__coin';
+                layer.append(coin); pooled = { coin, active: false }; saleCoins.push(pooled);
+              }
+              if (pooled) {
+                pooled.active = true;
+                const coin = pooled.coin;
+                coin.style.left = `${start.x}px`; coin.style.top = `${start.y}px`; coin.style.opacity = '1';
+                const animation = coin.animate([
+                  { transform: 'translate(-50%, -50%) scale(.65)', opacity: 0 },
+                  { transform: 'translate(-50%, -85%) scale(1.1)', opacity: 1, offset: 0.2 },
+                  { transform: `translate(${target.left + target.width / 2 - start.x}px, ${target.top + target.height / 2 - start.y}px) scale(.45)`, opacity: 0 },
+                ], { duration: 600, delay: 500, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)', fill: 'both' });
+                animation.onfinish = () => { animation.cancel(); coin.style.opacity = '0'; pooled!.active = false; };
+              }
+            }
+          }
+          const target = options.coinTarget()?.getBoundingClientRect();
+          if (target) floatLabel(`+${event.value} coins`, target.left + target.width / 2, target.top, 'coins', reducedMotion);
+          bumpCounter(reducedMotion);
         } else if (event.type === 'HarvestCompleted' && event.count > 1) {
           const banner = document.createElement('div');
           banner.className = 'rewards__combo';

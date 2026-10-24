@@ -140,10 +140,8 @@ test('Sunny harvest blocks a cross-tick repeat before allowing replant', async (
   await waitUntilTimestamp(page, plantedAt + 8_500);
   await page.evaluate(() => { delete document.body.dataset.plotPointerUpTimes; });
 
-  const harvest = await expectHarvestPaid(page, () => activatePlot(page, plot, mobile));
-  // A fresh regular Sunny Sprout pays 2; yield size can make it 1 or 3.
-  expect(harvest.paid).toBeGreaterThanOrEqual(1);
-  expect(harvest.paid).toBeLessThanOrEqual(3);
+  await activatePlot(page, plot, mobile);
+  await expect(page.getByRole('status', { name: 'Crate' })).toHaveText('1/12');
   const repeatTickAt = await page.evaluate(() => performance.now());
   await activatePlot(page, plot, mobile);
   const repeatTap = await page.evaluate(() => {
@@ -154,14 +152,14 @@ test('Sunny harvest blocks a cross-tick repeat before allowing replant', async (
   // The real repeat tap starts from the first rendered empty-plot frame inside the guard window.
   expect(repeatTap.repeatAt - repeatTap.harvestAt).toBeGreaterThanOrEqual(0);
   expect(repeatTap.repeatAt - repeatTap.harvestAt).toBeLessThan(PLOT_ACTIVATION_GUARD_MS);
-  await expect(coins).toHaveText(String(harvest.after));
+  await expect(coins).toHaveText('11');
   await waitForSimTick(page, repeatTickAt);
-  await expect(coins).toHaveText(String(harvest.after));
+  await expect(coins).toHaveText('11');
 
   // At the guard boundary, a deliberate tap on the empty plot plants again and spends one coin.
   await waitUntilTimestampIsRendered(page, repeatTap.harvestAt + PLOT_ACTIVATION_GUARD_MS);
   await activatePlot(page, plot, mobile);
-  await expect(coins).toHaveText(String(harvest.after - 1));
+  await expect(coins).toHaveText('10');
   const elapsedMs = await page.evaluate(() => Date.now()) - startedAt;
   expect(elapsedMs).toBeLessThan(30_000);
   expect(errors).toEqual([]);

@@ -8,7 +8,7 @@ import { encodeSave } from '../../src/save/codec';
  * keep whatever the spec did.
  */
 export async function startWithSave(page: Page, xp = 25, options: {
-  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number;
+  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; crateCount?: number; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number;
 } = {}): Promise<void> {
   const initial = createInitialState(options.seed ?? 20261022, 0, { xp });
   const plots = initial.plots.map((plot) => {
@@ -20,7 +20,8 @@ export async function startWithSave(page: Page, xp = 25, options: {
         size: 'regular' as const, mutationSeed: 11, mutations: [] } };
     return plot;
   });
-  const envelope = encodeSave({ ...initial, coins: options.coins ?? initial.coins, plots, mutationRngState: options.mutationRngState ?? 2, plantCount: options.plantCount ?? 100, scriptedGiantUsed: options.scriptedGiantUsed ?? true, scriptedGoldenUsed: options.scriptedGoldenUsed ?? true }, options.savedAt ?? 0, 'e2e');
+  const crate = Array.from({ length: options.crateCount ?? 0 }, () => ({ speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 1, xp: 1 }));
+  const envelope = encodeSave({ ...initial, coins: options.coins ?? initial.coins, plots, crate, mutationRngState: options.mutationRngState ?? 2, plantCount: options.plantCount ?? 100, scriptedGiantUsed: options.scriptedGiantUsed ?? true, scriptedGoldenUsed: options.scriptedGoldenUsed ?? true }, options.savedAt ?? 0, 'e2e');
   await page.addInitScript((save) => {
     const injected = 'mutation-garden-e2e-save-injected';
     if (sessionStorage.getItem(injected)) return;

@@ -62,6 +62,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     onToggleSound: () => changeSettings({ ...settings, sound: !settings.sound }),
     onToggleMusic: () => changeSettings({ ...settings, music: !settings.music }),
     onHarvestAll: () => harvestAll(),
+    onSell: () => uiCommand({ type: 'StartSelling' }),
     onBuy: (item) => uiCommand({ type: 'Buy', item }),
     onWaterAll: () => uiCommand({ type: 'WaterAll' }),
   });
@@ -94,6 +95,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       ripeCount: snapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').length,
       owned: snapshot.owned ?? [],
       fertiliser: snapshot.fertiliser ?? 0,
+      crateCount: snapshot.crateCount ?? 0,
+      crateCapacity: snapshot.crateCapacity ?? 12,
+      selling: snapshot.selling ?? false,
     });
   };
   let changeSettings: (next: Settings) => void = (next) => { settings = next; };
@@ -126,6 +130,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     reducedMotion = motion.matches;
     const rewards = createRewardLayer(uiRoot, {
       projectPlot: r.projectPlot,
+      projectStall: r.projectStall,
       coinTarget: () => uiRoot.querySelector<HTMLElement>('.garden-ui__coins'),
     });
     const mutationReveal = createMutationReveal(uiRoot, r.projectPlot);
@@ -155,6 +160,10 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           }
           if (event.type === 'Harvested') gardenUI.hideAway();
           if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
+          if (event.type === 'CommandRejected' && event.reason === 'crate-full') {
+            gardenUI.crateFull(motion.matches);
+            showNotice('Crate full. Sell fruit at the stall to make room.', 3_000);
+          }
         }
         r.onEvents(events, motion.matches);
         if (!motion.matches && events.some((event) => event.type === 'HarvestCompleted' && event.count >= 3)) r.nudge?.();
@@ -179,6 +188,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           return;
         case 'PanCamera':
           r.pan(intent.deltaXCss, intent.deltaYCss);
+          return;
+        case 'Sell':
+          act({ type: 'StartSelling' });
           return;
         case 'ActivatePlot': {
           const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
@@ -271,7 +283,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         });
       };
       scheduleSave = (events) => {
-        if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered')) return;
+        if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered' || type === 'FruitSold')) return;
         clearTimeout(pending);
         pending = setTimeout(saveNow, 800) as unknown as number;
       };

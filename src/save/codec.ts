@@ -1,4 +1,4 @@
-import { levelForXp, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
+import { crateCapacity, levelForXp, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
 import type { GardenState, TraitId } from '../sim';
 
 /** The stored and exported save format (docs/architecture.md, Saves). Keep it stable. */
@@ -52,6 +52,7 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
 const SIZES = new Set(['small', 'regular', 'big']);
+const SHOP_ITEM_IDS = new Set(['plot-6', 'plot-7', 'big-can', 'lucky-charm', 'quick-counter-1', 'quick-counter-2', 'quick-counter-3', 'crate-1', 'crate-2', 'second-counter', 'fresh-produce']);
 const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
 /** Structural check of a migrated state; anything unexpected is rejected rather than half-loaded. */
@@ -69,10 +70,12 @@ export function validateState(value: unknown): value is GardenState {
       && isCount(item.value) && isCount(item.xp) && Array.isArray(item.mutations)
       && new Set(item.mutations).size === item.mutations.length && item.mutations.every((trait) => traits.includes(trait as TraitId));
   };
-  if (!Array.isArray(state.crate) || state.crate.length > 12 || !state.crate.every(validFruit)
+  if (!Array.isArray(state.owned) || !state.owned.every((item) => SHOP_ITEM_IDS.has(item as string))
+    || new Set(state.owned).size !== state.owned.length) return false;
+  if (!Array.isArray(state.crate) || state.crate.length > crateCapacity(state.owned as GardenState['owned']) || !state.crate.every(validFruit)
     || !(state.sellingSince === null || (isCount(state.sellingSince) && state.sellingSince <= (state.lastNowMs as number)))) return false;
   if (!Number.isInteger(state.mutationRngState) || (state.mutationRngState as number) < 0 || (state.mutationRngState as number) > 0xffff_ffff) return false;
-  if (!isCount(state.plantCount) || !isCount(state.fertiliser) || !Array.isArray(state.owned) || !state.owned.every((item) => ['plot-6', 'plot-7', 'big-can', 'lucky-charm'].includes(item as string)) || new Set(state.owned).size !== state.owned.length || typeof state.scriptedGiantUsed !== 'boolean' || typeof state.scriptedGoldenUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string') || !Array.isArray(state.crystalReadyPlots) || !state.crystalReadyPlots.every((id) => typeof id === 'string') || new Set(state.crystalReadyPlots).size !== state.crystalReadyPlots.length || !Array.isArray(state.rainbowPlots) || !state.rainbowPlots.every((id) => typeof id === 'string') || new Set(state.rainbowPlots).size !== state.rainbowPlots.length) return false;
+  if (!isCount(state.plantCount) || !isCount(state.fertiliser) || typeof state.scriptedGiantUsed !== 'boolean' || typeof state.scriptedGoldenUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string') || !Array.isArray(state.crystalReadyPlots) || !state.crystalReadyPlots.every((id) => typeof id === 'string') || new Set(state.crystalReadyPlots).size !== state.crystalReadyPlots.length || !Array.isArray(state.rainbowPlots) || !state.rainbowPlots.every((id) => typeof id === 'string') || new Set(state.rainbowPlots).size !== state.rainbowPlots.length) return false;
   if (!state.order || typeof state.order !== 'object' || Array.isArray(state.order)) return false;
   const order = state.order as Record<string, unknown>;
   if (Object.keys(order).sort().join(',') !== 'index,progress' || !isCount(order.index) || !isCount(order.progress) || order.index >= ORDER_DECK.length) return false;

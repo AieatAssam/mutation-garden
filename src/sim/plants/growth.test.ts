@@ -130,6 +130,7 @@ describe('timestamp-derived plant growth', () => {
       crate: [],
       crateCount: 0,
       crateCapacity: 12,
+      saleIntervalMs: 1_200,
       discoveries: [],
       rewardsPaid: [],
       order: { title: 'Sell 3 Sunny Sprouts', progress: 0, target: 3, rewardCoins: 6, rewardXp: 10 },

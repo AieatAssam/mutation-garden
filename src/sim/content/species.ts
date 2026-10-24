@@ -73,9 +73,27 @@ export const INITIAL_COINS = 12;
 /** Total XP needed to reach level 2, 3, ... (design.md 4.4); after the table each level costs 200 more. */
 export const LEVEL_XP = [500, 900, 2_500, 3_500, 4_900, 6_500, 8_300, 10_300] as const;
 
-export const SHOP_PRICES = { 'plot-6': 80, 'plot-7': 220, 'big-can': 90, fertiliser: 30, 'lucky-charm': 300 } as const;
+export const SHOP_PRICES = { 'plot-6': 80, 'plot-7': 220, 'big-can': 90, fertiliser: 30, 'lucky-charm': 300, 'quick-counter-1': 45, 'quick-counter-2': 180, 'quick-counter-3': 600, 'crate-1': 70, 'crate-2': 300, 'second-counter': 350, 'fresh-produce': 160 } as const;
 export const CRATE_CAPACITY = 12;
 export const SELL_INTERVAL_MS = 1_200;
+export const SELLING_UPGRADES = [
+  { id: 'quick-counter-1', title: 'Quick Counter I', desc: 'Sell each fruit in 1 second.', price: SHOP_PRICES['quick-counter-1'], level: 4 },
+  { id: 'quick-counter-2', title: 'Quick Counter II', desc: 'Sell each fruit in 0.8 seconds.', price: SHOP_PRICES['quick-counter-2'], level: 7, requires: 'quick-counter-1' },
+  { id: 'quick-counter-3', title: 'Quick Counter III', desc: 'Sell each fruit in 0.6 seconds.', price: SHOP_PRICES['quick-counter-3'], level: 10, requires: 'quick-counter-2' },
+  { id: 'crate-1', title: 'Crate I', desc: 'Hold 18 fruit.', price: SHOP_PRICES['crate-1'], level: 5 },
+  { id: 'crate-2', title: 'Crate II', desc: 'Hold 24 fruit.', price: SHOP_PRICES['crate-2'], level: 9, requires: 'crate-1' },
+  { id: 'second-counter', title: 'Second Counter', desc: 'Sell twice as fast.', price: SHOP_PRICES['second-counter'], level: 8 },
+  { id: 'fresh-produce', title: 'Fresh Produce sign', desc: 'Add 10% to sale value.', price: SHOP_PRICES['fresh-produce'], level: 6 },
+] as const;
+
+export function saleIntervalMs(owned: readonly import('../state/types').ShopItemId[]): number {
+  const counter = owned.includes('quick-counter-3') ? 600 : owned.includes('quick-counter-2') ? 800 : owned.includes('quick-counter-1') ? 1_000 : SELL_INTERVAL_MS;
+  return owned.includes('second-counter') ? counter / 2 : counter;
+}
+
+export function crateCapacity(owned: readonly import('../state/types').ShopItemId[]): number {
+  return owned.includes('crate-2') ? 24 : owned.includes('crate-1') ? 18 : CRATE_CAPACITY;
+}
 
 /** XP needed to reach a level (level 1 needs 0). */
 export function xpForLevel(level: number): number {

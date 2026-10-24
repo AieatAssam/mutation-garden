@@ -1,6 +1,6 @@
 import { getGrowthView } from '../plants/growth';
 import { levelForXp, SPECIES, xpForLevel } from '../content/species';
-import { CRATE_CAPACITY, SELL_INTERVAL_MS } from '../content/species';
+import { crateCapacity, saleIntervalMs } from '../content/species';
 import { growthStart, type GardenSnapshot, type GardenState } from './types';
 import { areAdjacent, hasGiantTell } from '../plants/mutate';
 import { getOrderSnapshot } from '../content/orders';
@@ -37,9 +37,10 @@ export function getSnapshot(state: GardenState): GardenSnapshot {
     fertiliser: state.fertiliser,
     crate: state.crate,
     crateCount: state.crate.length,
-    crateCapacity: CRATE_CAPACITY,
+    crateCapacity: crateCapacity(state.owned),
     selling: state.sellingSince !== null,
-    nextSaleTime: state.sellingSince === null ? null : state.sellingSince + SELL_INTERVAL_MS,
+    saleIntervalMs: saleIntervalMs(state.owned),
+    nextSaleTime: state.sellingSince === null ? null : state.sellingSince + saleIntervalMs(state.owned),
     plots,
     discoveries: state.discoveries,
     rewardsPaid: state.rewardsPaid,

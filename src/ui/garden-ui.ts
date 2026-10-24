@@ -1,4 +1,4 @@
-import { SHOP_PRICES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
+import { SHOP_PRICES, SELLING_UPGRADES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
 import './garden-ui.css';
 import { readingTimeMs } from './notice-queue';
 import { createDiscoveryJournal, type JournalOrder, type JournalTraitDescriptor } from './discovery-journal';
@@ -155,12 +155,13 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const shopHead = document.createElement('header'); shopHead.innerHTML = '<strong>Shop</strong>';
   const close = document.createElement('button'); close.type = 'button'; close.className = 'garden-ui__shop-close'; close.textContent = 'Close';
   shopHead.append(close); sheet.append(shopHead);
-  const shopItems: readonly { id: ShopItemId; title: string; desc: string; price: number; level: number }[] = [
+  const shopItems: readonly { id: ShopItemId; title: string; desc: string; price: number; level: number; requires?: ShopItemId }[] = [
     { id: 'plot-6', title: 'Plot 7', desc: 'Grow the island west.', price: SHOP_PRICES['plot-6'], level: 3 },
     { id: 'plot-7', title: 'Plot 8', desc: 'Add another garden bed.', price: SHOP_PRICES['plot-7'], level: 4 },
     { id: 'big-can', title: 'Big can', desc: 'Tap once to water every growing plant.', price: SHOP_PRICES['big-can'], level: 3 },
     { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: SHOP_PRICES.fertiliser, level: 1 },
     { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: SHOP_PRICES['lucky-charm'], level: 5 },
+    ...SELLING_UPGRADES,
   ];
   const shopRows = shopItems.map((item) => {
     const row = document.createElement('article'); row.className = 'garden-ui__shop-row';
@@ -172,7 +173,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const bigCan = document.createElement('button'); bigCan.type = 'button'; bigCan.className = 'garden-ui__water-all'; bigCan.textContent = 'Water all'; bigCan.hidden = true;
   bigCan.addEventListener('click', () => options.onWaterAll?.());
   close.addEventListener('click', () => { shop.hidden = true; });
-  shopButton.addEventListener('click', () => { journal.close(); shop.hidden = false; });
+  shopButton.addEventListener('click', () => { journal.close(); sheet.scrollTop = 0; shop.hidden = false; });
   shop.addEventListener('click', (event) => { if (event.target === shop) shop.hidden = true; });
   shop.append(sheet); overlay.append(shop, bigCan);
 
@@ -319,11 +320,12 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     bigCan.textContent = `Water all${state.fertiliser ? ` · Fertiliser x${state.fertiliser}` : ''}`;
     for (const { item, row, action } of shopRows) {
       const has = owned.includes(item.id);
-      const locked = level < item.level;
+      const locked = level < item.level || Boolean(item.requires && !owned.includes(item.requires));
       const affordable = state.coins >= item.price;
       row.classList.toggle('is-muted', locked || !affordable);
       action.disabled = (has && item.id !== 'fertiliser') || locked || !affordable;
-      action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? `Level ${item.level}` : `Buy · ${item.price}`;
+      const requiredTitle = shopItems.find(({ id }) => id === item.requires)?.title;
+      action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? item.requires && !owned.includes(item.requires) ? `Requires ${requiredTitle}` : `Level ${item.level}` : `Buy · ${item.price}`;
     }
     journal.update({
       discoveries: state.discoveries ?? [],

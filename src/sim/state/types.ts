@@ -1,6 +1,6 @@
 export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap';
 export type PlotId = string;
-export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm';
+export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm' | 'quick-counter-1' | 'quick-counter-2' | 'quick-counter-3' | 'crate-1' | 'crate-2' | 'second-counter' | 'fresh-produce';
 export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestable';
 
 /** Fruit size rolled at planting (design.md 4.3). Absent means regular. */
@@ -68,7 +68,8 @@ export interface GardenSnapshot {
   readonly fertiliser?: number;
   readonly crate?: readonly Fruit[];
   readonly crateCount?: number;
-  readonly crateCapacity?: 12;
+  readonly crateCapacity?: number;
+  readonly saleIntervalMs?: number;
   readonly selling?: boolean;
   readonly nextSaleTime?: number | null;
   readonly discoveries?: readonly string[];

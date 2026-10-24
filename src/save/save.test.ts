@@ -26,6 +26,14 @@ describe('save codec', () => {
     expect(decodeSave('nonsense')).toMatchObject({ ok: false });
   });
 
+  it('round-trips an expanded crate without accepting capacity the save does not own', () => {
+    const fruit = { speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 2, xp: 2 };
+    const state = { ...garden(), owned: ['crate-1', 'crate-2'] as const, crate: Array.from({ length: 24 }, () => fruit) };
+    expect(decodeSave(encodeSave(state, 1_000, 'test'))).toMatchObject({ ok: true, state });
+    const invalid = { ...state, owned: [], crate: Array.from({ length: 13 }, () => fruit) };
+    expect(decodeSave(encodeSave(invalid, 1_000, 'test'))).toMatchObject({ ok: false, reason: 'invalid state' });
+  });
+
   it('loads the committed schema-1 fixture (every future migration must keep this passing)', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-1.json', 'utf8'));
     const result = decodeSave(fixture);

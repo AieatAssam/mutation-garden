@@ -1,4 +1,4 @@
-import { CRATE_CAPACITY, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
+import { crateCapacity, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
 import { MUTATIONS } from '../content/mutations';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
@@ -46,7 +46,7 @@ export function harvest(
       events.push(rejection(plotId, 'not-harvestable'));
       continue;
     }
-    if (nextState.crate.length >= CRATE_CAPACITY) { events.push(rejection(plotId, 'crate-full')); continue; }
+    if (nextState.crate.length >= crateCapacity(nextState.owned)) { events.push(rejection(plotId, 'crate-full')); continue; }
 
     const size = plot.plant.size ?? 'regular';
     const ripeAt = growthStart(plot.plant) + species.growthDurationMs;

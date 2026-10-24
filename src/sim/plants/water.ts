@@ -1,4 +1,4 @@
-import { levelForXp, SPECIES, WATER_SPEEDUP } from '../content/species';
+import { SPECIES, WATER_SPEEDUP } from '../content/species';
 import { getGrowthView } from './growth';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
@@ -15,7 +15,7 @@ export function water(state: GardenState, command: WaterCommand, effectiveNowMs:
   const plantState = plot.plant;
   if (plantState === null) return rejected(state, command, 'empty');
   const waterCount = plantState.waterCount ?? (plantState.boostMs === undefined ? 0 : 1);
-  if (waterCount >= 1 && (levelForXp(state.xp) < 4 || waterCount >= 2)) return rejected(state, command, 'already-watered');
+  if (waterCount >= 2) return rejected(state, command, 'already-watered');
   const species = SPECIES.find((entry) => entry.id === plantState.speciesId)!;
   const start = growthStart(plantState);
   const before = getGrowthView(plantState.speciesId, start, effectiveNowMs);

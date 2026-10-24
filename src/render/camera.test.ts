@@ -88,7 +88,7 @@ describe('garden camera', () => {
       const centers = () => {
         camera.updateMatrixWorld(true);
         garden.updateMatrixWorld(true);
-        return garden.plots.map((plot) => {
+        return garden.plots.filter((plot) => plot.userData.locked !== true).map((plot) => {
           const projected = plot.getWorldPosition(new Vector3()).project(camera);
           return { x: (projected.x + 1) * width / 2, y: (1 - projected.y) * height / 2 };
         });

@@ -136,20 +136,21 @@ describe('page lifecycle', () => {
       { type: 'StageReached', plotId: 'plot-0', stage: 'Growing' },
       { type: 'StageReached', plotId: 'plot-0', stage: 'Mature' },
       { type: 'Harvestable', plotId: 'plot-0' },
-      expect.objectContaining({ type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout' }),
-      expect.objectContaining({ type: 'HarvestCompleted', count: 1 }),
+      expect.objectContaining({ type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', lucky: true, coins: 6 }),
+      { type: 'LuckyHarvest', plotId: 'plot-0' },
+      expect.objectContaining({ type: 'HarvestCompleted', count: 1, coins: 6 }),
     ]]);
     const resumed = h.renderFrames.at(-1)!;
     expect(resumed.previous).toEqual(resumed.current);
     expect(resumed.current.nowMs).toBe(10_000);
-    expect(resumed.current.coins).toBe(13);
+    expect(resumed.current.coins).toBe(17);
     expect(resumed.current.plots[0]?.plant).toBeNull();
 
     h.runFrame(0);
     h.runFrame(100);
     expect(h.nowMs).toHaveBeenCalledTimes(2);
     expect(h.eventBatches).toHaveLength(1);
-    expect(h.renderFrames.at(-1)?.current.coins).toBe(13);
+    expect(h.renderFrames.at(-1)?.current.coins).toBe(17);
     expect(h.requestFrame).toHaveBeenCalledTimes(5);
   });
 

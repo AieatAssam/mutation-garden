@@ -8,20 +8,23 @@ import { encodeSave } from '../../src/save/codec';
  * keep whatever the spec did.
  */
 export async function startWithSave(page: Page, xp = 25, options: {
-  scriptedGiantUsed?: boolean; twistrootPlantedAt?: number; extraRipeSunny?: boolean; savedAt?: number;
+  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number;
 } = {}): Promise<void> {
-  const initial = createInitialState(20261022, 0, { xp });
+  const initial = createInitialState(options.seed ?? 20261022, 0, { xp });
   const plots = initial.plots.map((plot) => {
     if (options.twistrootPlantedAt !== undefined && plot.id === 'plot-0') return { ...plot,
       plant: { speciesId: 'twistroot' as const, plantedAt: options.twistrootPlantedAt, size: 'regular' as const,
-        mutationSeed: 7, waterCount: 0, scriptedGiant: true } };
+        mutationSeed: 7, waterCount: options.twistrootWaterCount ?? 0, scriptedGiant: true } };
     if (options.extraRipeSunny && plot.id === 'plot-1') return { ...plot,
-      plant: { speciesId: 'sunny-sprout' as const, plantedAt: options.twistrootPlantedAt! - 20_000,
+      plant: { speciesId: 'sunny-sprout' as const, plantedAt: options.extraRipeSunnyAt ?? options.twistrootPlantedAt! - 20_000,
         size: 'regular' as const, mutationSeed: 11, mutations: [] } };
     return plot;
   });
-  const envelope = encodeSave({ ...initial, plots, scriptedGiantUsed: options.scriptedGiantUsed ?? true }, options.savedAt ?? 0, 'e2e');
+  const envelope = encodeSave({ ...initial, coins: options.coins ?? initial.coins, plots, mutationRngState: options.mutationRngState ?? 2, plantCount: options.plantCount ?? 100, scriptedGiantUsed: options.scriptedGiantUsed ?? true, scriptedGoldenUsed: options.scriptedGoldenUsed ?? true }, options.savedAt ?? 0, 'e2e');
   await page.addInitScript((save) => {
+    const injected = 'mutation-garden-e2e-save-injected';
+    if (sessionStorage.getItem(injected)) return;
+    sessionStorage.setItem(injected, '1');
     const request = indexedDB.open('mutation-garden', 1);
     request.onupgradeneeded = () => request.result.createObjectStore('saves');
     request.onsuccess = () => {

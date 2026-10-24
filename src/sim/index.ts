@@ -25,4 +25,5 @@ export type {
   StepResult,
   YieldSize,
   TraitId,
+  ShopItemId,
 } from './state/types';

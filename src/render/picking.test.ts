@@ -1,7 +1,7 @@
 import { BufferGeometry, Box3, Material, Mesh, Vector3 } from 'three';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { GardenSnapshot, PlantSnapshot } from '../sim';
-import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
+import { createGardenCamera, panGardenCamera, resizeGardenCamera, setGardenCameraExpanded, zoomGardenCamera } from './camera';
 import { createGarden, type Garden } from './garden';
 import { createMaterialLibrary } from './materials';
 import { createGardenPicker } from './picking';
@@ -388,12 +388,21 @@ describe('garden picker', () => {
 
   it('picks a bed anywhere on its footprint, beyond the 48px minimum target', () => {
     const { garden, picker, screen } = setup();
-    garden.plots.forEach((anchor) => {
+    garden.plots.filter(({ userData }) => userData.locked !== true).forEach((anchor) => {
       for (const [dx, dz] of [[-0.8, -0.8], [0.8, -0.8], [-0.8, 0.8], [0.8, 0.8]] as const) {
         const [x, y] = screen(anchor.localToWorld(new Vector3(dx, 0, dz)));
         expect(picker.pick(x, y), `${anchor.plotId} corner ${dx},${dz}`).toEqual({ kind: 'plot', plotId: anchor.plotId });
       }
     });
+  });
+
+  it('picks west plots after expansion is purchased', () => {
+    const { camera, garden, picker, screen } = setup();
+    setGardenCameraExpanded(camera, true);
+    garden.plots.slice(6).forEach((plot) => { plot.visible = true; plot.userData.locked = false; });
+    const plot = garden.plots[6]!;
+    const [x, y] = screen(plot.localToWorld(new Vector3(0.8, 0, 0.8)));
+    expect(picker.pick(x, y)).toEqual({ kind: 'plot', plotId: 'plot-6' });
   });
 
   it('disposes its three geometries and one material exactly once without disposing borrowed resources', () => {

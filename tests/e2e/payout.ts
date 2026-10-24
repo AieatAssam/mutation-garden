@@ -4,17 +4,27 @@ import { expect, type Page } from '@playwright/test';
  * Harvest payouts vary with yield size, the fresh bonus and swipe combos (design.md 4.3), so specs
  * check the counter against what the game showed: every "+N" label plus any combo bonus.
  */
-export async function expectHarvestPaid(page: Page, act: () => Promise<void>): Promise<{ before: number; after: number; paid: number; payouts: number[] }> {
+export async function expectHarvestPaid(page: Page, act: () => Promise<void>): Promise<{ before: number; after: number; paid: number; payouts: number[]; labels: string[] }> {
   const coins = page.getByRole('status', { name: 'Coins' });
   const before = Number((await coins.textContent())?.trim());
   await page.evaluate(() => {
-    const record = window as unknown as { __payouts?: number[] };
+    const record = window as unknown as { __payouts?: number[]; __payoutLabels?: string[] };
     record.__payouts = [];
+    record.__payoutLabels = [];
     const observer = new MutationObserver((mutations) => {
       for (const mutation of mutations) {
         for (const node of mutation.addedNodes) {
           if (!(node instanceof HTMLElement)) continue;
-          if (node.classList.contains('rewards__label--coins')) record.__payouts!.push(Number(node.textContent!.replace('+', '')));
+          if (node.classList.contains('rewards__label--coins')) {
+            record.__payouts!.push(Number(node.textContent!.match(/^\+(\d+)/)?.[1]));
+            record.__payoutLabels!.push(node.textContent!.trim());
+          }
+          if (node.classList.contains('mutation-reveal__line') && /^\+\d+ coins first-find bonus$/.test(node.textContent!.trim())) {
+            record.__payouts!.push(Number(node.textContent!.match(/\d+/)![0]));
+          }
+          for (const line of node.querySelectorAll?.('.mutation-reveal__line') ?? []) {
+            if (/^\+\d+ coins first-find bonus$/.test(line.textContent!.trim())) record.__payouts!.push(Number(line.textContent!.match(/\d+/)![0]));
+          }
           if (node.classList.contains('rewards__combo')) {
             const bonus = node.querySelector('span')?.textContent;
             if (bonus) record.__payouts!.push(Number(bonus.replace('+', '')));
@@ -22,7 +32,7 @@ export async function expectHarvestPaid(page: Page, act: () => Promise<void>): P
         }
       }
     });
-    observer.observe(document.querySelector('.rewards')!, { childList: true });
+    observer.observe(document.body, { childList: true, subtree: true });
     (window as unknown as { __payoutObserver?: MutationObserver }).__payoutObserver?.disconnect();
     (window as unknown as { __payoutObserver?: MutationObserver }).__payoutObserver = observer;
   });
@@ -37,5 +47,9 @@ export async function expectHarvestPaid(page: Page, act: () => Promise<void>): P
     return paid > 0 && shown === before + paid;
   }, { message: 'the counter moved by exactly the payout shown', timeout: 5_000 }).toBe(true);
   const { paid, shown: after } = await read();
-  return { before, after, paid, payouts: await page.evaluate(() => (window as unknown as { __payouts?: number[] }).__payouts ?? []) };
+  return {
+    before, after, paid,
+    payouts: await page.evaluate(() => (window as unknown as { __payouts?: number[] }).__payouts ?? []),
+    labels: await page.evaluate(() => (window as unknown as { __payoutLabels?: string[] }).__payoutLabels ?? []),
+  };
 }

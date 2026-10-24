@@ -55,7 +55,7 @@ probeWindow.gardenProbe = {
     const rect = stage.getBoundingClientRect();
     resizeGardenCamera(referenceCamera, rect.width, rect.height);
     referenceCamera.updateMatrixWorld(true);
-    const plots = probeGarden.plots.map((anchor) => ({
+    const plots = probeGarden.plots.filter((anchor) => !anchor.userData.locked).map((anchor) => ({
       plotId: anchor.plotId,
       ...project(anchor.getWorldPosition(new Vector3()), rect),
     }));

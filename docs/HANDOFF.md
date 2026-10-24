@@ -5,7 +5,7 @@ Living note for whoever picks this up next (human, Claude or Codex). Update it a
 ## Where things are (2026-10-23)
 
 - **M1 accepted:** S1–S5 merged (#173–#177); critique #178 is closed and its fixes merged in #179. Acceptance is complete. Open gap: profile on a real mid-range phone.
-- **M2 planned:** design and slices are written; ADR 0010 records the deterministic mutation and save rules. Next: S1 on `m2/s1-mutations`.
+- **M2 active:** S1 is in progress on `m2/s1-mutations`; owner direction dated 2026-10-23 replans later work as M3 economy, M4 automation, M5 mutations/polish and M6 lab. Design and milestone docs are updated; no implementation changes are included here.
 - **E2E with later seeds:** specs call `startWithSave(page)` (`tests/e2e/garden-save.ts`), which seeds a level-3 save before the app opens IndexedDB.
 - **Research:** [research/viral-findings.md](research/viral-findings.md) and [design section 11](design.md#11-viral-and-retention-features) map adopted ideas to milestones.
 
@@ -34,6 +34,10 @@ Living note for whoever picks this up next (human, Claude or Codex). Update it a
 - The camera keeps back-row ready stamps below the top HUD row (`TOP_HUD_PX` in `src/render/camera.ts`): folded into the resting pose on resize, and nudged after pans and zooms.
 
 ## Log
+
+- 2026-10-23: Owner directed crate-and-stall selling, eight seeds, the automation ladder, offline automation and three more mutations. Replanned M2–M6; next: finish and accept M2-S1, then build M3 economy.
+
+- 2026-10-23: Owner directed M2-S1 toward a real coin sink and mutation payout loop: guaranteed Giant/Golden rules, Shop purchases, west plots, Puffcap→Glowing, fertiliser, Big can and Lucky charm. Implementation is in progress on `m2/s1-mutations`.
 
 - 2026-10-23: M1 accepted; critique #178 closed and fixes merged in #179. M2 planned with ADR 0010; next: S1 on `m2/s1-mutations`.
 

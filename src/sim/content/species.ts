@@ -62,12 +62,16 @@ export const SPECIES = [
       { stage: 'Harvestable', startsAtMs: 25000 },
     ],
   },
+  {
+    id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14, growthDurationMs: 30_000, unlockLevel: 4,
+    stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 4_000 }, { stage: 'Growing', startsAtMs: 12_000 }, { stage: 'Mature', startsAtMs: 26_000 }, { stage: 'Harvestable', startsAtMs: 30_000 }],
+  },
 ] as const satisfies readonly SpeciesDefinition[];
 
 export const INITIAL_COINS = 12;
 
 /** Total XP needed to reach level 2, 3, ... (design.md 4.4); after the table each level costs 200 more. */
-export const LEVEL_XP = [10, 25, 50, 90, 150, 240, 360, 520] as const;
+export const LEVEL_XP = [6, 16, 32, 60, 100, 160, 240, 360] as const;
 
 /** XP needed to reach a level (level 1 needs 0). */
 export function xpForLevel(level: number): number {
@@ -93,7 +97,7 @@ export const YIELD_SIZES = [
 export const FRESH_WINDOW_MS = 5_000;
 export const FRESH_BONUS = 0.25;
 /** Each extra plant in one swipe adds this share of the swipe's total, up to the cap. */
-export const COMBO_STEP = 0.1;
-export const COMBO_CAP = 0.5;
+export const COMBO_STEP = 0.2;
+export const COMBO_CAP = 0.8;
 /** Watering cuts the remaining growth time by this share. */
 export const WATER_SPEEDUP = 0.3;

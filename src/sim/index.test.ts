@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { mutationRoll, SIM_SCHEMA_VERSION } from './index';
+import { mutationRoll, SIM_SCHEMA_VERSION, LEVEL_XP } from './index';
 
 describe('sim module', () => {
   it('loads without a renderer or DOM', () => {
     expect(SIM_SCHEMA_VERSION).toBe(3);
+    expect(LEVEL_XP).toEqual([6, 16, 32, 60, 100, 160, 240, 360]);
     expect(typeof (globalThis as { document?: unknown }).document).toBe('undefined');
   });
 

@@ -539,6 +539,17 @@ flat_polygon('creature-leaf', leaf_points, 'environment.grass.1', depth=0.006)
 
 # ---------------------------------------------------------------- join by material, build hulls
 
+# ---------------------------------------------------------------- west island chunk (kept separate so it can rise when Plot 7 is bought)
+chunk = link(bpy.data.objects.new('chunk-west', None))
+grass_chunk = prim('ico_sphere', 'environment.grass.1', loc=(-6.3, 0, GROUND - 0.22), scale=(3.25, 2.25, 0.55), subdivisions=3)
+grass_chunk.name = 'chunk-west-grass'; grass_chunk['keep'] = True; grass_chunk.parent = chunk
+for x in (-7.35, -5.25):
+    soil = rounded_box('environment.soil.1', (1.55, 1.55, 0.20), (x, 0, SOIL_TOP - 0.1), 0.06)
+    soil.name = 'chunk-west-bed-soil'; soil['keep'] = True; soil.parent = chunk
+    for dx, dy, sx, sy in ((0, .77, 1.55, .10), (0, -.77, 1.55, .10), (.77, 0, .10, 1.55), (-.77, 0, .10, 1.55)):
+        rail = rounded_box('environment.wood-crate.1', (sx, sy, .22), (x + dx, dy, SOIL_TOP - .08), .035)
+        rail.name = 'chunk-west-bed-rail'; rail['keep'] = True; rail.parent = chunk
+
 if os.environ.get('GARDEN_STOP_BEFORE_JOIN') == '1':
     raise SystemExit('stopped before join')
 

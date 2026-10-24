@@ -4,7 +4,7 @@ import { startWithSave } from './garden-save';
 // These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
 test.beforeEach(async ({ page }) => startWithSave(page));
 
-test('three seed controls and their focus ring fit the viewport safe areas', async ({ page }, testInfo) => {
+test('all seed controls and their focus rings fit the viewport safe areas', async ({ page }, testInfo) => {
   const viewport = testInfo.project.name === 'desktop' ? { width: 1280, height: 800 } : { width: 390, height: 844 };
   await page.setViewportSize(viewport);
   await page.goto('http://127.0.0.1:4174/mutation-garden/tests/e2e/fixtures/garden-ui.html');
@@ -12,13 +12,10 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
   await page.evaluate(async () => { await document.fonts.ready; });
 
   const tray = page.getByRole('navigation', { name: 'Seeds' });
-  const seeds = [
-    tray.getByRole('button', { name: 'Sunny Sprout' }),
-    tray.getByRole('button', { name: 'Bubble Berry' }),
-    tray.getByRole('button', { name: 'Twistroot' }),
-  ];
+  const seedNames = ['Sunny Sprout', 'Bubble Berry', 'Twistroot', 'Puffcap'];
+  const seeds = seedNames.map((name) => tray.getByRole('button', { name }));
   await expect(tray).toBeVisible();
-  await expect(tray.locator('.garden-ui__seed')).toHaveCount(3);
+  await expect(tray.locator('.garden-ui__seed')).toHaveCount(seedNames.length);
 
   const layout = await page.evaluate(() => {
     const trayElement = document.querySelector<HTMLElement>('.garden-ui__tray');
@@ -62,7 +59,7 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
   expect(layout.label.right).toBeLessThanOrEqual(viewport.width);
   expect(layout.label.top).toBeGreaterThanOrEqual(0);
   expect(layout.label.bottom).toBeLessThanOrEqual(viewport.height);
-  expect(layout.buttons.map(button => button.text)).toEqual(['Sunny Sprout', 'Bubble Berry', 'Twistroot']);
+  expect(layout.buttons.map(button => button.text)).toEqual(['Sunny Sprout', 'Bubble Berry', 'Twistroot', 'Puffcap']);
   for (const [index, button] of layout.buttons.entries()) {
     expect(button.width, `seed ${button.text} width`).toBeGreaterThanOrEqual(48);
     expect(button.height, `seed ${button.text} height`).toBeGreaterThanOrEqual(48);
@@ -98,7 +95,7 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
     };
   });
 
-  // Tab is real keyboard navigation. The sound and music toggles come first, then the seeds.
+  // Tab is real keyboard navigation. Sound and music come before the seeds; Shop follows them.
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
   await page.keyboard.press('Tab');
@@ -121,8 +118,7 @@ test('three seed controls and their focus ring fit the viewport safe areas', asy
   }
 
   // Restore focus to the first seed so evidence shows the edge clearance being checked above.
-  await page.keyboard.press('Shift+Tab');
-  await page.keyboard.press('Shift+Tab');
+  for (let index = 1; index < seeds.length; index += 1) await page.keyboard.press('Shift+Tab');
   await expect(seeds[0]!).toBeFocused();
 
   await page.screenshot({

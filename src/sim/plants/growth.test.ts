@@ -11,7 +11,7 @@ import {
 const seed = 0x1234_5678;
 
 function plantOne(speciesId: (typeof SPECIES)[number]['id'], plotId = 'plot-0') {
-  const initial = createInitialState(seed, 0, { xp: 100 });
+  const initial = { ...createInitialState(seed, 0, { xp: 100 }), plantCount: 2 };
   const command: Command = { type: 'Plant', plotId, seedId: speciesId };
   const planted = step(initial, [command], 0);
   return { state: planted.state, plantedAt: 0 };
@@ -53,7 +53,7 @@ describe('timestamp-derived plant growth', () => {
         ? { type: 'Harvestable', plotId: 'plot-0' }
         : { type: 'StageReached', plotId: 'plot-0', stage },
     ]);
-    if (stage === 'Mature' && species.id === 'twistroot') expect(at.events.at(-1)?.type).toBe('Mutated');
+    if (stage === 'Mature') expect(at.events.at(-1)).toEqual({ type: 'StageReached', plotId: 'plot-0', stage: 'Mature' });
     expect(getSnapshot(at.state).plots[0]?.plant).toMatchObject({
       stage,
       progress: startsAtMs / species.growthDurationMs,
@@ -115,15 +115,20 @@ describe('timestamp-derived plant growth', () => {
     ]);
   });
 
-  it('keeps six stable empty plots in snapshots and exposes only derived growth there', () => {
+  it('keeps six stable initial plots in snapshots and exposes only derived growth there', () => {
     const initial = createInitialState(seed, 100, { xp: 100 });
     expect(getSnapshot(initial)).toEqual({
       coins: initial.coins,
       xp: 100,
-      level: 5,
-      levelStartXp: 90,
-      nextLevelXp: 150,
+      level: 6,
+      levelStartXp: 100,
+      nextLevelXp: 160,
       nowMs: 100,
+      plantCount: 0,
+      owned: [],
+      fertiliser: 0,
+      scriptedGiantUsed: false,
+      scriptedGoldenUsed: false,
       nearMiss: null,
       plots: Array.from({ length: 6 }, (_, index) => ({ id: `plot-${index}`, plant: null })),
     });
@@ -138,7 +143,7 @@ describe('timestamp-derived plant growth', () => {
       stage: 'Seed',
       progress: 0,
     });
-    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'badLuck', 'discoveries', 'rewardsPaid', 'xp', 'plots']);
+    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'scriptedGoldenUsed', 'plantCount', 'badLuck', 'discoveries', 'rewardsPaid', 'owned', 'fertiliser', 'xp', 'plots']);
     expect(Object.keys(planted.state.plots[0]!.plant!)).toEqual(['speciesId', 'plantedAt', 'size', 'mutationSeed']);
 
     const half = step(planted.state, [], 4_100);

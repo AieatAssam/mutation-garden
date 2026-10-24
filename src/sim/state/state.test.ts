@@ -21,9 +21,13 @@ describe('initial garden state', () => {
       rngState: expect.any(Number),
       mutationRngState: expect.any(Number),
       scriptedGiantUsed: false,
+      scriptedGoldenUsed: false,
+      plantCount: 0,
       badLuck: { giant: 0, golden: 0, glowing: 0, crystal: 0, rainbow: 0 },
       discoveries: [],
       rewardsPaid: [],
+      owned: [],
+      fertiliser: 0,
       xp: 0,
       plots: [
         { id: 'plot-0', plant: null },

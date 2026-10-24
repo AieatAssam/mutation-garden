@@ -49,17 +49,18 @@ Targets come from brief section 7. Each row is a moment we design, build and tes
 | ~3 s | First plant | Seed drops, squashes into soil, dust puff, plant sound. Coin counter ticks down by 1 with a bump. The pulse moves to the next empty plot. |
 | ~8 s | Several planted | Each plant sprouts with a pop. Hint: "Plants grow on their own." |
 | ~12 s | First ripe | Sunny Sprout ripens: colour warms, hop, gleam sweep, ripe chime. Hint: "Tap a ripe plant to harvest." |
-| ~15 s | First harvest | Fruit stretches, pops off, arcs to the crate; coins fly to the counter; "+2" floats up. First XP bar fill. |
-| ~25 s | Swipe taught | When two or more plants are ripe at once, hint: "Swipe across ripe plants." Swipe gives combo "×2", "×3" with rising pitch. |
+| ~15 s | First harvest | Fruit stretches, pops off and arcs to the crate; a value label floats up. No coins yet. |
+| ~16 s | First sale | Tap the market stall. One fruit hops to the counter; a coin pops after 1.2 s. |
+| ~25 s | Swipe taught | When two or more plants are ripe at once, hint: "Swipe across ripe plants." Swipe gives a growing Combo stamp and rising pitch. |
+| ~40 s | Mutation rule | Water a growing plant a second time to make it Giant. Its first discovery pays coins and XP. |
 | ~45 s | Level 2 | XP bar fills. Level-up stamp. **Unlocks Bubble Berry seed** (card flips in on the tray). |
 | ~1:30 | First order | Order board appears: "Harvest 4 Bubble Berries" for a coin bonus and XP. |
-| ~2:00 | First purchase | Shop button lights up: **Watering can** (first tool). It lets each plant be watered a second time, which is the Giant rule. |
-| ~2:30 | Level 3 | Unlocks Twistroot. |
-| ~3:00 | First mutation (scripted) | The first Twistroot planted after Level 3 always comes up **Giant**. Full first-discovery reveal. Journal unlocks with one entry filled and the rest of the row shown as silhouettes. |
-| ~4:00 | Rule learned | Journal entry for Giant says how: "Giant: water a plant twice while it grows." The player can now cause it. |
-| ~5:00 | Plot 7 | Level 4 opens a new plot: a chunk of island rises from below and locks on with a thud. |
-| ~8:00 | Golden hint | An order asks for "1 Golden fruit". Journal silhouette for Golden reads "Grows in full sun: plant next to two Sunny Sprouts." |
-| ~10:00 | New species or expansion | Level 6 unlocks a fourth species (Puffcap) or a second island tier, whichever comes first. |
+| ~2:00 | First purchase | Shop button offers Plot 7 for 40 coins at Level 2. The west island chunk rises and adds a plantable plot. |
+| ~2:30 | Level 3 | Unlocks Twistroot and the Big can. The Big can waters every growing plant once per tap. |
+| ~3:00 | Rule learned | Journal entry for Giant says: "Water a plant twice while it grows." The player can cause it from Level 1. |
+| ~5:00 | Puffcap | Level 4 unlocks Puffcap. Plants beside it always become Glowing. |
+| ~8:00 | Golden hint | An order asks for "1 Golden fruit". Journal silhouette for Golden reads "Plant next to two Sunny Sprouts." |
+| ~10:00 | New species or expansion | Level 6 unlocks Lantern Pod or a second island tier, whichever comes first. |
 | ~20:00 | Strategy | The player has 3–4 mutation rules, 8–9 plots, 2 tools and is arranging plots on purpose. Session ends on an unfinished order or a planted Twistroot due back soon. |
 
 ## 4. Core loop rules (M1)
@@ -74,95 +75,109 @@ These sharpen the brief's plant, grow and harvest loop into something with textu
 ### 4.2 Growth
 - Real-time, timestamp-derived (unchanged).
 - Five stages, each with a pop accent (motion.md 4.2).
-- **Watering (Amendment: pulled into M1-S3 from M3):** tap a growing plant (Sprout stage or later) to water it **once**, cutting its remaining time by 30%. Seeds can't be watered, so a double tap after planting does nothing. The M3 watering can upgrade adds the second watering that enables Giant. Watered soil is visibly darker for the rest of the growth. Watering twice (M2) enables Giant.
+- **Watering:** tap a growing plant (Sprout stage or later) to cut its remaining time by 30%. Seeds and ripe plants cannot be watered. Water twice at any level and the plant is **always Giant**. The Big can (60 coins, Level 3) waters every growing plant once per tap. Watered soil stays darker for the rest of growth.
 
 ### 4.3 Harvest and yield
 - Tap a ripe plant or swipe across several.
 - **Yield variety (Amendment):** each harvest rolls a size from the sim RNG: Small (×0.8, 25%), Regular (×1, 60%), Big (×1.5, 15%). The fruit is visibly that size before harvest, so the player sees what's coming. This is the cheapest variable reward in the game and costs no rules to learn.
 - **Fresh bonus (Amendment):** harvesting within 5 s of ripening adds +25% and a sparkle. Late harvests lose nothing. This rewards attention without punishing absence.
-- **Swipe combo:** harvesting N plants in one swipe pays a bonus of +10% per extra plant (×1.1 for 2, up to ×1.5 for 6), shown as "×2 … ×6" labels with a rising musical scale. Coins are integers; round each payout down and pay the remainder at the end of the combo.
-- Coins are added when the harvest command resolves in the sim, not when the coin animation lands. The counter animation catches up visually.
+- **Swipe combo:** harvesting N plants in one swipe pays a bonus of +20% per extra plant, with at least +1 coin per plant beyond two (×1.2 for 2, up to ×1.8 for 5+), shown as a large "Combo xN" stamp with a rising musical scale. Coins are integers; round each payout down and pay the remainder at the end of the combo.
+- Harvested produce goes into the crate; coins are added only when sold. The counter animation catches up when the stall pays.
+- Mutated harvest coins and XP multiply by every trait value: Giant ×2, Glowing ×3, Golden ×4; stacked traits multiply together. The harvest label names the payout, for example "+12 Giant x2".
+- The first discovery of each species + trait pays 10 times that trait's base mutated value in coins and XP, once per save. The reveal names the bonus.
 
 ### 4.4 Garden XP and levels (Amendment: pulled into M1 from M3)
-Without a visible level bar the first minute has no "step" clock. Each harvest gives XP equal to its base coin value. Level thresholds: 10, 25, 50, 90, 150, 240, 360, 520, then +200 each. Each level unlocks exactly one named thing (table in section 8). M1 ships levels 1–3 (seeds); M3 fills in the rest.
+Without a visible level bar the first minute has no "step" clock. Each harvest gives XP equal to its base coin value. Total XP thresholds for levels 2–9: **6, 16, 32, 60, 100, 160, 240, 360**, then +200 each. Levels unlock named items (table in section 7.1). M1 ships levels 1–3 (seeds); M3–M5 fill in the rest.
 
 ## 5. Plants
 
-The brief caps species at a handful. We ship six across the game, each with one mechanic hook so it isn't just a bigger number.
+The brief excludes dozens of species. We ship eight across the game, each with one mechanic hook so it isn't just a bigger number.
 
 | Species | Unlock | Grow | Seed / value | Silhouette | Hook |
 |---|---|---|---|---|---|
 | Sunny Sprout | Start | 8 s | 1 / 2 | Lollipop | Fast filler. Two adjacent Sunnies give "full sun" to neighbours (Golden rule). |
 | Bubble Berry | Lv 2 | 15 s | 3 / 6 | Low dome of berries | Berries bounce out on harvest (Rapier). Yields 4–6 berries; each one is a coin. |
 | Twistroot | Lv 3 | 25 s | 5 / 10 | Corkscrew root | Pulled up with a stretchy tug on harvest. Twist count = value. |
-| Puffcap (M3) | Lv 6 | 40 s | 10 / 22 | Fat mushroom | Grows faster at night (dusk phase). Releases spores that spread Glowing to neighbours. |
-| Lantern Pod (M3) | Lv 9 | 60 s | 18 / 40 | Hanging pods on an arch | Glows at dusk. The Glowing species. |
-| Star Melon (M3) | Lv 12 | 120 s | 40 / 100 | Huge striped sphere on vines | Spans one plot but its vines decorate neighbours. Giant chance doubled. |
+| Puffcap | Lv 4 | 30 s | 6 / 14 | Fat mushroom | Plants next to Puffcap always become Glowing. |
+| Lantern Pod | Lv 6 | 45 s | 12 / 28 | Three hanging lantern pods | A harvest after dusk grants one bonus seed (once per plant). |
+| Clockvine | Lv 11 | 55 s | 20 / 46 | Two clock-hand tendrils around a seed | Each ripe neighbour reduces Clockvine's remaining growth time by 2 s, once per neighbour. |
+| Dewbell | Lv 13 | 90 s | 34 / 82 | Downward bell flower with a dew bead | Its ripe dew waters one orthogonal growing neighbour once. |
+| Comet Pear | Lv 9 | 75 s | 24 / 58 | Pear-shaped fruit with a swept-back leaf tail | Its harvest adds one extra item to the crate. |
 
-Two more species come only from the Lab (M4): **Prism Fig** (Crystal + Glowing parents) and **Sunburst** (two Golden Sunnies). They're the lab's promise.
+Owner change (2026-10-23): the eight-seed roster keeps the five named starting species and adds Clockvine, Dewbell and Comet Pear; the earlier Star Melon proposal is cut.
 
 All plants are authored in Blender with shape keys for growth (ADR 0009).
 
-## 6. Mutations (M2)
+## 6. Mutations (M2 core; remaining traits M5)
 
-The brief requires that players can influence mutations and that randomness is never the only path. Every mutation has **one learnable rule** that makes it likely, plus a **small natural chance** for surprise, plus **bad-luck protection**.
+Players can cause Giant, Golden and Glowing with clear, guaranteed rules. Natural chances remain a surprise from Level 2. Bad-luck counters remain available for later traits.
 
 No natural mutations before Level 2, so the first minute stays about planting and harvesting.
 
 | Mutation | Value | Learnable rule (shown in journal once discovered or hinted) | Natural chance | Guarantee |
 |---|---:|---|---:|---|
-| Giant | ×2 | Water twice while growing. The second water unlocks at Level 4. | 3% | Scripted: the first Twistroot planted at Level 3 or above |
-| Golden | ×4 | At Mature, at least two orthogonal neighbours are Sunny Sprouts, at any stage. 40% when the rule holds. | 1% | Guaranteed after 25 rule-qualifying Matures without one |
-| Glowing | ×3 | Growth overlaps a dusk window. 50% when the rule holds. Puffcap adds a second route in M3. | 1% | Guaranteed after 20 rule-qualifying Matures without one |
+| Giant | ×2 | Water twice while growing. Available from Level 1. | 3% (Level 2+) | Always when watered twice |
+| Golden | ×4 | At Mature, two orthogonal neighbours are Sunny Sprouts, at any stage. | 1% (Level 2+) | Always when the rule holds |
+| Glowing | ×3 | At Mature, a neighbouring plot contains Puffcap. | 1% (Level 2+) | Always when the rule holds |
 | Crystal | ×6 | Plant on pond-side plot-0 or plot-2 immediately after harvesting a Glowing fruit from that plot. 30% when the rule holds. | 0.3% | Guaranteed after 40 rule-qualifying Matures without one |
 | Rainbow | ×10 | Harvest Golden, Glowing and Crystal in one swipe; the next seed planted on any of those plots is Rainbow. Deterministic. | — | The rule is deterministic |
+| Frozen | ×5 | A Dewbell neighbour is growing when this plant becomes Mature. | 0.2% | Rule always grants it |
+| Electric | ×7 | A Sprinkler waters this plant twice before it becomes Mature. | 0.1% | Rule always grants it |
+| Twin | ×4 | Plant a seed beside a mature Clockvine; the new plant gets Twin at Mature. | 0.2% | Rule always grants it |
 
 Rules:
 - A separate mutation RNG stream is initialised from a hash of the game seed, so mutation rolls never shift M1 size rolls. At planting, draw one 32-bit `mutationSeed` for the plant. Each trait gets its own uniform value from `hash(mutationSeed, traitId)`.
-- At **Mature**, evaluate each trait once, then store up to two results on the plant in descending value order. Use the rule chance when one is specified and its rule holds; otherwise use the natural chance. Reloading never re-rolls. Bad-luck counters are per trait and count rule-qualifying Matures without that trait.
-- The scripted Giant is assigned to the first Twistroot planted at Level 3 or above; store the one-time flag in garden state. It is fixed at Mature like other results.
+- At **Mature**, evaluate each trait once, then store its result on the plant. Reloading never re-rolls. Guaranteed rules apply whenever their condition holds; natural chances apply otherwise. Rule chances, when below 100%, receive the Bee hive bonus.
+- Lucky Harvest rolls 10% from the garden RNG at harvest, after planting size draws, and pays three times the ordinary harvest payout.
 - A Sprout-stage tell is computed from current snapshot conditions. It can disappear if a condition breaks; only the Mature result is fixed.
-- Golden checks the six-plot 2×3 grid by orthogonal adjacency: plot-0 is front-left; columns are x = −1.05 and +1.05, rows z = 2, 0 and −2. Corners have two neighbours; the middle-row plots have three.
-- Dusk is the final 60 seconds of each 240-second cycle, derived from `nowMs` (the cycle phase is `nowMs mod 240,000 ms`). Glowing qualifies when `[growthStart, matureAt]` overlaps a dusk window, including during offline growth.
-- **Stacking:** at most two traits per plant; value multipliers combine. Pairs count as their own journal entries (5 traits, 10 pairs).
+- Adjacency is orthogonal on the garden's plot layout, including purchased west plots.
+- **Stacking:** trait value multipliers combine. Each species + trait discovery is a separate journal entry and first-find reward.
 - **Journal:** a printed seed catalogue. Rows are species, columns are traits. Undiscovered entries show a silhouette with a hint line once the player has met a prerequisite. Entries never hint at something unobtainable.
 - **First discovery reward:** coins equal to 10× the mutated value and XP, paid once per journal entry. A shareable card is M5.
 
-## 7. Progression and economy (M3)
+## 7. Progression (M2–M4)
 
 ### 7.1 Unlock table
 
 | Level | Unlock | Kind |
 |---|---|---|
 | 2 | Bubble Berry | seed |
-| 3 | Twistroot | seed |
-| 4 | Plot 7 (island grows west), water twice, dusk cycle | plot, mutation rule, world |
+| 2 | Plot 7 (island grows west) | plot |
+| 3 | Twistroot, Big can | seed, tool |
+| 4 | Puffcap, Plot 8 | seed, plot |
 | 5 | Plant all, order board slot 2 | tool, UI |
-| 6 | Puffcap | seed |
-| 7 | Plot 8, sprinkler upgrade | plot, tool |
-| 8 | Bee hive (pollinates adjacent pairs: +rule chance) | decoration with effect |
-| 9 | Lantern Pod | seed |
-| 10 | Mutation Laboratory (M4) | system |
-| 11 | Plot 9–10 (second tier rises) | plot |
-| 12 | Star Melon | seed |
-| 13+ | Decorations, island tiers, daily challenges | cosmetic, challenge |
+| 5 | Lucky charm | shop |
+| 6 | Plot 9 and further tools | shop |
+| 5 | Sprinkler | automation |
+| 6 | Lantern Pod | seed |
+| 7 | Bee hive | automation |
+| 8 | Seed hopper | automation |
+| 9 | Comet Pear, plot expansion | seed, plot |
+| 10 | Harvest helper | automation |
+| 11 | Clockvine | seed |
+| 12 | Delivery cart, Auto-sell | automation |
+| 13 | Dewbell | seed |
+| 16 | Twin | mutation |
+| 18 | Mutation Laboratory (M6) | system |
 
 ### 7.2 Shop (one currency: coins)
-- Seeds (always available once unlocked).
-- Tools: watering can (Lv 1, 15 coins; a second watering per plant), sprinkler (waters a row; Lv 7), golden trowel (Big chance +10%; Lv 9), harvest basket (swipe range +1 plot; Lv 11).
-- Plots: price doubles each (40, 80, 160 …), gated by level so coins can't skip the pacing.
-- Decorations: gnome, windmill, bird bath, lanterns. Purely cosmetic, each placed on fixed decoration spots (no precision placement) and each has one idle animation.
+- Plot 7: 40 coins, Level 2. Plot 8: 120 coins, Level 4. Each purchase adds a real plot and grows the island west.
+- Big can: 60 coins, Level 3; one tap waters every growing plant once.
+- Fertiliser: 25 coins each; the next seed grows 40% faster. Stock stacks and is shown on the seed tray.
+- Lucky charm: 150 coins, Level 5; adds 3 percentage points to natural mutation chances.
+- Locked and unaffordable items remain visible with their level and price.
+- Seeds stay in the tray once unlocked. Puffcap costs 6 coins.
 
 ### 7.3 Orders
 Three order slots (one at first). Each order asks for a simple set ("4 Bubble Berries", "1 Golden anything", "a 3-combo swipe") and pays coins + XP + sometimes a seed packet. Orders refresh 30 s after completion. They give the player a reason to plant a specific mix.
 
 ### 7.4 Offline
-Plants grow while away (timestamps). Ripe plants wait. On return, a "While you were away" label shows how many are ripe and offers one tap harvest-all with a big combo. No coins are generated without plants. Cap: none needed since plants only ripen once.
+Plants and owned automations run from saved timestamps in the deterministic sim. Offline work is capped at 2 h; crate capacity and sell queues apply as during play. Return summary lists plants grown, plots watered, fruit harvested, and coins sold. Reprocessing the same interval cannot pay twice.
 
 ### 7.5 Balancing
-- A headless sim script plays 20-minute sessions with a simple bot policy and asserts: first purchase ≤ 2:30, first mutation ≤ 5:00, level 6 by 12:00, no stall over 90 s without a reward. Runs in CI (brief section 14, M3 acceptance).
+- A headless sim script plays 20-minute sessions with a simple bot policy and asserts: first purchase ≤ 2:30, first mutation ≤ 5:00, level 6 by 12:00, no stall over 90 s without a reward. M3 measures manual sale pace; M4 adds automation rates.
 
-## 8. Mutation Laboratory (M4)
+## 8. Mutation Laboratory (M6)
 
 A small glass jar on a shelf beside the island. Drag harvested specimens from a tray into the jar. Rapier drops them in; they bounce and settle (Suika-style). Two specimens that make a recipe and touch fuse with a squash, flash and pop into a new seed packet that flies to the tray. Wrong pairs bump off each other with a soft thud and a "Doesn't mix" label.
 
@@ -201,3 +216,51 @@ Rejected: trading, stealing, gacha, paid speed-ups, energy timers, fake scarcity
 ## 12. What we cut
 
 From the brief's non-goals, plus: no dozens of species, no complex weather (one dusk phase only), no player-to-player anything, no premium currency, no energy system, no timers that punish absence.
+
+## 13. Economy and automation (Owner change, 2026-10-23)
+
+The brief's instant-coin harvest is replaced: fruit enters the crate and pays only at the market stall. The brief's section 16 still excludes dozens of species; this plan has eight total.
+
+### Crate and stall
+- The crate holds 12 items at start. Each fruit record retains species, rolled size, and mutation traits; value is computed at sale using today's base value, size, fresh/combo harvest modifiers already earned, and every mutation multiplier.
+- When full, harvesting still resolves: the ripe fruit remains on the plant, its stamp shows the full-crate icon, and it can be collected when space opens.
+- The stall is a fixed island object. Tap to start its queue; each fruit takes 1.2 s, hops crate-to-counter, and pops a coin. It continues selling while gardening. Buyers (paper villagers) and order-line bonus prices are a later M5 addition, never required for base sale.
+- The stall uses one draw call; its cloth sign lifts slightly while idle and snaps flat when selling.
+- Shop upgrades: Quick Counter I/II/III (1.0/0.8/0.6 s, levels 4/7/10, 45/180/600 coins); Crate I/II (18/24 slots, levels 5/9, 70/300); second counter (level 8, 350); Fresh Produce sign (+10% sale value, level 6, 160); Delivery Cart Auto-sell (level 12, 1,200). Auto-sell sends crate items to the stall; it is the final automation unlock.
+
+### Automation ladder
+All objects are authored Blender models. Costs below include the object and its listed tiers. One draw call each when idle (instanced/shared materials); moving parts use the same call. Idle animations pause under reduced motion.
+
+| Unlock, price | Object and island position | Work and upgrades | Idle animation / draw calls |
+|---|---|---|---|
+| Lv 5, 80 coins | Sprinkler, centre garden edge | Waters growing plots in radius once per plant; T2 (Lv 7, 160) waters twice and enables Giant; T3 (Lv 9, 360) radius +1 plot | Head swivels and clicks; one call |
+| Lv 7, 140 coins | Bee hive, flower patch | Bees visit neighbouring plants; T2 (Lv 9, 260) adds 10 percentage points to non-guaranteed mutation rule chances for visited plants; T3 (Lv 11, 520) +50% bee visits | Bees orbit entrance; one call |
+| Lv 8, 220 coins | Seed hopper, beside seed tray | Replants last seed in a harvested plot; T2 (Lv 10, 400) prioritises empty plots; T3 (Lv 12, 800) plants all eligible plots | Belt nudges a packet; one call |
+| Lv 10, 420 coins | Harvest helper, path around beds | Walks to ripe plants and carries fruit to crate; T2 (Lv 12, 700) walks faster; T3 (Lv 14, 1,100) carries 2 | Creature/clockwork gait and crate glance; one call |
+| Lv 12, 1,200 coins | Delivery cart, stall path | Auto-sell transports crate items; T2 (Lv 14, 1,000) doubles route speed; T3 (Lv 16, 1,800) adds a second trip per cycle | Rocks gently, wheel turns; one call |
+
+Sprinkler, Bee hive, Seed hopper, Harvest helper, and Delivery cart are separate real objects. Bee visits mark plants for the rule-chance bonus; they never bypass a trait's own rule or turn a failed roll into a guaranteed mutation. Guaranteed rules remain guaranteed.
+
+### New mutation treatments
+Guaranteed rules apply whenever their conditions hold; natural rolls remain rare surprise chances. Reveal colours use existing palette families.
+
+| Trait | Rule | Value | Look and reveal colour |
+|---|---|---:|---|
+| Frozen | A growing Dewbell neighbour is present at Mature. | ×5 | Pale ice material, 3 small facets; Pool blue |
+| Electric | Sprinkler waters the plant twice before Mature. | ×7 | Marigold vein lines pulse once per second; coin gold |
+| Twin | Plant beside mature Clockvine. | ×4 | Two fruits grow as a mirrored pair; violet |
+
+### Pacing targets
+Approximate active-play income after seed costs, per minute; tune in the M4 economy simulation. Each stage must beat the prior sustainable rate and leave the next purchase within reach.
+
+| Stage | Target coins/min |
+|---|---:|
+| Manual only | 12 |
+| Sprinkler | 20 |
+| Harvest helper | 34 |
+| Auto-sell | 52 |
+
+First automation target: buy Sprinkler by minute 5. Delivery Cart/Auto-sell target: earliest at about 2 hours of active play, normally later; Level 12 and 1,200 coins both gate it. Offline simulation caps at 2 h per absence.
+
+### 13.1 Owner change: staged milestones (2026-10-23)
+The brief's milestone order is retained verbatim there. This approved plan places the Mutation Laboratory in M6, after M5 mutations and polish.

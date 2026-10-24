@@ -1,5 +1,6 @@
-export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot';
+export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap';
 export type PlotId = string;
+export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm';
 export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestable';
 
 /** Fruit size rolled at planting (design.md 4.3). Absent means regular. */
@@ -17,6 +18,7 @@ export interface PlantState {
   readonly waterCount?: number;
   readonly mutations?: readonly TraitId[];
   readonly scriptedGiant?: boolean;
+  readonly fertilised?: boolean;
 }
 
 /** The timestamp growth is measured from. */
@@ -49,8 +51,13 @@ export interface GardenSnapshot {
   readonly levelStartXp: number;
   readonly nextLevelXp: number;
   readonly nowMs: number;
+  readonly plantCount?: number;
+  readonly scriptedGiantUsed?: boolean;
+  readonly scriptedGoldenUsed?: boolean;
   readonly plots: readonly PlotSnapshot[];
   readonly nearMiss?: string | null;
+  readonly owned?: readonly ShopItemId[];
+  readonly fertiliser?: number;
 }
 
 export interface GardenState {
@@ -60,9 +67,13 @@ export interface GardenState {
   readonly rngState: number;
   readonly mutationRngState: number;
   readonly scriptedGiantUsed: boolean;
+  readonly scriptedGoldenUsed: boolean;
+  readonly plantCount: number;
   readonly badLuck: Readonly<Record<TraitId, number>>;
   readonly discoveries: readonly string[];
   readonly rewardsPaid: readonly string[];
+  readonly owned: readonly ShopItemId[];
+  readonly fertiliser: number;
   /** Garden XP; the level is derived from it (design.md 4.4). */
   readonly xp: number;
   readonly plots: readonly PlotState[];
@@ -71,7 +82,9 @@ export interface GardenState {
 export type Command =
   | { readonly type: 'Plant'; readonly plotId: PlotId; readonly seedId: SpeciesId }
   | { readonly type: 'Harvest'; readonly plotIds: readonly PlotId[] }
-  | { readonly type: 'Water'; readonly plotId: PlotId };
+  | { readonly type: 'Water'; readonly plotId: PlotId }
+  | { readonly type: 'WaterAll' }
+  | { readonly type: 'Buy'; readonly item: ShopItemId };
 
 export type RejectionReason =
   | 'unknown-plot'
@@ -83,7 +96,8 @@ export type RejectionReason =
   | 'not-growing'
   | 'too-early'
   | 'already-watered'
-  | 'locked';
+  | 'locked'
+  | 'owned';
 
 export type SimEvent =
   | { readonly type: 'Planted'; readonly plotId: PlotId; readonly speciesId: SpeciesId }
@@ -101,6 +115,8 @@ export type SimEvent =
       readonly size: YieldSize;
       /** Harvested within the fresh window after ripening. */
       readonly fresh: boolean;
+      readonly lucky: boolean;
+      readonly mutations?: readonly TraitId[];
     }
   | {
       readonly type: 'HarvestCompleted';
@@ -109,8 +125,10 @@ export type SimEvent =
       readonly coins: number;
       readonly comboBonus: number;
     }
+  | { readonly type: 'LuckyHarvest'; readonly plotId: PlotId }
   | { readonly type: 'Watered'; readonly plotId: PlotId }
-  | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean }
+  | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean; readonly bonusCoins: number }
+  | { readonly type: 'Bought'; readonly item: ShopItemId }
   | { readonly type: 'LevelUp'; readonly level: number; readonly unlocked: readonly SpeciesId[] }
   | {
       readonly type: 'CommandRejected';

@@ -11,23 +11,26 @@ import { SPECIES } from '../../src/sim';
 import { startWithSave } from './garden-save';
 
 // These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
-test.beforeEach(async ({ page }) => startWithSave(page));
+test.beforeEach(async ({ page }, info) => startWithSave(page, 25, {
+  ...(info.title === 'six ripe plants stay under the production renderer draw-call budget'
+    ? { coins: 40, mutationRngState: 2, scriptedGiantUsed: true, scriptedGoldenUsed: true } : {}),
+}));
 
 type Point = { x: number; y: number };
 type Box = { x: number; y: number; width: number; height: number };
 type SpeciesId = (typeof SPECIES)[number]['id'];
-const speciesPlot: Record<SpeciesId, number> = { 'sunny-sprout': 0, 'bubble-berry': 2, twistroot: 4 };
+const speciesPlot: Record<SpeciesId, number> = { 'sunny-sprout': 0, 'bubble-berry': 2, twistroot: 4, puffcap: 5 };
 const speciesStampWorldY: Record<SpeciesId, number> = {
   // Authored plant tops (tools/blender/build_plants.py) plus the 0.45 stamp lift.
   'sunny-sprout': 2.89,
   'bubble-berry': 2.30,
-  twistroot: 3.13,
+  twistroot: 3.13, puffcap: 2.75,
 };
 
 const speciesLabels: Record<SpeciesId, string> = {
   'sunny-sprout': 'Sunny Sprout',
   'bubble-berry': 'Bubble Berry',
-  twistroot: 'Twistroot',
+  twistroot: 'Twistroot', puffcap: 'Puffcap',
 };
 
 function projectPlotPoint(
@@ -237,6 +240,7 @@ async function readStamp(
   page: Page,
   speciesId: SpeciesId,
   camera?: ReturnType<typeof createGardenCamera>,
+  plotId = speciesPlot[speciesId],
 ): Promise<{ center: Point; box: Box }> {
   const stageBounds = await page.locator('#stage').boundingBox();
   expect(stageBounds).not.toBeNull();
@@ -247,7 +251,7 @@ async function readStamp(
   // Yield size scales the plant, so search up its axis around the regular stamp height.
   const base = speciesStampWorldY[speciesId];
   const candidates = Array.from({ length: 15 }, (_, index) => base - 0.5 + index * 0.1)
-    .map((worldY) => projectPlotPoint(stageBounds!, speciesPlot[speciesId], worldY, camera));
+    .map((worldY) => projectPlotPoint(stageBounds!, plotId, worldY, camera));
   const xs = candidates.map(({ x }) => x);
   const ys = candidates.map(({ y }) => y);
   const clip = {
@@ -301,50 +305,10 @@ async function readStamp(
     // plant can also show paper, ink and fruit colours, but never at the expected height.
     .sort((a, b) => Math.abs(candidates.indexOf(a.center) - 5) - Math.abs(candidates.indexOf(b.center) - 5))[0];
   if (!visible) {
-    throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible above plot ${speciesPlot[speciesId]}: ${JSON.stringify(results)}`);
+    throw new Error(`settled ${speciesLabels[speciesId]} stamp should be visible above plot ${plotId}: ${JSON.stringify(results)}`);
   }
   const center = visible.center;
   return { center, box: { x: center.x - radius, y: center.y - radius, width: radius * 2, height: radius * 2 } };
-}
-
-async function countFruitRampPixels(page: Page, speciesId: SpeciesId, centers: readonly Point[]): Promise<number[]> {
-  const stage = await page.locator('#stage').boundingBox();
-  expect(stage).not.toBeNull();
-  const screenshot = await page.screenshot({ clip: stage!, scale: 'css' });
-  return page.evaluate(async ({ encoded, colors, centers }) => {
-    const image = new Image();
-    image.src = `data:image/png;base64,${encoded}`;
-    await image.decode();
-    const canvas = document.createElement('canvas');
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
-    const context = canvas.getContext('2d', { willReadFrequently: true });
-    if (!context) throw new Error('Could not inspect the production fruit crop');
-    context.drawImage(image, 0, 0);
-    const { data, width, height } = context.getImageData(0, 0, canvas.width, canvas.height);
-    const targets = colors.map((color) => [1, 3, 5].map((offset) => Number.parseInt(color.slice(offset, offset + 2), 16)));
-    const size = 48;
-    return centers.map(({ x: centerX, y: centerY }) => {
-      const left = Math.max(0, Math.min(width - size, Math.floor(centerX - size / 2)));
-      const top = Math.max(0, Math.min(height - size, Math.floor(centerY - size / 2)));
-      let matching = 0;
-      for (let y = top; y < Math.min(height, top + size); y += 1) {
-        for (let x = left; x < Math.min(width, left + size); x += 1) {
-          const pixel = (y * width + x) * 4;
-          if (targets.some((target) => Math.max(
-            Math.abs(data[pixel]! - target[0]!),
-            Math.abs(data[pixel + 1]! - target[1]!),
-            Math.abs(data[pixel + 2]! - target[2]!),
-          ) <= 24)) matching += 1;
-        }
-      }
-      return matching;
-    });
-  }, {
-    encoded: screenshot.toString('base64'),
-    colors: palette.plants[speciesId].fruit.slice(1),
-    centers: centers.map(({ x, y }) => ({ x: x - stage!.x, y: y - stage!.y })),
-  });
 }
 
 async function capturePlantCrop(page: Page, stage: Box, plotId: number, worldY = 1.65): Promise<{ image: Buffer; bounds: Box }> {
@@ -762,8 +726,10 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   const camera = createGardenCamera();
   resizeGardenCamera(camera, stageBox!.width, stageBox!.height);
   // Phone: the front lawn below the beds (the portrait view crops the island's sides). Desktop: left lawn.
-  const panOrigin = mobile ? projectGround(stageBox!, 3.3, camera, 0) : projectGround(stageBox!, 0, camera, -2.5);
   const plotsBeforePan = plotCenters(stageBox!, 0.65, camera);
+  const panOrigin = mobile
+    ? projectGround(stageBox!, 2.5, camera)
+    : (await findEmptyGroundPair(page, stageBox!, plotsBeforePan, camera))[0];
   expect(Math.min(...plotsBeforePan.map((plot) => distance(panOrigin, plot))), 'camera pan begins on grass away from every plot')
     .toBeGreaterThan(48);
   expect(await page.evaluate(({ x, y }) => document.elementFromPoint(x, y) === document.querySelector('#stage'), panOrigin))
@@ -887,17 +853,25 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
   });
   const { mobile, plots } = await openGame(page, info.project.name);
   await attachGardenCapture(page, info, `${info.project.name}-before-planting.png`);
-  for (const plot of plots) await plant(page, 'sunny-sprout', plot, mobile);
-  await waitForCoins(page, 6);
-  await advanceGameClock(page, 8_100);
-  await waitForRenderedStamps(page, ['sunny-sprout']);
-  expect((await readStamp(page, 'sunny-sprout')).box.width).toBeGreaterThanOrEqual(26);
-  const stageBounds = await page.locator('#stage').boundingBox();
-  expect(stageBounds).not.toBeNull();
-  const fruitCenters = plotCenters(stageBounds!, 1.81);
-  const fruitPixelCounts = await countFruitRampPixels(page, 'sunny-sprout', fruitCenters);
-  for (const [index, matchingPixels] of fruitPixelCounts.entries()) {
-    expect(matchingPixels, `ripe Sunny Sprout fruit is visible at plot ${index}`).toBeGreaterThan(12);
+  const speciesAtPlot = ['sunny-sprout', 'bubble-berry', 'twistroot', 'bubble-berry', 'bubble-berry', 'twistroot'] as const;
+  for (const [index, plot] of plots.entries()) await plant(page, speciesAtPlot[index]!, plot, mobile);
+  await waitForCoins(page, 20);
+  await advanceGameClock(page, 25_100);
+  const stamps = [];
+  for (const [plotId, speciesId] of speciesAtPlot.entries()) {
+    await expect.poll(async () => {
+      try {
+        const stamp = await readStamp(page, speciesId, undefined, plotId);
+        return stamp.box.width >= 26 ? 'ready' : 'stamp below minimum size';
+      } catch (error) {
+        return error instanceof Error ? error.message : String(error);
+      }
+    }, { intervals: [250, 500], timeout: 20_000 }).toBe('ready');
+    stamps.push(await readStamp(page, speciesId, undefined, plotId));
+  }
+  for (const [plotId, stamp] of stamps.entries()) {
+    const speciesId = speciesAtPlot[plotId]!;
+    expect(stamp.box.width, `ripe ${speciesId} stamp at plot ${plotId}`).toBeGreaterThanOrEqual(26);
   }
   if (info.project.name === 'mobile-portrait') {
     await attachGardenCapture(page, info, 'mobile-six-ripe-grayscale.png', true);

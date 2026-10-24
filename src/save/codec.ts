@@ -34,6 +34,9 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
   1: (state) => ({ ...state, schema: 2, xp: 0 }),
   2: (state) => ({ ...state, schema: 3, mutationRngState: 0, scriptedGiantUsed: false,
     badLuck: { giant: 0, golden: 0, glowing: 0, crystal: 0, rainbow: 0 }, discoveries: [], rewardsPaid: [],
+    owned: [], fertiliser: 0,
+    plantCount: Array.isArray(state.plots) ? state.plots.filter((plot) => Boolean(plot && typeof plot === 'object' && (plot as Record<string, unknown>).plant)).length : 0,
+    scriptedGoldenUsed: false,
     plots: Array.isArray(state.plots) ? state.plots.map((plot) => {
       if (!plot || typeof plot !== 'object') return plot;
       const entry = plot as Record<string, unknown>;
@@ -56,7 +59,7 @@ export function validateState(value: unknown): value is GardenState {
   if (!Number.isInteger(state.rngState) || (state.rngState as number) < 0 || (state.rngState as number) > 0xffff_ffff) return false;
   if (!isCount(state.xp)) return false;
   if (!Number.isInteger(state.mutationRngState) || (state.mutationRngState as number) < 0 || (state.mutationRngState as number) > 0xffff_ffff) return false;
-  if (typeof state.scriptedGiantUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string')) return false;
+  if (!isCount(state.plantCount) || !isCount(state.fertiliser) || !Array.isArray(state.owned) || !state.owned.every((item) => ['plot-6', 'plot-7', 'big-can', 'lucky-charm'].includes(item as string)) || new Set(state.owned).size !== state.owned.length || typeof state.scriptedGiantUsed !== 'boolean' || typeof state.scriptedGoldenUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string')) return false;
   const traits: TraitId[] = ['giant', 'golden', 'glowing', 'crystal', 'rainbow'];
   if (!state.badLuck || typeof state.badLuck !== 'object' || !traits.every((trait) => isCount((state.badLuck as Record<string, unknown>)[trait]))) return false;
   if (!Array.isArray(state.plots) || state.plots.length === 0) return false;
@@ -71,7 +74,7 @@ export function validateState(value: unknown): value is GardenState {
       && Number.isInteger(mutationSeed) && (mutationSeed as number) >= 0 && (mutationSeed as number) <= 0xffff_ffff
       && (waterCount === undefined || isCount(waterCount))
       && (waterCount === undefined || (waterCount as number) <= 2)
-      && (mutations === undefined || (Array.isArray(mutations) && mutations.length <= 2 && new Set(mutations).size === mutations.length && mutations.every((trait) => traits.includes(trait as TraitId))))
+      && (mutations === undefined || (Array.isArray(mutations) && mutations.length <= traits.length && new Set(mutations).size === mutations.length && mutations.every((trait) => traits.includes(trait as TraitId))))
       && (scriptedGiant === undefined || typeof scriptedGiant === 'boolean')
       && (size === undefined || (typeof size === 'string' && SIZES.has(size)))
       && (boostMs === undefined || isCount(boostMs));

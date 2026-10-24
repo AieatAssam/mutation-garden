@@ -171,6 +171,26 @@
   touch-action: manipulation;
 }
 
+.garden-ui__shop,.garden-ui__water-all,.garden-ui__shop-close,.garden-ui__buy {
+  min-height: 48px; padding: 0 14px; border: 3px solid var(--mg-ui-border); border-radius: 14px;
+  background: var(--mg-ui-panel); color: var(--mg-ui-text); box-shadow: 3px 3px 0 var(--mg-ui-misprint);
+  font: 700 15px 'Atkinson Hyperlegible', system-ui, sans-serif; cursor: pointer; pointer-events: auto; touch-action: manipulation;
+}
+.garden-ui__shop { display:flex; align-items:center; gap:7px; }
+/* A tab on the tray's top-right edge, mirroring the Seeds label on the left. */
+.garden-ui__tray > .garden-ui__shop { position:absolute; right:14px; bottom:calc(100% - 12px); }
+.garden-ui__shop-backdrop { position:absolute; inset:0; display:grid; align-items:end; background:color-mix(in srgb, var(--mg-ui-border) 55%, transparent); pointer-events:auto; }
+.garden-ui__shop-backdrop[hidden] { display:none; }
+.garden-ui__shop-sheet { width:min(100%,560px); max-height:70dvh; overflow:auto; box-sizing:border-box; justify-self:center; padding:16px; border:3px solid var(--mg-ui-border); border-bottom:0; border-radius:20px 20px 0 0; background:var(--mg-ui-panel); box-shadow:0 -5px 0 var(--mg-ui-misprint); }
+.garden-ui__shop-sheet header,.garden-ui__shop-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.garden-ui__shop-sheet header { margin-bottom:12px; font:800 26px 'Fraunces', Georgia, serif; }
+.garden-ui__shop-row { padding:10px 0; border-top:2px solid var(--mg-ui-panel-sunk); }
+.garden-ui__shop-row div { display:grid; gap:2px; }
+.garden-ui__shop-row div span { color:var(--mg-ui-text-muted); font-size:13px; }
+.garden-ui__shop-row.is-muted { opacity:.55; }
+.garden-ui__water-all { position:absolute; right:14px; bottom:calc(var(--garden-safe-bottom) + 136px); }
+.garden-ui__water-all[hidden] { display:none; }
+
 .garden-ui__toggle[aria-pressed='false'] {
   background: var(--mg-ui-panel-sunk);
   color: var(--mg-ui-text-muted);
@@ -310,7 +330,7 @@
 }
 
 .garden-ui__seed-name {
-  font: 700 15px/1.1 'Fraunces', Georgia, serif;
+  font: 700 13px/1.1 'Fraunces', Georgia, serif;
   font-variation-settings: 'SOFT' 100, 'WONK' 1;
   text-align: center;
 }
@@ -424,9 +444,9 @@
 @media (min-aspect-ratio: 1/1) {
   .garden-ui__hint {
     top: var(--garden-safe-top);
-    right: calc(var(--garden-safe-right) + 130px);
+    right: calc(var(--garden-safe-right) + 220px);
     left: auto;
-    max-width: calc(50% - 190px);
+    max-width: calc(50% - 280px);
     font-size: 14px;
     text-align: left;
     transform: none;
@@ -441,7 +461,7 @@
 /* Sits on its own just above the tray, so it never covers a seed card. */
 .garden-ui__harvest-all {
   position: absolute;
-  bottom: calc(100% + 10px);
+  bottom: calc(100% + 46px);
   right: 14px;
   min-height: 52px;
   padding: 0 16px;

@@ -12,7 +12,7 @@ Mutation Garden is a mobile-first 3D gardening game in the browser: plant, grow,
 | `docs/design.md` | The full game design: player journey, reward rhythm, rules, numbers, unlocks. What to build. |
 | `docs/art/motion.md` | **Binding** motion and effects spec: every transition, particle, sound and timing. |
 | `docs/architecture.md` | Module boundaries, deterministic sim, fixed timestep, saves, offline growth |
-| `docs/milestones/` | M1–M5 scope, slices and acceptance criteria. |
+| `docs/milestones/` | M1–M6 scope, slices and acceptance criteria. |
 | `docs/art/style-guide.md` | **Binding** art source of truth (Seed Packet direction) |
 | `docs/art/palette.json` | **Binding** colours. Generated into `src/render/palette.ts`. |
 | `docs/art/prototype/` | The visual reference: a throwaway three.js sketch and its screenshots. Not game code. |
@@ -51,8 +51,8 @@ Ask both agents to report actionable findings with severity, screenshot evidence
 ## One milestone at a time
 
 - Work only on the current milestone (see `docs/milestones/README.md`). Finish and accept it before starting the next.
-- **Do not start the Mutation Laboratory before M4.** Nothing goes in `src/lab`, and ESLint blocks importing it.
-- Keep the non-goals out (brief section 16): multiplayer, accounts, server persistence, ads, in-app purchases, large open worlds, complex weather, simulated plant biomechanics, extensive crafting, trading, the lab (until M4), dozens of species.
+- **Do not start the Mutation Laboratory before M6.** Nothing goes in `src/lab`, and ESLint blocks importing it.
+- Keep the non-goals out (brief section 16): multiplayer, accounts, server persistence, ads, in-app purchases, large open worlds, complex weather, simulated plant biomechanics, extensive crafting, trading, the lab (until M6), dozens of species.
 
 ## Architecture rules (enforced)
 
@@ -60,7 +60,7 @@ Ask both agents to report actionable findings with severity, screenshot evidence
 - Rendering, physics, UI and audio react to sim snapshots and events. They never decide rewards or change state.
 - Rapier is loaded lazily, only where it adds feel, and the game must work without it.
 - Growth is computed from real timestamps (`plantedAt`, `nowMs`), so it never depends on frame rate, physics or animation. Fixed 10 Hz sim tick for commands; rendering interpolates; physics has its own fixed step.
-- Rigid bodies only where the brief allows (section 9): falling and bouncing fruit, dropped objects, small environmental touches, and the M4 lab. Pool them and cap them.
+- Rigid bodies only where the brief allows (section 9): falling and bouncing fruit, dropped objects, small environmental touches, and the M6 lab. Pool them and cap them.
 - Saves: IndexedDB, versioned envelope, migrations with fixture tests, save on visibility change, recover from interrupted writes, never silently reset.
 - Module boundaries are in `eslint.config.js`. Don't add `eslint-disable` to cross them; write an ADR.
 
@@ -117,4 +117,4 @@ Player-facing text, docs and PR descriptions are plain, short and clear.
 - One slice per PR. Title: `M1-S2: Authored plants with smooth growth`. Branch: `salvage/s2-plants` or `m1/s2-plants`. Link the milestone doc and the task's issue.
 - The PR description says what changed, how it was tested (the gate commands and results), and includes screenshots for anything visual.
 - Squash-merge only after the reviewer approves (and the art advisor, when the change is visual) and CI is green with no retries.
-- Labels: `M1`–`M5`, `feat`, `bug`, `art`, `perf`, `needs-review`.
+- Labels: `M1`–`M6`, `feat`, `bug`, `art`, `perf`, `needs-review`.

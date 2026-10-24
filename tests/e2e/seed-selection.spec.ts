@@ -5,7 +5,7 @@ import { startWithSave } from './garden-save';
 // These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
 test.beforeEach(async ({ page }) => startWithSave(page));
 
-test('offers all three seeds, with Sunny selected and Twistroot selectable in a fixed viewport', async ({ page }, testInfo) => {
+test('offers all four seeds, with locked Puffcap visible until Level 4', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -27,7 +27,8 @@ test('offers all three seeds, with Sunny selected and Twistroot selectable in a 
   await expect(bubble).toBeVisible();
   await expect(twistroot).toBeVisible();
   await expect(trayLabel).toBeVisible();
-  await expect(seeds.getByRole('button')).toHaveCount(3);
+  await expect(seeds.locator('[data-species-id]')).toHaveCount(4);
+  await expect(seeds.getByRole('button', { name: 'Puffcap' })).toHaveAttribute('aria-disabled', 'true');
   await expect(sunny).toHaveAttribute('aria-pressed', 'true');
   await expect(bubble).toHaveAttribute('aria-pressed', 'false');
   await expect(coins).toHaveText('12');

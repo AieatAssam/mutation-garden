@@ -3,8 +3,8 @@ import './mutation-reveal.css';
 
 const TRAITS: Record<TraitId, { name: string; tier: number; line: string }> = {
   giant: { name: 'Giant', tier: 1, line: 'Water a plant twice to grow a Giant.' },
-  golden: { name: 'Golden', tier: 2, line: 'Keep tending plants to find Golden mutations.' },
-  glowing: { name: 'Glowing', tier: 2, line: 'Keep tending plants to find Glowing mutations.' },
+  golden: { name: 'Golden', tier: 2, line: 'Plant beside two Sunny Sprouts for Golden.' },
+  glowing: { name: 'Glowing', tier: 2, line: 'Plant beside a Puffcap for Glowing.' },
   crystal: { name: 'Crystal', tier: 3, line: 'A Crystal grows beside the pond.' },
   rainbow: { name: 'Rainbow', tier: 4, line: 'Pair mutations to discover Rainbow.' },
 };
@@ -21,29 +21,29 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
   let timer = 0;
   let labelTimer = 0;
   let detailTimer = 0;
-  const close = () => {
+  let active = false;
+  let disposed = false;
+  const queue: { event: Extract<SimEvent, { type: 'Mutated' }>; reducedMotion: boolean }[] = [];
+  const clear = () => {
     clearTimeout(timer);
     clearTimeout(labelTimer);
     clearTimeout(detailTimer);
     layer.replaceChildren();
     layer.className = 'mutation-reveal';
+    layer.onclick = null;
+    layer.onpointerdown = null;
+    layer.onpointerup = null;
   };
-  const show = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
+  const next = () => {
+    active = false;
+    clear();
+    const pending = queue.shift();
+    if (!disposed && pending) display(pending.event, pending.reducedMotion);
+  };
+  const display = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
+    active = true;
     const trait = TRAITS[event.mutations[0]!];
-    if (!trait) return;
-    if (!event.firstDiscovery) {
-      const point = projectPlot(event.plotId);
-      if (!point) return;
-      const label = document.createElement('span');
-      label.className = 'mutation-reveal__repeat';
-      label.textContent = trait.name;
-      label.style.left = `${point.x}px`;
-      label.style.top = `${point.y}px`;
-      layer.append(label);
-      setTimeout(() => label.remove(), 900);
-      return;
-    }
-    close();
+    if (!trait) { active = false; return; }
     layer.classList.add('mutation-reveal--full');
     layer.classList.toggle('mutation-reveal--reduced', reducedMotion);
     const flash = document.createElement('div');
@@ -65,6 +65,11 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     line.className = 'mutation-reveal__line';
     line.textContent = trait.line;
     details.append(stars, line);
+    if (event.bonusCoins > 0) {
+      const bonus = document.createElement('span'); bonus.className = 'mutation-reveal__line';
+      bonus.textContent = `+${event.bonusCoins} coins first-find bonus`;
+      details.append(bonus);
+    }
     labelTimer = window.setTimeout(() => {
       panel.append(title);
       if (!reducedMotion) {
@@ -75,8 +80,26 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     }, 1600);
     layer.onpointerdown = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
     layer.onpointerup = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
-    layer.onclick = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); close(); };
-    timer = window.setTimeout(close, 3200);
+    layer.onclick = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); next(); };
+    timer = window.setTimeout(next, 3200);
   };
-  return { show, dispose() { close(); layer.remove(); } };
+  const show = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
+    const mutations = [...event.mutations].sort((a, b) => (a === 'giant' ? -1 : 0) - (b === 'giant' ? -1 : 0));
+    for (const [index, mutation] of mutations.entries()) {
+      const single = { ...event, mutations: [mutation], bonusCoins: index === 0 ? event.bonusCoins : 0 };
+      const trait = TRAITS[mutation];
+      if (!trait) continue;
+      if (!event.firstDiscovery) {
+        const point = projectPlot(event.plotId);
+        if (!point) continue;
+        const label = document.createElement('span');
+        label.className = 'mutation-reveal__repeat'; label.textContent = trait.name;
+        label.style.left = `${point.x}px`; label.style.top = `${point.y}px`;
+        layer.append(label); setTimeout(() => label.remove(), 900);
+      } else queue.push({ event: single, reducedMotion });
+    }
+    const pending = !active ? queue.shift() : undefined;
+    if (pending && !disposed) display(pending.event, pending.reducedMotion);
+  };
+  return { show, dispose() { disposed = true; queue.length = 0; clear(); layer.remove(); } };
 }

@@ -1,5 +1,7 @@
 import {
   AmbientLight,
+  CubeReflectionMapping,
+  CubeTexture,
   ColorManagement,
   DirectionalLight,
   Group,
@@ -16,7 +18,7 @@ import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
 import { GARDEN_MODEL_URL, loadScenery, type Scenery } from './scenery';
-import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
+import { createGardenCamera, nudgeGardenCamera, panGardenCamera, resizeGardenCamera, setGardenCameraExpanded, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
 import { createParticles } from './motion/particles';
@@ -49,6 +51,7 @@ export interface Renderer {
   /** Screen point (CSS px, viewport) just above a plot's plant, for UI rewards. */
   projectPlot(plotId: PlotId): { x: number; y: number } | null;
   shiver(plotId: PlotId, durationMs: number): void;
+  nudge?(): void;
   pick(clientX: number, clientY: number): PickResult;
   /** Resolves once the authored island and plant models are in the scene (or failed to load). */
   whenLoaded(): Promise<void>;
@@ -81,6 +84,21 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   canvas.style.background = `linear-gradient(180deg, ${sky.zenith} 0%, ${sky.mid} 45%, ${sky.horizon} 85%)`;
 
   const scene = new Scene();
+  let environment: CubeTexture | null = null;
+  if (typeof document !== 'undefined') {
+    environment = new CubeTexture(Array.from({ length: 6 }, () => {
+      const face = document.createElement('canvas'); face.width = face.height = 16;
+      const context = face.getContext('2d')!;
+      const gradient = context.createLinearGradient(0, 0, 0, 16);
+      gradient.addColorStop(0, sky.zenith); gradient.addColorStop(0.55, sky.mid); gradient.addColorStop(1, sky.horizon);
+      context.fillStyle = gradient; context.fillRect(0, 0, 16, 16);
+      return face;
+    }));
+    environment.mapping = CubeReflectionMapping;
+    environment.colorSpace = SRGBColorSpace;
+    environment.needsUpdate = true;
+    scene.environment = environment;
+  }
   const camera = createGardenCamera();
 
   const day = palette.lighting.day;
@@ -128,10 +146,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     if (disposed) return;
     const warm = new Group();
     const rigs = plantModels
-      ? (['sunny-sprout', 'bubble-berry', 'twistroot'] as const).map((species) => createAuthoredRig(species, plantModels!, materials))
+      ? (['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap'] as const).map((species) => createAuthoredRig(species, plantModels!, materials))
       : [];
     for (const rig of rigs) {
-      rig.update({ speciesId: 'sunny-sprout', plantedAt: 0, stage: 'Harvestable', progress: 1 }, 0, true);
+      rig.update({ speciesId: rig.root.name as SpeciesId, plantedAt: 0, stage: 'Harvestable', progress: 1,
+        mutations: rig.root.name === 'sunny-sprout' ? ['golden'] : rig.root.name === 'puffcap' ? ['glowing'] : [] }, 0, true);
       warm.add(rig.root);
     }
     scene.add(warm);
@@ -337,6 +356,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       currentSnapshot = current;
       snapshotAlpha = Math.min(1, Math.max(0, alpha));
       currentReducedMotion = reducedMotion;
+      const expanded = current.plots.length > 6;
+      scenery?.setExpanded(expanded, clock(), reducedMotion);
+      setGardenCameraExpanded(camera, expanded);
+      for (const plot of garden.plots) {
+        const unlocked = current.plots.some((entry) => entry.id === plot.plotId);
+        plot.visible = unlocked;
+        plot.userData.locked = !unlocked;
+      }
       plants.update(previous, current, alpha, reducedMotion);
       const activeTells = new Set<PlotId>();
       for (const plot of current.plots) {
@@ -372,6 +399,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     shiver(plotId, durationMs) {
       if (!disposed && !currentReducedMotion) plants.shiver(plotId, currentSnapshot?.nowMs ?? 0, durationMs);
     },
+    nudge() {
+      if (!disposed && !currentReducedMotion) nudgeGardenCamera(camera, 0.02);
+    },
     pick(clientX, clientY) {
       if (disposed) return null;
       refreshStatus();
@@ -390,6 +420,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       flights.dispose();
       garden.dispose();
       materials.dispose();
+      environment?.dispose();
       gl.dispose();
     },
   };

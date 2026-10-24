@@ -23,6 +23,7 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
   layer.setAttribute('aria-hidden', 'true');
   container.append(layer);
   let flying = 0;
+  const luckyPool: { coin: HTMLSpanElement; active: boolean }[] = [];
 
   function floatLabel(text: string, x: number, y: number, kind: string, reducedMotion: boolean): void {
     const label = document.createElement('span');
@@ -86,14 +87,42 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
           const point = options.projectPlot(event.plotId);
           if (!point) continue;
           // Labels sit above the plant so the fruit's flight to the crate stays visible.
-          floatLabel(`+${event.coins}`, point.x, point.y - 44, 'coins', reducedMotion);
+          const mutations = event.mutations ?? [];
+          const label = mutations.length ? `+${event.coins} ${mutations.map((id) => `${id[0]!.toUpperCase()}${id.slice(1)}`).join(' + ')} x${mutations.reduce((v, id) => v * ({ giant: 2, golden: 4, glowing: 3, crystal: 6, rainbow: 10 } as const)[id], 1)}` : `+${event.coins}`;
+          floatLabel(label, point.x, point.y - 44, 'coins', reducedMotion);
           const note = event.size === 'big' ? 'Big' : event.fresh ? 'Fresh' : null;
           if (note) floatLabel(note, point.x, point.y - 74, 'note', reducedMotion);
           flyCoins(event.coins, point.x, point.y, reducedMotion);
+          if (event.lucky) {
+            if (reducedMotion) floatLabel('Lucky!', point.x, point.y - 98, 'note', true);
+            else for (let i = 0; i < 12; i += 1) {
+              let pooled = luckyPool.find(({ active }) => !active);
+              if (!pooled && luckyPool.length < 12) {
+                const coin = document.createElement('span'); coin.className = 'rewards__coin rewards__coin--lucky';
+                layer.append(coin); pooled = { coin, active: false }; luckyPool.push(pooled);
+              }
+              if (!pooled) break;
+              pooled.active = true;
+              const coin = pooled.coin;
+              coin.style.left = `${point.x}px`; coin.style.top = `${point.y}px`;
+              coin.style.opacity = '1';
+              const target = options.coinTarget()?.getBoundingClientRect();
+              const spread = (i - 5.5) * 12;
+              const destination = target
+                ? `translate(calc(-50% + ${target.left + 26 - point.x + spread}px), calc(-50% + ${target.top + target.height / 2 - point.y}px)) scale(.55)`
+                : `translate(calc(-50% + ${spread}px), calc(-50% - 70px)) scale(.8)`;
+              const animation = coin.animate([
+                { transform: 'translate(-50%, -50%) scale(.5)', opacity: 1 },
+                { transform: `translate(calc(-50% + ${spread}px), calc(-50% - 54px)) scale(1)`, opacity: 1, offset: 0.3 },
+                { transform: destination, opacity: 0 },
+              ], { duration: 780, delay: i * 28, fill: 'both' });
+              animation.onfinish = () => { animation.cancel(); coin.style.opacity = '0'; pooled.active = false; };
+            }
+          }
         } else if (event.type === 'HarvestCompleted' && event.count > 1) {
           const banner = document.createElement('div');
           banner.className = 'rewards__combo';
-          banner.textContent = `Combo ×${event.count}`;
+          banner.textContent = `Combo x${event.count}`;
           if (event.comboBonus > 0) {
             const bonus = document.createElement('span');
             bonus.textContent = ` +${event.comboBonus}`;

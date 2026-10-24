@@ -143,6 +143,7 @@ describe('boot animation wiring', () => {
         { id: 'sunny-sprout', stageFractions: [0.125, 0.375, 0.875] },
         { id: 'bubble-berry', stageFractions: [2 / 15, 0.4, 13 / 15] },
         { id: 'twistroot', stageFractions: [0.12, 0.4, 0.88] },
+        { id: 'puffcap', stageFractions: [4 / 30, 0.4, 26 / 30] },
       ],
     });
     const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
@@ -190,6 +191,7 @@ describe('boot animation wiring', () => {
         expect.objectContaining({ id: 'sunny-sprout', name: 'Sunny Sprout', cost: 1, unlockLevel: 1 }),
         expect.objectContaining({ id: 'bubble-berry', name: 'Bubble Berry', cost: 3, unlockLevel: 2 }),
         expect.objectContaining({ id: 'twistroot', name: 'Twistroot', cost: 5, unlockLevel: 3 }),
+        expect.objectContaining({ id: 'puffcap', name: 'Puffcap', cost: 6, unlockLevel: 4 }),
       ],
       selectedId: 'sunny-sprout',
       coins: 12,
@@ -197,7 +199,7 @@ describe('boot animation wiring', () => {
     }));
     expect(documentStub.body.append).toHaveBeenCalledWith(uiRoot);
     const uiOptions = createGardenUI.mock.calls[0]![1] as {
-      onSelect: (id: 'sunny-sprout' | 'bubble-berry' | 'twistroot') => void;
+      onSelect: (id: 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap') => void;
     };
     uiOptions.onSelect('bubble-berry');
     expect(updateGardenUI).toHaveBeenLastCalledWith(expect.objectContaining({ selectedId: 'bubble-berry', coins: 12 }));

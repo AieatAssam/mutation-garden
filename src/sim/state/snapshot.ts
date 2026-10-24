@@ -1,7 +1,7 @@
 import { getGrowthView } from '../plants/growth';
 import { levelForXp, xpForLevel } from '../content/species';
 import { growthStart, type GardenSnapshot, type GardenState } from './types';
-import { hasGiantTell } from '../plants/mutate';
+import { areAdjacent, hasGiantTell } from '../plants/mutate';
 
 /** Build presentation data without adding derived fields to canonical state. */
 export function getSnapshot(state: GardenState): GardenSnapshot {
@@ -19,8 +19,19 @@ export function getSnapshot(state: GardenState): GardenSnapshot {
     levelStartXp: xpForLevel(level),
     nextLevelXp: xpForLevel(level + 1),
     nowMs: state.lastNowMs,
+    plantCount: state.plantCount,
+    scriptedGiantUsed: state.scriptedGiantUsed,
+    scriptedGoldenUsed: state.scriptedGoldenUsed,
+    owned: state.owned,
+    fertiliser: state.fertiliser,
     plots,
-    nearMiss: level >= 4 && plots.some(({ plant }) => plant && plant.stage !== 'Mature' && plant.stage !== 'Harvestable' && (plant.waterCount ?? (plant.boostMs === undefined ? 0 : 1)) === 1)
-      ? 'Water it once more for a chance of Giant.' : null,
+    nearMiss: plots.some(({ id, plant }) => plant && plant.stage !== 'Mature' && plant.stage !== 'Harvestable' && goldenNeighbours(state, id) === 1)
+      ? 'Plant one more Sunny Sprout beside it for Golden.'
+      : plots.some(({ plant }) => plant && plant.stage !== 'Mature' && plant.stage !== 'Harvestable' && (plant.waterCount ?? (plant.boostMs === undefined ? 0 : 1)) === 1)
+        ? 'Water it again to grow a Giant.' : null,
   };
+}
+
+function goldenNeighbours(state: GardenState, id: string): number {
+  return state.plots.filter((plot) => plot.id !== id && plot.plant?.speciesId === 'sunny-sprout' && areAdjacent(id, plot.id)).length;
 }

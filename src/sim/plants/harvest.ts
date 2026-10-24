@@ -2,6 +2,7 @@ import { COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIE
 import { getGrowthView } from './growth';
 import { MUTATIONS } from '../content/mutations';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
+import { nextRandom } from '../state/rng';
 
 type HarvestCommand = Extract<Command, { readonly type: 'Harvest' }>;
 
@@ -49,18 +50,22 @@ export function harvest(
     const fresh = effectiveNowMs - ripeAt <= FRESH_WINDOW_MS;
     const mutationMultiplier = (plot.plant.mutations ?? []).reduce((product, trait) => product * MUTATIONS[trait].value, 1);
     const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1) * mutationMultiplier;
-    const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
+    const luckyRoll = nextRandom(nextState.rngState);
+    const lucky = luckyRoll.value < 0.1;
+    const coins = Math.max(1, Math.floor(species.baseValue * multiplier)) * (lucky ? 3 : 1);
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
     // XP follows the species' base value, so it never varies with luck (design.md 4.4).
-    nextState = { ...nextState, coins: nextState.coins + coins, xp: nextState.xp + species.baseValue * mutationMultiplier, plots };
+    nextState = { ...nextState, coins: nextState.coins + coins, xp: nextState.xp + species.baseValue * mutationMultiplier, plots, rngState: luckyRoll.nextState };
     totalCoins += coins;
     count += 1;
-    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins, size, fresh });
+    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins, size, fresh, lucky,
+      ...((plot.plant.mutations?.length ?? 0) > 0 ? { mutations: plot.plant.mutations } : {}) });
+    if (lucky) events.push({ type: 'LuckyHarvest', plotId });
   }
 
   // A swipe across several ripe plants pays a combo bonus on top (design.md 4.3).
-  const comboBonus = count > 1 ? Math.floor(totalCoins * Math.min(COMBO_CAP, COMBO_STEP * (count - 1))) : 0;
+  const comboBonus = count > 1 ? Math.max(count - 2, Math.floor(totalCoins * Math.min(COMBO_CAP, COMBO_STEP * (count - 1)))) : 0;
   if (comboBonus > 0) nextState = { ...nextState, coins: nextState.coins + comboBonus };
   totalCoins += comboBonus;
   if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: totalCoins, comboBonus });

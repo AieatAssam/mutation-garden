@@ -34,6 +34,7 @@ export interface Scenery extends Group {
   readonly clouds: readonly Group[];
   /** Creature shapes by name ("wing", "leaf"), vertex coloured, for the ambient layer to instance. */
   readonly creatures: ReadonlyMap<string, BufferGeometry>;
+  setExpanded(expanded: boolean, nowMs: number, reducedMotion: boolean): void;
   /** Moves wind and clouds to presentation time (m1-liveliness.md 4). Reduced motion holds them still. */
   update(nowMs: number, reducedMotion: boolean): void;
   dispose(): void;
@@ -123,13 +124,16 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
   };
 
   const cloudRoots: Object3D[] = [];
+  const chunkRoots: Object3D[] = [];
   source.traverse((object) => {
     if (/^cloud-\d+$/.test(object.name)) cloudRoots.push(object);
+    if (object.name === 'chunk-west') chunkRoots.push(object);
   });
   const inCloud = (object: Object3D) => {
     for (let parent = object.parent; parent; parent = parent.parent) if (cloudRoots.includes(parent)) return true;
     return false;
   };
+  const inChunk = (object: Object3D) => { for (let parent = object.parent; parent; parent = parent.parent) if (chunkRoots.includes(parent)) return true; return false; };
 
   // Creatures: "creature-wing", "creature-wing-dot", ... merge into one shape per second word.
   const creatureParts = new Map<string, BufferGeometry[]>();
@@ -151,7 +155,7 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
 
   const printed: BufferGeometry[] = [];
   source.traverse((object) => {
-    if (!(object instanceof Mesh) || inCloud(object) || object.name.startsWith('creature-')) return;
+    if (!(object instanceof Mesh) || inCloud(object) || inChunk(object) || object.name.startsWith('creature-')) return;
     // glTF strips dots from node names, so hull thickness is in thousandths: outline-60 = 0.06.
     const hull = /^outline-(\d+)$/.exec(object.name);
     if (hull) {
@@ -170,6 +174,33 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     mesh.userData.role = 'scenery';
     root.add(mesh);
   }
+
+  const chunks: Group[] = [];
+  for (const chunkRoot of chunkRoots) {
+    const chunk = new Group(); chunk.name = chunkRoot.name; chunk.position.y = -3.5;
+    const geometries: BufferGeometry[] = [];
+    chunkRoot.traverse((object) => {
+      if (!(object instanceof Mesh)) return;
+      const hull = /^outline-(\d+)$/.exec(object.name);
+      if (hull) { chunk.add(hullOf(object, object.matrixWorld, Number(hull[1]) / 1000)); return; }
+      geometries.push(vertexColored(object, object.matrixWorld));
+    });
+    if (geometries.length) { const printed = printedMesh(geometries, false); printed.name = 'chunk-west-printed'; chunk.add(printed); }
+    chunk.visible = false; chunks.push(chunk); root.add(chunk);
+  }
+  let expandStart = -Infinity; let expanded = false; let expandReduced = false;
+  (root as Scenery).setExpanded = (value, nowMs, reducedMotion) => {
+    if (expanded === value) return;
+    expanded = value; expandStart = nowMs; expandReduced = reducedMotion;
+    for (const chunk of chunks) {
+      chunk.visible = true;
+      if (reducedMotion) {
+        const printed = chunk.getObjectByName('chunk-west-printed') as Mesh | null;
+        if (printed) { const material = printed.material as MeshToonMaterial; material.transparent = true; material.opacity = value ? 0 : 1; }
+        chunk.position.y = 0;
+      }
+    }
+  };
 
   // Each cloud: lit and shade layers merged into one mesh plus its hull, in the cloud's own frame.
   const clouds: Group[] = [];
@@ -206,6 +237,15 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
 
   root.update = (nowMs, reducedMotion) => {
     windUniforms.windAmount.value = reducedMotion ? 0 : 1;
+    const t = Math.max(0, Math.min(1, (nowMs - expandStart) / (expandReduced ? 300 : 1800)));
+    for (const chunk of chunks) {
+      const printed = chunk.getObjectByName('chunk-west-printed') as Mesh | null;
+      if (!expanded && t >= 1) { chunk.visible = false; continue; }
+      const p = expanded ? t : 1 - t;
+      if (expandReduced) {
+        if (printed) (printed.material as MeshToonMaterial).opacity = p;
+      } else chunk.position.y = -3.5 * (1 - p) + 0.12 * Math.sin(p * Math.PI * 2) * (1 - p);
+    }
     if (reducedMotion) return;
     // Seconds within a whole number of wind periods, so float precision holds over long sessions.
     windUniforms.windTime.value = (nowMs % (WIND_PERIOD_MS * 100)) / 1000;

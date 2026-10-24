@@ -25,7 +25,9 @@ describe('save codec', () => {
   });
 
   it('continues a saved mature mutation without rerolling it', () => {
-    const state = step(createInitialState(44, 0, { xp: 25 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], 0).state;
+    let state = step(createInitialState(44, 0, { xp: 25 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], 0).state;
+    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 5_000).state;
+    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 6_000).state;
     const matured = step(state, [], 22_000).state;
     const decoded = decodeSave(encodeSave(matured, 22_000, 'test'));
     expect(decoded.ok).toBe(true);
@@ -45,6 +47,13 @@ describe('save codec', () => {
       const matured = step(result.state, [], 40_000);
       expect(matured.state.plots[0]?.plant?.mutations).toEqual([]);
     }
+  });
+
+  it('migrates schema 2 saves into the shop fields in schema 3', () => {
+    const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-2.json', 'utf8'));
+    const decoded = decodeSave(fixture);
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 3, owned: [], fertiliser: 0, plantCount: 1 });
   });
 });
 

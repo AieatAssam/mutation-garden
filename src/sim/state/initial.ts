@@ -38,9 +38,13 @@ export function createInitialState(seed: number, nowMs: number, options: Initial
     rngState: seed >>> 0,
     mutationRngState: seedHash === (seed >>> 0) ? (seedHash ^ 0x9e3779b9) >>> 0 : seedHash,
     scriptedGiantUsed: false,
+    scriptedGoldenUsed: false,
+    plantCount: 0,
     badLuck: { giant: 0, golden: 0, glowing: 0, crystal: 0, rainbow: 0 } satisfies Record<TraitId, number>,
     discoveries: [],
     rewardsPaid: [],
+    owned: [],
+    fertiliser: 0,
     xp: options.xp ?? 0,
     plots,
   };

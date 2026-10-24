@@ -4,6 +4,7 @@ import { harvest } from '../plants/harvest';
 import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
 import { evaluateMature } from '../plants/mutate';
+import { buy, waterAll } from '../plants/shop';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -37,7 +38,11 @@ export function step(
       ? plant(nextState, command, effectiveNowMs)
       : command.type === 'Water'
         ? water(nextState, command, effectiveNowMs)
-        : harvest(nextState, command, effectiveNowMs);
+        : command.type === 'Harvest'
+          ? harvest(nextState, command, effectiveNowMs)
+          : command.type === 'Buy'
+            ? buy(nextState, command)
+            : waterAll(nextState, effectiveNowMs);
     nextState = result.state;
     events.push(...result.events);
   }

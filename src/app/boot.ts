@@ -26,6 +26,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   let coins = initialState.coins;
   let latestSnapshot: GardenSnapshot = getSnapshot(initialState);
   const acceptPlotActivation = createPlotActivationGuard();
+  let uiCommand: (command: Command) => void = () => {};
   const uiRoot = document.createElement('div');
   uiRoot.dataset.gardenUi = '';
   for (const [name, value] of Object.entries({
@@ -61,6 +62,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     onToggleSound: () => changeSettings({ ...settings, sound: !settings.sound }),
     onToggleMusic: () => changeSettings({ ...settings, music: !settings.music }),
     onHarvestAll: () => harvestAll(),
+    onBuy: (item) => uiCommand({ type: 'Buy', item }),
+    onWaterAll: () => uiCommand({ type: 'WaterAll' }),
   });
   let harvestAll = () => {};
   let settings: Settings = DEFAULT_SETTINGS;
@@ -89,6 +92,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       music: settings.music,
       reducedMotion,
       ripeCount: snapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').length,
+      owned: snapshot.owned ?? [],
+      fertiliser: snapshot.fertiliser ?? 0,
     });
   };
   let changeSettings: (next: Settings) => void = (next) => { settings = next; };
@@ -128,6 +133,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     const unlockAudio = () => sfx.unlock();
     window.addEventListener('pointerdown', unlockAudio, { capture: true });
     const act = (command: Command) => { if (loadSettled) loop.enqueue(command); };
+    uiCommand = act;
     const loop = createFixedStepLoop({
       initialState,
       nowMs: () => Date.now(),
@@ -151,9 +157,11 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
         }
         r.onEvents(events, motion.matches);
+        if (!motion.matches && events.some((event) => event.type === 'HarvestCompleted' && event.count >= 3)) r.nudge?.();
         rewards.onEvents(events, motion.matches);
         sfx.onEvents(events);
-        for (const event of events) if (event.type === 'Mutated') {
+        for (const event of events.filter((item) => item.type === 'Mutated')
+          .sort((a, b) => Number(b.mutations.includes('giant')) - Number(a.mutations.includes('giant')))) {
           mutationReveal.show(event, motion.matches);
           sfx.mutation(event.firstDiscovery);
           if (event.firstDiscovery && !motion.matches && 'vibrate' in navigator) navigator.vibrate([20, 40, 20]);

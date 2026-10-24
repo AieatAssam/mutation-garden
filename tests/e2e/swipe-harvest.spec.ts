@@ -118,19 +118,19 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   const rect = await canvas.boundingBox();
   expect(rect).not.toBeNull();
 
-  const plots = [0, 1, 2, 4].map((id) => plotCenter(id, rect!));
+  const plots = Array.from({ length: 6 }, (_, id) => plotCenter(id, rect!));
   // The pond: scenery no plant, effect or HUD element covers, so it only changes if the camera pans.
   const untouchedRock = projectWorld(new Vector3(-2.85, 0.48, 1.0), rect!);
   const coins = page.getByRole('status', { name: 'Coins' });
   const seeds = page.getByRole('navigation', { name: 'Seeds' });
   const sunny = seeds.getByRole('button', { name: 'Sunny Sprout' });
   await expect(coins).toHaveText('12');
-  for (const id of [0, 2, 4]) {
+  for (const id of [0, 3, 4]) {
     if (mobile) await sunny.tap();
     else await sunny.click();
     await expect(sunny).toHaveAttribute('aria-pressed', 'true');
-    if (mobile) await page.touchscreen.tap(plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.x, plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.y);
-    else await page.mouse.click(plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.x, plots[id === 0 ? 0 : id === 2 ? 2 : 3]!.y);
+    if (mobile) await page.touchscreen.tap(plots[id]!.x, plots[id]!.y);
+    else await page.mouse.click(plots[id]!.x, plots[id]!.y);
   }
   await expect(coins).toHaveText('9');
   const plantedAt = await page.evaluate(() => Date.now());
@@ -140,7 +140,7 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
 
   // A canceled plot-owned path across ripe crops must neither harvest nor pan.
   const beforeCancellation = await plotSignature(page, untouchedRock);
-  await cancelSwipe(page, plots[0]!, plots[3]!, mobile);
+  await cancelSwipe(page, plots[0]!, plots[4]!, mobile);
   await expect(coins).toHaveText('9');
   expect(await plotSignature(page, untouchedRock)).toBe(beforeCancellation);
   const bubble = seeds.getByRole('button', { name: 'Bubble Berry' });
@@ -156,7 +156,7 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   const beforeHarvest = await plotSignature(page, untouchedRock);
 
   // A fresh swipe crosses three ripe plants, reverses over one, and commits one batch.
-  const harvest = await expectHarvestPaid(page, () => swipe(page, [plots[0]!, plots[2]!, plots[3]!, plots[2]!], mobile));
+  const harvest = await expectHarvestPaid(page, () => swipe(page, [plots[0]!, plots[3]!, plots[4]!, plots[3]!], mobile));
   // Three fresh Sunny Sprouts in one swipe: at least 1 each, plus any combo bonus shown.
   expect(harvest.paid).toBeGreaterThanOrEqual(3);
   await page.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => resolve())));
@@ -164,14 +164,14 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   const harvestAt = await page.evaluate(() => Date.now());
 
   // Repeating the same harvest cannot pay again or turn its release into planting.
-  await swipe(page, [plots[0]!, plots[2]!, plots[3]!], mobile);
+  await swipe(page, [plots[0]!, plots[3]!, plots[4]!], mobile);
   await expect(coins).toHaveText(String(harvest.after));
   await advanceGrowthClock(page, PLOT_ACTIVATION_GUARD_MS);
   await expect.poll(() => page.evaluate(() => Date.now()), {
     intervals: [10, 25, 50], timeout: 5_000,
   }).toBeGreaterThanOrEqual(harvestAt + PLOT_ACTIVATION_GUARD_MS);
 
-  await swipe(page, [plots[0]!, plots[2]!, plots[3]!], mobile);
+  await swipe(page, [plots[0]!, plots[3]!, plots[4]!], mobile);
   const simTickAt = await page.evaluate(() => performance.now());
   await expect.poll(() => page.evaluate(() => performance.now()), {
     intervals: [10, 25, 50], timeout: 5_000,

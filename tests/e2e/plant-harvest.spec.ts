@@ -254,6 +254,7 @@ test('Twistroot costs five coins, matures after 25 seconds, pays its yield and c
 
 test('a planted seed and the spent coin survive a reload', async ({ page }, testInfo) => {
   const mobile = testInfo.project.name === 'mobile-portrait';
+  await page.emulateMedia({ reducedMotion: 'reduce' });
   const plot = await firstPlotCenter(page, testInfo.project.name);
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');

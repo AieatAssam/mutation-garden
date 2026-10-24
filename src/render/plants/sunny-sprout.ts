@@ -16,7 +16,7 @@ import type { MaterialLibrary } from '../materials';
 
 export interface PlantRig {
   readonly root: Group;
-  update(plant: PlantSnapshot, presentationNowMs: number, reducedMotion: boolean): void;
+  update(plant: PlantSnapshot, presentationNowMs: number, reducedMotion: boolean, crystalTransmissionSlots?: number): number | void;
   shiver?(presentationNowMs: number, durationMs: number): void;
   /** Optional exact top of the visible plant in world space; the reconciler measures bounds otherwise. */
   getTop?(target: Vector3): boolean;

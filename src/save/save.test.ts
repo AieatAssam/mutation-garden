@@ -62,7 +62,7 @@ describe('save codec', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-2.json', 'utf8'));
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
-    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 5, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null, order: { index: 0, progress: 0 } });
+    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 6, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
   });
 
   it('migrates the M2 schema 3 fixture with mutations to an empty, idle crate', () => {
@@ -70,7 +70,7 @@ describe('save codec', () => {
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
-      expect(decoded.state).toMatchObject({ schema: 5, crate: [], sellingSince: null, order: { index: 0, progress: 0 } });
+      expect(decoded.state).toMatchObject({ schema: 6, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
       expect(decoded.state.plots[0]?.plant).toMatchObject({ mutations: ['golden'] });
     }
   });
@@ -81,9 +81,17 @@ describe('save codec', () => {
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
-      expect(decoded.state).toMatchObject({ schema: 5, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser });
-      expect({ ...decoded.state, schema: 4, order: undefined }).toEqual({ ...original, order: undefined });
+      expect(decoded.state).toMatchObject({ schema: 6, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser, crystalReadyPlots: [], rainbowPlots: [] });
+      const { crystalReadyPlots: _crystal, rainbowPlots: _rainbow, ...migrated } = decoded.state;
+      void _crystal; void _rainbow;
+      expect({ ...migrated, schema: 4, order: undefined }).toEqual({ ...original, order: undefined });
     }
+  });
+
+  it('migrates a schema 5 fixture with the new one-shot plot flags empty', () => {
+    const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-5.json', 'utf8'));
+    const decoded = decodeSave(fixture);
+    expect(decoded).toMatchObject({ ok: true, state: { schema: 6, crystalReadyPlots: [], rainbowPlots: [] } });
   });
 
   it('does not replay an order reward after saving and resuming', () => {

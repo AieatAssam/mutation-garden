@@ -19,6 +19,7 @@ export interface PlantState {
   readonly mutations?: readonly TraitId[];
   readonly scriptedGiant?: boolean;
   readonly fertilised?: boolean;
+  readonly rainbow?: boolean;
 }
 
 /** The timestamp growth is measured from. */
@@ -80,7 +81,7 @@ export interface OrderProgress { readonly index: number; readonly progress: numb
 export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number }
 
 export interface GardenState {
-  readonly schema: 5;
+  readonly schema: 6;
   readonly coins: number;
   readonly lastNowMs: number;
   readonly rngState: number;
@@ -91,6 +92,8 @@ export interface GardenState {
   readonly badLuck: Readonly<Record<TraitId, number>>;
   readonly discoveries: readonly string[];
   readonly rewardsPaid: readonly string[];
+  readonly crystalReadyPlots: readonly PlotId[];
+  readonly rainbowPlots: readonly PlotId[];
   readonly owned: readonly ShopItemId[];
   readonly fertiliser: number;
   /** Garden XP; the level is derived from it (design.md 4.4). */
@@ -153,7 +156,7 @@ export type SimEvent =
     }
   | { readonly type: 'LuckyHarvest'; readonly plotId: PlotId }
   | { readonly type: 'Watered'; readonly plotId: PlotId }
-  | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean; readonly bonusCoins: number }
+  | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean; readonly bonusCoins: number; readonly bonusXp: number }
   | { readonly type: 'Bought'; readonly item: ShopItemId }
   | { readonly type: 'FruitSold'; readonly value: number; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[] }
   | { readonly type: 'OrderCompleted'; readonly title: string; readonly coins: number; readonly xp: number }

@@ -61,6 +61,13 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         rule: 'Keep two Sunny Sprout neighbours beside a growing plant.' },
       { id: 'glowing', name: 'Glowing', multiplier: MUTATIONS.glowing.value, naturalChance: MUTATIONS.glowing.naturalChance,
         rule: 'Keep a Puffcap beside a growing plant.', hintLevel: 4, prerequisite: 'Unlock Puffcap at Level 4 for the guaranteed recipe.' },
+      { id: 'crystal', name: 'Crystal', multiplier: MUTATIONS.crystal.value, naturalChance: MUTATIONS.crystal.naturalChance,
+        ruleOdds: '30% when the rule holds · Guaranteed after 40 qualifying Matures without Crystal.',
+        rule: 'Harvest Glowing fruit from plot 0 or 2, then replant there.', prerequisites: ['glowing'],
+        prerequisite: 'Find Glowing first to reveal the pond-side recipe.' },
+      { id: 'rainbow', name: 'Rainbow', multiplier: MUTATIONS.rainbow.value, naturalChance: MUTATIONS.rainbow.naturalChance,
+        rule: 'Harvest Golden, Glowing and Crystal together, then replant one of those plots.',
+        prerequisites: ['golden', 'glowing', 'crystal'], prerequisite: 'Find Golden, Glowing and Crystal first.' },
     ],
     selectedId: selectedSpeciesId,
     coins,
@@ -197,7 +204,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
               { transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' },
             ], { duration: 420 });
           }
-          sfx.mutation(event.firstDiscovery);
+          sfx.mutation(event.mutations, event.firstDiscovery);
           if (event.firstDiscovery && !motion.matches && 'vibrate' in navigator) navigator.vibrate([20, 40, 20]);
         }
         if (!motion.matches && 'vibrate' in navigator) {

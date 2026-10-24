@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { Box3, Group, InstancedMesh, Matrix4, Mesh, Vector3, type Material, type Object3D } from 'three';
+import { Box3, BoxGeometry, Group, InstancedMesh, Matrix4, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, Vector3, type Material, type Object3D } from 'three';
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
 import { createMaterialLibrary } from '../materials';
 import { createPlantReconciler } from './reconcile';
+import { readPlantModels } from './authored';
 
 const libraries: ReturnType<typeof createMaterialLibrary>[] = [];
 afterEach(() => libraries.splice(0).forEach((library) => library.dispose()));
@@ -92,6 +93,39 @@ describe('plant reconciliation', () => {
     expect(jiggleTop.y).toBeLessThan(target.y);
     expect(jiggleTop.y).toBeCloseTo(semanticWorldTop(anchors[0]!).y, 6);
     reconciler.dispose();
+  });
+
+  it('caps transmitting Crystal fruit meshes across multiple visible rigs', () => {
+    const ids: PlotId[] = ['plot-0', 'plot-1', 'plot-2', 'plot-3'];
+    const { anchors, materials, reconciler } = setup(ids);
+    const source = new Group();
+    for (const species of ['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap'] as const) {
+      const group = new Group(); group.name = species;
+      const stem = new Mesh(new BoxGeometry(0.1, 1, 0.1), new MeshStandardMaterial());
+      stem.name = `${species}_stem`; stem.material.name = `plants.${species}.stem.1`;
+      stem.userData = { grow_start: 0, grow_end: 0.5 };
+      group.add(stem);
+      const fruits = species === 'puffcap' ? ['fruit', 'fruit_two'] : ['fruit'];
+      for (const name of fruits) {
+        const fruit = new Mesh(new BoxGeometry(0.2, 0.2, 0.2), new MeshStandardMaterial());
+        fruit.name = `${species}_${name}`; fruit.material.name = `plants.${species}.fruit.1`;
+        fruit.userData = { grow_start: 0.5, grow_end: 1, attach: `${species}_stem`, ripe: true, fly: true };
+        group.add(fruit);
+      }
+      source.add(group);
+    }
+    const models = readPlantModels(source);
+    reconciler.setModels(models);
+    const crystal = { ...plant(1, 1, 'Harvestable', 'puffcap'), mutations: ['crystal', 'giant'] as const };
+    reconciler.update(snap(0, [null, null, null, null], ids), snap(0, [crystal, crystal, crystal, crystal], ids), 1, true);
+
+    const fruitMeshes = anchors.map((anchor) => anchor.getObjectByName('plant-body')!.children as Mesh[])
+      .map((children) => children.filter((child) => child.userData.part?.startsWith('puffcap_fruit') && !child.userData.part.endsWith('-outline')));
+    expect(fruitMeshes.flat().filter((mesh) => mesh.material instanceof MeshPhysicalMaterial)).toHaveLength(3);
+    expect(fruitMeshes[0]!.every((mesh) => mesh.material instanceof MeshPhysicalMaterial)).toBe(true);
+    expect(fruitMeshes[1]!.filter((mesh) => mesh.material instanceof MeshStandardMaterial && !(mesh.material instanceof MeshPhysicalMaterial))).toHaveLength(1);
+    expect(fruitMeshes[2]!.every((mesh) => mesh.material instanceof MeshStandardMaterial && !(mesh.material instanceof MeshPhysicalMaterial))).toBe(true);
+    reconciler.dispose(); models.dispose(); materials.dispose();
   });
 
   it('reports the visible semantic world-space top for every supported plant and follows live growth and animation', () => {

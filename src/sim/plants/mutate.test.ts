@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, getSnapshot, nextRandom, step } from '../index';
+import { createInitialState, getSnapshot, mutationRoll, nextRandom, step } from '../index';
 
 describe('M2 mutation rules', () => {
   it('keeps planting size draws on the garden RNG stream', () => {
@@ -26,7 +26,7 @@ describe('M2 mutation rules', () => {
     expect(state.plots[1]?.plant?.mutations).toContain('golden');
   });
 
-  it('pays half a level of XP and three mutated harvest values for an early Golden', () => {
+  it('pays ten mutated base values in coins and XP for an early Golden', () => {
     let state = createInitialState(91, 0);
     state = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
@@ -35,8 +35,8 @@ describe('M2 mutation rules', () => {
     ], 0).state;
 
     const result = step(state, [], 8_000);
-    expect(result.state.xp).toBe(250);
-    expect(result.state.coins).toBe(33);
+    expect(result.state.xp).toBe(80);
+    expect(result.state.coins).toBe(89);
     expect(result.state.plots[1]?.plant?.mutations).toEqual(['golden']);
   });
 
@@ -89,6 +89,42 @@ describe('M2 mutation rules', () => {
     expect(state.plots[1]?.plant?.mutations).toContain('glowing');
   });
 
+  it('primes Crystal only from a Glowing harvest on pond-side plot 0 or 2', () => {
+    const glowing = { speciesId: 'sunny-sprout' as const, plantedAt: 0, size: 'regular' as const, mutationSeed: 1, mutations: ['glowing' as const] };
+    const initial = createInitialState(50, 8_000, { xp: 900 });
+    const state = { ...initial, plots: initial.plots.map((plot) => plot.id === 'plot-0' ? { ...plot, plant: glowing } : plot) };
+    const harvest = step(state, [{ type: 'Harvest', plotIds: ['plot-0'] }], 8_000);
+    expect(harvest.state.crystalReadyPlots).toEqual(['plot-0']);
+    const planted = step({ ...harvest.state, badLuck: { ...harvest.state.badLuck, crystal: 39 } },
+      [{ type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' }], 8_000);
+    const mature = step(planted.state, [], 23_000);
+    expect(mature.state.plots[0]?.plant?.mutations).toContain('crystal');
+    expect(mature.state.crystalReadyPlots).toEqual([]);
+  });
+
+  it('uses the 30% Crystal rule roll on a qualified plot', () => {
+    const mutationSeed = Array.from({ length: 1000 }, (_, seed) => seed).find((seed) => mutationRoll(seed!, 'crystal') < 0.3)!;
+    const state = createInitialState(51, 15_000, { xp: 900 });
+    const qualified = { ...state, crystalReadyPlots: ['plot-2'], plots: state.plots.map((plot) => plot.id === 'plot-2'
+      ? { ...plot, plant: { speciesId: 'bubble-berry' as const, plantedAt: 0, size: 'regular' as const, mutationSeed } } : plot) };
+    expect(step(qualified, [], 15_000).state.plots[2]?.plant?.mutations).toContain('crystal');
+  });
+
+  it('flags every harvested Golden, Glowing and Crystal plot for one Rainbow seed', () => {
+    let state = createInitialState(52, 30_000, { xp: 900 });
+    const mutations = [['golden'], ['glowing'], ['crystal']] as const;
+    state = { ...state, plots: state.plots.map((plot, index) => index < 3 ? { ...plot,
+      plant: { speciesId: 'sunny-sprout', plantedAt: 0, size: 'regular', mutationSeed: 0, mutations: mutations[index]! } } : plot) };
+    const harvest = step(state, [{ type: 'Harvest', plotIds: ['plot-0', 'plot-1', 'plot-2'] }], 30_000);
+    expect(harvest.state.rainbowPlots).toEqual(['plot-0', 'plot-1', 'plot-2']);
+    expect(harvest.state.crate.map(({ mutations: found }) => found)).toEqual([['golden'], ['glowing'], ['crystal']]);
+    expect(harvest.state.crate.map(({ value }) => value)).toEqual([8, 6, 12]);
+    const planted = step(harvest.state, [{ type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' }], 30_000);
+    expect(planted.state.plots[1]?.plant?.rainbow).toBe(true);
+    expect(planted.state.rainbowPlots).toEqual(['plot-0', 'plot-2']);
+    expect(step(planted.state, [], 38_000).state.plots[1]?.plant?.mutations).toContain('rainbow');
+  });
+
   it('pays each species-trait first-find reward once', () => {
     let state = createInitialState(11, 0, { xp: 900 });
     state = step(state, [
@@ -97,8 +133,9 @@ describe('M2 mutation rules', () => {
       { type: 'Plant', plotId: 'plot-3', seedId: 'sunny-sprout' },
     ], 0).state;
     const first = step(state, [], 25_001);
-    expect(first.events).toContainEqual(expect.objectContaining({ type: 'Mutated', speciesId: 'twistroot', bonusCoins: 120 }));
-    expect(first.state.xp).toBe(2_100);
+    expect(first.events).toContainEqual(expect.objectContaining({ type: 'Mutated', speciesId: 'twistroot', bonusCoins: 400, bonusXp: 400 }));
+    const firstBonusXp = first.events.filter((event) => event.type === 'Mutated').reduce((total, event) => total + event.bonusXp, 0);
+    expect(first.state.xp).toBe(state.xp + firstBonusXp);
     expect(first.state.rewardsPaid).toContain('twistroot:golden');
     const second = step({ ...first.state, plots: first.state.plots.map((plot) => {
       if (plot.id !== 'plot-1' || !plot.plant) return plot;
@@ -107,6 +144,6 @@ describe('M2 mutation rules', () => {
       return { ...plot, plant: unmutated };
     }) }, [], 25_002);
     expect(second.state.rewardsPaid.filter((id) => id === 'twistroot:golden')).toHaveLength(1);
-    expect(second.events).toContainEqual(expect.objectContaining({ type: 'Mutated', bonusCoins: 0 }));
+    expect(second.events).toContainEqual(expect.objectContaining({ type: 'Mutated', bonusCoins: 0, bonusXp: 0 }));
   });
 });

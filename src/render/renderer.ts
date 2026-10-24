@@ -131,7 +131,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     console.error('Garden model failed to load', error);
   });
   scene.add(garden);
-  const plants = createPlantReconciler(garden.plots, materials, { waitForModels: true });
+  const plants = createPlantReconciler(garden.plots, materials, { waitForModels: true, camera });
   let plantModels: PlantModels | null = null;
   const plantsLoaded = loadPlantModels(PLANT_MODEL_URL).then((models) => {
     if (disposed) {
@@ -297,7 +297,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
             const trait = event.mutations[0];
             const colors = trait === 'giant' ? [palette.ui.coin.emboss, palette.ink['paper-white']]
               : trait === 'golden' ? palette.plants[event.speciesId].fruit.slice(0, 2)
-                : [palette.environment.water[0], palette.environment.water[1]];
+                : trait === 'crystal' ? [palette.mutations.crystal.body, palette.mutations.crystal.edge]
+                  : trait === 'rainbow' ? palette.mutations.rainbow
+                    : [palette.environment.water[0], palette.environment.water[1]];
             particles.burst({ origin: top, count: event.firstDiscovery ? 16 : 7, colors,
               speed: 0.8, up: 1.1, gravity: 2, lifeMs: event.firstDiscovery ? 1000 : 500, size: 0.1 }, now, reducedMotion);
           }

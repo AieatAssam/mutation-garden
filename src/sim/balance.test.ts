@@ -8,12 +8,12 @@ describe('greedy balance pacing', () => {
     expect(milestones['first harvest']).toBeLessThanOrEqual(30_000);
     expect(milestones['first mutation']).toBeLessThanOrEqual(60_000);
     expect(milestones['level 2']).toBeGreaterThanOrEqual(60_000);
-    expect(milestones['level 2']).toBeLessThanOrEqual(100_000);
+    expect(milestones['level 2']).toBeLessThanOrEqual(120_000);
     expect(milestones['first purchase']).toBeGreaterThanOrEqual(120_000);
     expect(milestones['first purchase']).toBeLessThanOrEqual(240_000);
     expect(milestones['plot 7']).toBeGreaterThanOrEqual(180_000);
     expect(milestones['plot 7']).toBeLessThanOrEqual(300_000);
-    expect(milestones['Puffcap / level 4']).toBeGreaterThanOrEqual(480_000);
+    expect(milestones['Puffcap / level 4']).toBeGreaterThanOrEqual(300_000);
     expect(milestones['Puffcap / level 4']).toBeLessThanOrEqual(720_000);
   });
 

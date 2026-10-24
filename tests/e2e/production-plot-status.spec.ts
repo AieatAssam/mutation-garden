@@ -13,7 +13,9 @@ import { startWithSave } from './garden-save';
 // These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
 test.beforeEach(async ({ page }, info) => startWithSave(page, xpForLevel(3), {
   ...(info.title === 'six ripe plants stay under the production renderer draw-call budget'
-    ? { coins: 40, mutationRngState: 2, scriptedGiantUsed: true, scriptedGoldenUsed: true } : {}),
+    ? { coins: 40, mutationRngState: 2, scriptedGiantUsed: true, scriptedGoldenUsed: true,
+      discoveries: ['sunny-sprout:golden', 'twistroot:golden', 'bubble-berry:golden'],
+      rewardsPaid: ['sunny-sprout:golden', 'twistroot:golden', 'bubble-berry:golden'] } : {}),
 }));
 
 type Point = { x: number; y: number };
@@ -840,10 +842,10 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
   });
   const { mobile, plots } = await openGame(page, info.project.name);
   await attachGardenCapture(page, info, `${info.project.name}-before-planting.png`);
-  const speciesAtPlot = ['sunny-sprout', 'bubble-berry', 'twistroot', 'bubble-berry', 'bubble-berry', 'twistroot'] as const;
+  const speciesAtPlot = ['sunny-sprout', 'sunny-sprout', 'twistroot', 'sunny-sprout', 'sunny-sprout', 'bubble-berry'] as const;
   for (const [index, plot] of plots.entries()) await plant(page, speciesAtPlot[index]!, plot, mobile);
-  await waitForCoins(page, 20);
-  await advanceGameClock(page, 25_100);
+  await waitForCoins(page, 28);
+  await advanceGameClock(page, 30_100);
   const stamps = [];
   for (const [plotId, speciesId] of speciesAtPlot.entries()) {
     await expect.poll(async () => {
@@ -860,6 +862,20 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
     const speciesId = speciesAtPlot[plotId]!;
     expect(stamp.box.width, `ripe ${speciesId} stamp at plot ${plotId}`).toBeGreaterThanOrEqual(26);
   }
+  const twistrootMutations = () => page.evaluate(() => new Promise<string[]>((resolve, reject) => {
+    const request = indexedDB.open('mutation-garden', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const read = database.transaction('saves', 'readonly').objectStore('saves').get('slot-0');
+      read.onerror = () => { database.close(); reject(read.error); };
+      read.onsuccess = () => {
+        database.close();
+        resolve(read.result?.state?.plots?.find((plot: { id: string }) => plot.id === 'plot-2')?.plant?.mutations ?? []);
+      };
+    };
+  }));
+  await expect.poll(twistrootMutations).toContain('golden');
   if (info.project.name === 'mobile-portrait') {
     await attachGardenCapture(page, info, 'mobile-six-ripe-grayscale.png', true);
   }

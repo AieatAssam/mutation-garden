@@ -13,6 +13,10 @@ export function harvest(
 ): StepResult {
   let nextState = state;
   let count = 0;
+  const crystalReadyPlots = new Set(state.crystalReadyPlots);
+  const rainbowPlots = new Set(state.rainbowPlots);
+  const harvestedTraits = new Set<string>();
+  const harvestedPlotIds = new Set<string>();
   const events: SimEvent[] = [];
   const seenPlotIds = new Set<string>();
 
@@ -51,13 +55,24 @@ export function harvest(
     const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1) * mutationMultiplier;
     const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
     const mutations = plot.plant.mutations ?? [];
+    if (mutations.includes('glowing')) crystalReadyPlots.add(plotId);
+    for (const trait of mutations) harvestedTraits.add(trait);
     const fruit = { speciesId: species.id, size, mutations, value: coins, xp: Math.floor(species.baseValue * mutationMultiplier) };
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
     nextState = { ...nextState, crate: [...nextState.crate, fruit], plots };
     count += 1;
+    harvestedPlotIds.add(plotId);
     events.push({ type: 'Harvested', plotId, speciesId: species.id, coins: 0, size, fresh, lucky: false,
       ...(mutations.length ? { mutations } : {}) });
+  }
+  if (harvestedTraits.has('golden') && harvestedTraits.has('glowing') && harvestedTraits.has('crystal')) {
+    for (const plotId of harvestedPlotIds) {
+      if (state.plots.find((plot) => plot.id === plotId)?.plant?.mutations?.some((trait) => ['golden', 'glowing', 'crystal'].includes(trait))) rainbowPlots.add(plotId);
+    }
+  }
+  if (crystalReadyPlots.size !== state.crystalReadyPlots.length || rainbowPlots.size !== state.rainbowPlots.length) {
+    nextState = { ...nextState, crystalReadyPlots: [...crystalReadyPlots], rainbowPlots: [...rainbowPlots] };
   }
 
   if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: 0, comboBonus: 0 });

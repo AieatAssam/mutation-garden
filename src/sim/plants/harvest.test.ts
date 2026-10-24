@@ -282,6 +282,21 @@ describe('Harvest commands', () => {
     expect(result.events).toContainEqual({ type: 'CommandRejected', command: 'Harvest', plotId: 'plot-0', reason: 'crate-full' });
   });
 
+  it('flags only successfully harvested mutation plots for Rainbow', () => {
+    const state = stateWithPlants({
+      'plot-0': { ...plantAt('sunny-sprout', startTime - 8_000), mutations: ['golden'] },
+      'plot-1': { ...plantAt('sunny-sprout', startTime - 8_000), mutations: ['glowing'] },
+      'plot-2': { ...plantAt('sunny-sprout', startTime - 8_000), mutations: ['crystal'] },
+      'plot-3': { ...plantAt('sunny-sprout', startTime - 8_000), mutations: ['glowing'] },
+    });
+    const crate = Array.from({ length: 9 }, () => ({ speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 2, xp: 2 }));
+
+    const result = step({ ...state, crate }, [harvest('plot-0', 'plot-1', 'plot-2', 'plot-3')], startTime);
+
+    expect(result.state.rainbowPlots).toEqual(['plot-0', 'plot-1', 'plot-2']);
+    expect(result.events).toContainEqual({ type: 'CommandRejected', command: 'Harvest', plotId: 'plot-3', reason: 'crate-full' });
+  });
+
   it('sells one fruit per 1.2 seconds with identical offline totals', () => {
     const fruit = { speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: ['golden' as const], value: 7, xp: 6 };
     const queued = { ...createInitialState(seed, startTime), crate: [fruit, { ...fruit, mutations: [], value: 2, xp: 2 }] };

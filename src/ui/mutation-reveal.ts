@@ -18,14 +18,14 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
   const layer = document.createElement('div');
   layer.className = 'mutation-reveal';
   container.append(layer);
-  let timer = 0;
+
   let labelTimer = 0;
   let detailTimer = 0;
   let active = false;
   let disposed = false;
   const queue: { event: Extract<SimEvent, { type: 'Mutated' }>; reducedMotion: boolean }[] = [];
   const clear = () => {
-    clearTimeout(timer);
+
     clearTimeout(labelTimer);
     clearTimeout(detailTimer);
     layer.replaceChildren();
@@ -81,7 +81,11 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     layer.onpointerdown = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
     layer.onpointerup = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
     layer.onclick = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); next(); };
-    timer = window.setTimeout(next, 3200);
+    // A first discovery is the game's big moment: it stays until the player taps, so it is always read.
+    const hint = document.createElement('span');
+    hint.className = 'mutation-reveal__line mutation-reveal__hint';
+    hint.textContent = 'Tap to continue';
+    details.append(hint);
   };
   const show = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
     const mutations = [...event.mutations].sort((a, b) => (a === 'giant' ? -1 : 0) - (b === 'giant' ? -1 : 0));
@@ -95,7 +99,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
         const label = document.createElement('span');
         label.className = 'mutation-reveal__repeat'; label.textContent = trait.name;
         label.style.left = `${point.x}px`; label.style.top = `${point.y}px`;
-        layer.append(label); setTimeout(() => label.remove(), 900);
+        layer.append(label); setTimeout(() => label.remove(), 2500);
       } else queue.push({ event: single, reducedMotion });
     }
     const pending = !active ? queue.shift() : undefined;

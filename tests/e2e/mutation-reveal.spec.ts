@@ -8,7 +8,8 @@ test('first Giant reveal swallows the skip tap and harvest pays the mutation val
   await startWithSave(page, 50, { scriptedGiantUsed: false, plantCount: 2, twistrootPlantedAt: plantedAt, twistrootWaterCount: 2, extraRipeSunny: true, savedAt: plantedAt + 25_000 });
   await page.goto('./');
   const coins = page.getByRole('status', { name: 'Coins' });
-  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  // Model load and shader warm-up run on CI's software renderer under an installed clock: allow for it.
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready', { timeout: 20_000 });
   await expect(coins).toHaveText('212');
   const reveal = page.getByText('New mutation: Giant!');
   await page.clock.runFor(2_000);
@@ -19,7 +20,8 @@ test('first Giant reveal swallows the skip tap and harvest pays the mutation val
   await expect(coins).toHaveText('212');
 
   await page.clock.runFor(4_000);
-  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  // Model load and shader warm-up run on CI's software renderer under an installed clock: allow for it.
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready', { timeout: 20_000 });
   await expect(coins).toHaveText('212');
   const harvestAll = page.getByRole('button', { name: 'Harvest all 2' });
   await expect(harvestAll).toBeVisible();

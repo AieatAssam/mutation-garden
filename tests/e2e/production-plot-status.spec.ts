@@ -123,6 +123,7 @@ async function setViewport(page: Page, project: string): Promise<void> {
 
 async function installGameClock(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    (window as Window & { __gardenTestCameraProbe?: boolean }).__gardenTestCameraProbe = true;
     let nowMs = Date.now();
     const browserDateNow = Date.now.bind(Date);
     nowMs = browserDateNow();
@@ -221,19 +222,29 @@ async function probeGroundByReversiblePan(
   session: CDPSession,
   point: Point,
   pointerId: number,
+  camera: ReturnType<typeof createGardenCamera>,
 ): Promise<void> {
   const bounds = await page.locator('#stage').boundingBox();
   expect(bounds).not.toBeNull();
-  const dx = point.x - 50 >= bounds!.x ? -50 : 50;
-  // Compare whole-stage captures: a pan shifts most of the image; restoring leaves only ambient motion.
-  const before = await stageCapture(page);
+  const plotXs = plotCenters(bounds!, 0.65, camera).map(({ x }) => x - bounds!.x);
+  const minimumPan = Math.max(...plotXs.map((x) => 32 - x));
+  const maximumPan = Math.min(...plotXs.map((x) => bounds!.width - 32 - x));
+  const neutral = createGardenCamera(); resizeGardenCamera(neutral, bounds!.width, bounds!.height);
+  const panOffset = camera.position.clone().sub(neutral.position);
+  const cameraRight = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const inwardDirection = Math.abs(panOffset.dot(cameraRight)) < 0.01 ? 1 : Math.sign(panOffset.dot(cameraRight));
+  const dx = inwardDirection > 0 && maximumPan >= 45 ? 55 : inwardDirection < 0 && minimumPan <= -45 ? -55 : 0;
+  if (dx === 0) throw new Error('Camera has no unsaturated direction for the reversible ground probe');
+  const readPose = () => page.locator('#stage').getAttribute('data-camera-pose');
+  const before = await readPose();
+  expect(before).not.toBeNull();
   await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: pointerId, ...point }] });
   await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: pointerId, x: point.x + dx, y: point.y }] });
-  expect(await changedFraction(page, before, await stageCapture(page)),
-    'a candidate ground contact pans the rendered camera synchronously').toBeGreaterThan(0.1);
+  await expect.poll(readPose, { intervals: [10, 20, 40], timeout: 1_000 })
+    .not.toBe(before);
+  await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: pointerId, x: point.x + dx / 2, y: point.y }] });
   await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: pointerId, x: point.x, y: point.y }] });
-  expect(await changedFraction(page, before, await stageCapture(page)),
-    'the reversible ground probe restores the camera before pinch').toBeLessThan(0.02);
+  await expect.poll(readPose, { intervals: [10, 20, 40], timeout: 1_000 }).toBe(before);
   await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
 }
 
@@ -574,36 +585,6 @@ async function waitForSimulationOpportunity(page: Page): Promise<void> {
     .toBeGreaterThan(frameBaseline);
 }
 
-async function stageCapture(page: Page): Promise<string> {
-  const bounds = await page.locator('#stage').boundingBox();
-  expect(bounds).not.toBeNull();
-  return (await page.screenshot({ clip: bounds!, scale: 'css' })).toString('base64');
-}
-
-/** Fraction of pixels whose colour moved by more than 24 in any channel between two stage captures. */
-async function changedFraction(page: Page, a: string, b: string): Promise<number> {
-  return page.evaluate(async ([first, second]) => {
-    const read = async (encoded: string) => {
-      const image = new Image();
-      image.src = `data:image/png;base64,${encoded}`;
-      await image.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      const context = canvas.getContext('2d', { willReadFrequently: true })!;
-      context.drawImage(image, 0, 0);
-      return context.getImageData(0, 0, canvas.width, canvas.height).data;
-    };
-    const [x, y] = await Promise.all([read(first), read(second)]);
-    let changed = 0;
-    for (let index = 0; index < x.length; index += 4) {
-      if (Math.max(Math.abs(x[index]! - y[index]!), Math.abs(x[index + 1]! - y[index + 1]!),
-        Math.abs(x[index + 2]! - y[index + 2]!)) > 24) changed += 1;
-    }
-    return changed / (x.length / 4);
-  }, [a, b] as const);
-}
-
 async function stageSignature(page: Page): Promise<string> {
   const bounds = await page.locator('#stage').boundingBox();
   expect(bounds).not.toBeNull();
@@ -782,8 +763,8 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   }
   const stampForZoom = await readStamp(page, 'bubble-berry', camera);
   if (mobile) {
-    await probeGroundByReversiblePan(page, session!, groundPair[0], 7);
-    await probeGroundByReversiblePan(page, session!, groundPair[1], 8);
+    await probeGroundByReversiblePan(page, session!, groundPair[0], 7, camera);
+    await probeGroundByReversiblePan(page, session!, groundPair[1], 8, camera);
   }
   const cameraBeforeZoom = await stageSignature(page);
   if (mobile) {

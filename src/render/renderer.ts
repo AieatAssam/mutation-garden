@@ -310,6 +310,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }
 
   function draw(): void {
+    // The production e2e probe opts in; normal play avoids per-frame DOM writes.
+    if ((window as Window & { __gardenTestCameraProbe?: boolean }).__gardenTestCameraProbe) {
+      canvas.dataset.cameraPose = [...camera.position.toArray(), camera.zoom].map((value) => value.toFixed(6)).join(',');
+    }
     const now = clock();
     const snapshot = currentSnapshot;
     const stall = scenery?.stall;

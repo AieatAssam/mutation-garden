@@ -2,6 +2,13 @@
 
 Living note for whoever picks this up next (human, Claude or Codex). Update it at every stopping point.
 
+## Stopping point (2026-10-24)
+
+- **PR #188 (m2/s1-mutations):** M2-S1 complete and reviewed (Codex Sol; six findings fixed). Mutation engine, Giant/Golden/Glowing guaranteed rules, payouts and first-find bonus, shop (Plot 7/8 raise a joined west island lobe, Big can, fertiliser, lucky charm), Puffcap, Start over, shop above the tray, reveal waits for a tap. CI runs Playwright with one worker (browser crashed with two). Merge when CI is green.
+- **Branch m3/s1-crate-stall (pushed, no PR yet):** built on an older #188 head. Crate (12), market stall object, timed selling (1.2 s/fruit), fruit-hop and progress ring, save schema 4. Balance pass measured with a greedy bot (src/sim/balance.test.ts): first harvest 9 s, Level 2 1:12, first purchase 2:42, Plot 7 4:42, Puffcap 8:19; first-find bonus 3x. Notification reading-time helper and queue exist but not every notice uses them yet. Browser tests on this branch were not run after the balance pass. Next: merge main after #188, then finish notices and run the full gates.
+- **Plans:** M3 economy (#180-#183), M4 automation objects (#184-#187), M5 more mutations, M6 lab. Design in docs/design.md "Economy and automation".
+- **Working method:** implementation by Codex CLI on gpt-6-luna; headless Blender crashes for Codex, so GLBs are rebuilt through the Blender MCP. Don't run two Playwright suites at once (ports 4173/4174/42741).
+
 ## Where things are (2026-10-23)
 
 - **M1 accepted:** S1–S5 merged (#173–#177); critique #178 is closed and its fixes merged in #179. Acceptance is complete. Open gap: profile on a real mid-range phone.

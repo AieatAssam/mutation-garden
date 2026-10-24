@@ -30,6 +30,7 @@ createGardenUI(root, {
     { id: 'sunny-sprout', name: 'Sunny Sprout', cost: 1, unlockLevel: 1 },
     { id: 'bubble-berry', name: 'Bubble Berry', cost: 3, unlockLevel: 1 },
     { id: 'twistroot', name: 'Twistroot', cost: 5, unlockLevel: 1 },
+    { id: 'puffcap', name: 'Puffcap', cost: 6, unlockLevel: 4 },
   ],
   selectedId: 'sunny-sprout',
   coins: 12,

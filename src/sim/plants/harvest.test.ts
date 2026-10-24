@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SPECIES } from '../content/species';
-import { createInitialState, step, type Command, type GardenState, type PlantState, type SpeciesId } from '../index';
+import { createInitialState, nextRandom, step, type Command, type GardenState, type PlantState, type SpeciesId } from '../index';
 
 const seed = 0x12345678;
 const startTime = 10_000;
@@ -12,6 +12,7 @@ function stateWithPlants(
   const initial = createInitialState(seed, nowMs, { xp: 100 });
   return {
     ...initial,
+    rngState: 2,
     lastNowMs: nowMs,
     plots: initial.plots.map((plot) => ({
       ...plot,
@@ -21,7 +22,7 @@ function stateWithPlants(
 }
 
 function plantAt(speciesId: SpeciesId, plantedAt: number) {
-  return { speciesId, plantedAt };
+  return { speciesId, plantedAt, mutationSeed: 0xffff_ffff };
 }
 
 function harvest(...plotIds: string[]): Command {
@@ -41,7 +42,7 @@ describe('Harvest commands', () => {
         plantedAt + species.growthDurationMs - 1,
       );
       expect(beforeMaturity.state.coins).toBe(planted.coins);
-      expect(beforeMaturity.state.plots[0]?.plant).toEqual(plantAt(species.id, plantedAt));
+      expect(beforeMaturity.state.plots[0]?.plant).toEqual({ ...plantAt(species.id, plantedAt), mutations: [] });
       expect(beforeMaturity.events).toContainEqual({
         type: 'CommandRejected', command: 'Harvest', plotId: 'plot-0', reason: 'not-harvestable',
       });
@@ -58,7 +59,7 @@ describe('Harvest commands', () => {
       expect(atMaturity.state.plots[0]?.plant).toBeNull();
       expect(atMaturity.events).toEqual([
         { type: 'Harvestable', plotId: 'plot-0' },
-        { type: 'Harvested', plotId: 'plot-0', speciesId: species.id, coins: paid, size: 'regular', fresh: true },
+        { type: 'Harvested', plotId: 'plot-0', speciesId: species.id, coins: paid, size: 'regular', fresh: true, lucky: false },
         { type: 'HarvestCompleted', count: 1, coins: paid, comboBonus: 0 },
       ]);
     },
@@ -74,7 +75,7 @@ describe('Harvest commands', () => {
     const result = step(state, [harvest('plot-0', 'missing-plot', 'plot-1', 'plot-2')], startTime);
 
     expect(result.events).toEqual([
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true },
+      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true, lucky: false },
       { type: 'CommandRejected', command: 'Harvest', plotId: 'missing-plot', reason: 'unknown-plot' },
       { type: 'CommandRejected', command: 'Harvest', plotId: 'plot-1', reason: 'empty' },
       { type: 'CommandRejected', command: 'Harvest', plotId: 'plot-2', reason: 'not-harvestable' },
@@ -84,7 +85,7 @@ describe('Harvest commands', () => {
     expect(result.state.plots.map(({ plant }) => plant)).toEqual([
       null,
       null,
-      plantAt('bubble-berry', startTime - 14_999),
+      { ...plantAt('bubble-berry', startTime - 14_999), mutations: [] },
       null,
       null,
       null,
@@ -100,12 +101,12 @@ describe('Harvest commands', () => {
     const result = step(state, [harvest('plot-1', 'bad-plot', 'plot-0', 'plot-1', 'bad-plot', 'plot-0')], startTime);
 
     expect(result.events).toEqual([
-      { type: 'Harvested', plotId: 'plot-1', speciesId: 'bubble-berry', coins: 7, size: 'regular', fresh: true },
+      { type: 'Harvested', plotId: 'plot-1', speciesId: 'bubble-berry', coins: 7, size: 'regular', fresh: true, lucky: false },
       { type: 'CommandRejected', command: 'Harvest', plotId: 'bad-plot', reason: 'unknown-plot' },
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true },
-      { type: 'HarvestCompleted', count: 2, coins: 9, comboBonus: 0 },
+      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true, lucky: false },
+      { type: 'HarvestCompleted', count: 2, coins: 10, comboBonus: 1 },
     ]);
-    expect(result.state.coins).toBe(state.coins + 9);
+    expect(result.state.coins).toBe(state.coins + 10);
     expect(result.state.plots.slice(0, 2).map(({ plant }) => plant)).toEqual([null, null]);
   });
 
@@ -113,7 +114,8 @@ describe('Harvest commands', () => {
     const state = stateWithPlants({ 'plot-0': plantAt('sunny-sprout', startTime - 8_000) });
     const result = step(state, [harvest()], startTime);
 
-    expect(result).toEqual({ state, events: [] });
+    expect(result.events).toEqual([]);
+    expect(result.state.plots[0]?.plant).toMatchObject({ mutations: [] });
   });
 
   it('pays once when duplicate Harvest commands target the same plot in one step', () => {
@@ -121,7 +123,7 @@ describe('Harvest commands', () => {
     const result = step(state, [harvest('plot-0'), harvest('plot-0')], startTime);
 
     expect(result.events).toEqual([
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true },
+      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true, lucky: false },
       { type: 'HarvestCompleted', count: 1, coins: 2, comboBonus: 0 },
       { type: 'CommandRejected', command: 'Harvest', plotId: 'plot-0', reason: 'empty' },
     ]);
@@ -147,9 +149,10 @@ describe('Harvest commands', () => {
     }], startTime);
 
     expect(result.state.coins).toBe(state.coins + 2 - 3);
-    expect(result.state.plots[0]?.plant).toMatchObject(plantAt('bubble-berry', startTime));
+    expect(result.state.plots[0]?.plant).toMatchObject({ speciesId: 'bubble-berry', plantedAt: startTime });
+    expect(result.state.plots[0]?.plant?.mutationSeed).toEqual(expect.any(Number));
     expect(result.events).toEqual([
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true },
+      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true, lucky: false },
       { type: 'HarvestCompleted', count: 1, coins: 2, comboBonus: 0 },
       { type: 'Planted', plotId: 'plot-0', speciesId: 'bubble-berry' },
     ]);
@@ -163,16 +166,31 @@ describe('Harvest commands', () => {
     expect(result.state.lastNowMs).toBe(matureAt);
     expect(result.state.coins).toBe(state.coins + 2);
     expect(result.events).toEqual([
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true },
+      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true, lucky: false },
       { type: 'HarvestCompleted', count: 1, coins: 2, comboBonus: 0 },
     ]);
   });
 
-  it('does not consume RNG state when harvesting', () => {
+  it('uses the seeded harvest RNG for Lucky Harvest and replays it exactly', () => {
     const state = stateWithPlants({ 'plot-0': plantAt('twistroot', startTime - 25_000) });
-    const result = step(state, [harvest('plot-0')], startTime);
+    const luckyState = { ...state, rngState: 7 };
+    const result = step(luckyState, [harvest('plot-0')], startTime);
+    expect(result.events).toContainEqual({ type: 'LuckyHarvest', plotId: 'plot-0' });
+    expect(result.events).toContainEqual(expect.objectContaining({ type: 'Harvested', lucky: true, coins: 36 }));
+    expect(result.state.rngState).not.toBe(luckyState.rngState);
+    expect(step(luckyState, [harvest('plot-0')], startTime)).toEqual(result);
+  });
 
-    expect(result.state.rngState).toBe(state.rngState);
+  it('multiplies mutated coin and XP value by every stored trait', () => {
+    const initial = createInitialState(seed, startTime);
+    const rngState = Array.from({ length: 100 }, (_, value) => value).find((value) => nextRandom(value).value >= 0.1)!;
+    const state: GardenState = { ...initial, rngState, rewardsPaid: ['sunny-sprout:giant', 'sunny-sprout:golden'], plots: initial.plots.map((plot) => plot.id === 'plot-0'
+      ? { ...plot, plant: { speciesId: 'sunny-sprout', plantedAt: startTime - 8_000, size: 'regular', mutationSeed: 0, mutations: ['golden', 'giant'] } }
+      : plot) };
+    const result = step(state, [harvest('plot-0')], startTime);
+    expect(result.state.coins).toBe(state.coins + 20);
+    expect(result.state.xp).toBe(16);
+    expect(result.events).toContainEqual(expect.objectContaining({ type: 'Harvested', coins: 20, mutations: ['golden', 'giant'] }));
   });
 
   it('replays the same seed and command sequence to the same state and events', () => {
@@ -233,15 +251,21 @@ describe('Harvest commands', () => {
     const result = step(state, [harvest('plot-0', 'plot-1', 'plot-2')], startTime);
 
     expect(result.events.filter((event) => event.type === 'HarvestCompleted')).toEqual([
-      // 2 + 7 + 12 = 21 fresh; three plants add 20%: floor(4.2) = 4.
-      { type: 'HarvestCompleted', count: 3, coins: 25, comboBonus: 4 },
+      { type: 'HarvestCompleted', count: 3, coins: 29, comboBonus: 8 },
     ]);
     expect(result.events.filter((event) => event.type === 'Harvested')).toEqual([
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true },
-      { type: 'Harvested', plotId: 'plot-1', speciesId: 'bubble-berry', coins: 7, size: 'regular', fresh: true },
-      { type: 'Harvested', plotId: 'plot-2', speciesId: 'twistroot', coins: 12, size: 'regular', fresh: true },
+      { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 2, size: 'regular', fresh: true, lucky: false },
+      { type: 'Harvested', plotId: 'plot-1', speciesId: 'bubble-berry', coins: 7, size: 'regular', fresh: true, lucky: false },
+      { type: 'Harvested', plotId: 'plot-2', speciesId: 'twistroot', coins: 12, size: 'regular', fresh: true, lucky: false },
     ]);
-    expect(result.state.coins).toBe(state.coins + 25);
+    expect(result.state.coins).toBe(state.coins + 29);
+  });
+
+  it('pays at least half the base total as a four-plant combo bonus', () => {
+    const state = stateWithPlants(Object.fromEntries(['plot-0', 'plot-1', 'plot-2', 'plot-3'].map((id) => [id, plantAt('twistroot', startTime - 25_001)])));
+    const result = step(state, [harvest('plot-0', 'plot-1', 'plot-2', 'plot-3')], startTime);
+    const complete = result.events.find((event) => event.type === 'HarvestCompleted');
+    expect(complete).toMatchObject({ count: 4, comboBonus: 28 });
   });
 
   it('emits no completion event when every target is rejected', () => {
@@ -261,14 +285,14 @@ describe('Harvest commands', () => {
 
   it('pays yield size and drops the fresh bonus after the fresh window', () => {
     const state = stateWithPlants({
-      'plot-0': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_001, size: 'big' },
-      'plot-1': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_000, size: 'small' },
+      'plot-0': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_001, size: 'big', mutationSeed: 0xffff_ffff },
+      'plot-1': { speciesId: 'twistroot', plantedAt: startTime - 25_000 - 5_000, size: 'small', mutationSeed: 0xffff_ffff },
     });
     const result = step(state, [harvest('plot-0'), harvest('plot-1')], startTime);
 
     expect(result.events.filter((event) => event.type === 'Harvested')).toEqual([
-      { type: 'Harvested', plotId: 'plot-0', speciesId: 'twistroot', coins: 15, size: 'big', fresh: false },
-      { type: 'Harvested', plotId: 'plot-1', speciesId: 'twistroot', coins: 10, size: 'small', fresh: true },
+      { type: 'Harvested', plotId: 'plot-0', speciesId: 'twistroot', coins: 15, size: 'big', fresh: false, lucky: false },
+      { type: 'Harvested', plotId: 'plot-1', speciesId: 'twistroot', coins: 10, size: 'small', fresh: true, lucky: false },
     ]);
   });
 });

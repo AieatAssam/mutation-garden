@@ -138,7 +138,7 @@ Repeat discoveries skip the pause and run only the wipe and a smaller burst (900
 
 Reduced motion: no camera, vignette or shake; the material crossfades over 300 ms; label and card appear with fades.
 
-### 4.10 Laboratory merge (M4)
+### 4.10 Laboratory merge (M6)
 - Contact: both specimens squash toward each other 120 ms, a ring flash, hit-stop 80 ms.
 - Fuse: they collapse into a bright point, which pops into a seed packet with a stretch.
 - Chain: each successive fusion in a chain plays one pentatonic step higher and adds 10% shake.
@@ -150,6 +150,31 @@ Reduced motion: no camera, vignette or shake; the material crossfades over 300 m
 - Counters: digits roll (odometer), each change bumps the label 1.08.
 - Toasts and hints: paper label drops in from the top with a slight rotation and settles; leaves after 3 s or on the next correct action.
 - Shop purchase: price stamps "Paid", item card shrinks and arcs to where it goes.
+
+### 4.12 Crate and market stall (M3)
+- Harvested fruit hops from plant into the crate in 450 ms; the crate lid bobs once. At 12/12 items, the plant remains ripe and its stamp changes to a crate-full icon.
+- Tap the stall: its paper sign flips to "Selling". Each item rises from the crate, arcs to the counter over 500 ms, lands with a squash, and releases one coin pop. Start the next item every 1.2 s. Selling remains active during garden input.
+- While idle, the cloth sign lifts and settles over a 2 s loop; on the first sale it snaps flat with the sign flip.
+- A buyer line is M5: each paper villager shuffles one step when an item sells; any bonus price appears on the order card before sale.
+- Reduced motion: fruit fades between crate and counter; coin value and sold count remain visible.
+
+### 4.13 Automation objects (M4)
+- Sprinkler: head turns to a target over 180 ms, clicks, then sends 3 water drops to the plot. Between targets, the head slowly scans ±25° every 3 s.
+- Bee hive: entrance flaps; two pooled bees loop a 1.6 s figure-eight and land on neighbouring plants for 300 ms. A visited plant shows a small bee stamp while its rule-chance bonus is active.
+- Seed hopper: packet drops into its chute in 220 ms, then springs to the selected plot and plants using 4.1. Keep the packet motion within the island.
+- Harvest helper: walk cycle at 4 steps/s; stop 100 ms, lift fruit over 250 ms, carry it to the crate over 500 ms, then return. Tier 3 carries two in a stagger.
+- Delivery cart: wheel rotation matches travel speed; it loads at the crate, follows the fixed path, unloads one fruit at the stall and returns. Upgrades change route speed/count only.
+- All props have a 2 s idle loop (subtle body bob or moving part), one draw call per object, and pause under reduced motion. No rigid bodies are used for their gameplay decisions.
+
+### 4.14 New species and mutation motion (M3/M5)
+- Lantern Pod: three pods sway in sequence with 120 ms offsets; dusk glow fades in over 400 ms.
+- Comet Pear: swept-back leaf streams behind the fruit during growth; on harvest the fruit makes one short orbit before entering the crate.
+- Clockvine: paired tendrils rotate like hands at 0.2 rpm; its ripe fruit makes one quarter-turn.
+- Dewbell: flower bell opens 15° over 300 ms; the dew bead drops and rebounds once when it waters a neighbour.
+- Frozen: frost wipes from fruit base to tip over 500 ms; 4 ice motes fall and fade. Pool-blue reveal edge.
+- Electric: two vein arcs pulse once over 350 ms with 80 ms spacing; marigold reveal edge. No screen flash.
+- Twin: paired fruit pop in sequence, 100 ms apart, with one shared label; violet reveal edge.
+- Reduced motion replaces loops with a static silhouette cue and a 120 ms material fade.
 
 ## 5. Rarity ladder
 

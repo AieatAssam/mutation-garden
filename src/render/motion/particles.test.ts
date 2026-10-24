@@ -1,4 +1,4 @@
-import { Vector3 } from 'three';
+import { Matrix4, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { createParticles } from './particles';
 
@@ -28,5 +28,18 @@ describe('particles', () => {
     expect(reduced.liveCount).toBe(5);
     particles.dispose();
     reduced.dispose();
+  });
+
+  it('keeps long-lived tell glints visible and stationary', () => {
+    const particles = createParticles(2);
+    particles.burst({ ...burst(1), speed: 0, up: 0, gravity: 0, lifeMs: 1_000_000_000 }, 0, true);
+    particles.update(1_000);
+    const matrix = new Matrix4();
+    particles.mesh.getMatrixAt(0, matrix);
+    expect(matrix.elements[0]).toBeGreaterThan(0.04);
+    expect(matrix.elements[12]).toBe(0);
+    expect(matrix.elements[13]).toBe(0);
+    expect(matrix.elements[14]).toBe(0);
+    particles.dispose();
   });
 });

@@ -58,6 +58,9 @@
   white-space: nowrap;
 }
 
+.rewards__combo { font-size: 36px; }
+.rewards__coin--lucky { border-width: 3px; opacity: 0; }
+
 .rewards__combo span {
   color: var(--mg-ui-coin-emboss);
 }

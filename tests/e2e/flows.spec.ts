@@ -44,7 +44,7 @@ test('a new player is guided from the first plant to the first harvest within 30
   await tapPlot(0);
   await expect(coins).toHaveText('11');
   await expect(hint).toHaveText('Tap a growing plant to water it.');
-  await expect(hint).toHaveText('Tap the ripe plant to harvest it.', { timeout: 12_000 });
+  await expect(hint).toHaveText('Tap the ripe plant to harvest.', { timeout: 12_000 });
   await expectHarvestPaid(page, () => tapPlot(0));
   expect(await page.evaluate(() => Date.now()) - startedAt).toBeLessThan(30_000);
 });

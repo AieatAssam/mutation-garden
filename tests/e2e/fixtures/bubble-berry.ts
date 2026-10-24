@@ -190,13 +190,13 @@ function renderSixRipeGarden() {
   scene.add(new AmbientLight(day['fill-sky'], 0.25), new HemisphereLight(day['fill-sky'], day['fill-ground'], 0.8));
   const keyLight = new DirectionalLight(day.key, 2.2); keyLight.position.set(-4, 7, 5); scene.add(keyLight);
   const camera = createGardenCamera();
-  const plants = createPlantReconciler(garden.plots, materials);
+  const plants = createPlantReconciler(garden.plots.slice(0, 6), materials);
   const mixedOrder: PlantSnapshot['speciesId'][] = ['sunny-sprout', 'bubble-berry', 'twistroot', 'sunny-sprout', 'bubble-berry', 'twistroot'];
   const speciesForPlot = (index: number): PlantSnapshot['speciesId'] => mixedSixRipe ? mixedOrder[index]! : speciesId;
   const snapshot: GardenSnapshot = {
     nowMs: 15_000,
     coins: 100, xp: 0, level: 1, levelStartXp: 0, nextLevelXp: 10,
-    plots: garden.plots.map((plot, index) => ({
+    plots: garden.plots.slice(0, 6).map((plot, index) => ({
       id: plot.plotId,
       plant: { speciesId: speciesForPlot(index), plantedAt: 0, stage: 'Harvestable', progress: 1 },
     })),
@@ -206,7 +206,7 @@ function renderSixRipeGarden() {
   plants.update(snapshot, snapshot, 1, true);
   renderer.render(scene, camera);
   status.dataset.drawCalls = String(renderer.info.render.calls);
-  status.dataset.plants = String(garden.plots.length);
+  status.dataset.plants = String(garden.plots.slice(0, 6).length);
   status.dataset.speciesOrder = JSON.stringify(snapshot.plots.map(({ plant }) => plant?.speciesId));
   status.dataset.ripe = String(snapshot.plots.filter((plot, index) => plot.plant?.stage === 'Harvestable'
     && garden.plots[index]?.children.some((rig) => rig.name === plot.plant?.speciesId)).length);

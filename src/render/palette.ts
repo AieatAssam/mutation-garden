@@ -132,6 +132,28 @@ export const palette = {
       "accent": {
         "growth-ring": "#E8DEFF"
       }
+    },
+    "puffcap": {
+      "leaf": [
+        "#D8EDB8",
+        "#A7CF86",
+        "#709E61",
+        "#426A49"
+      ],
+      "stem": [
+        "#FFF0CC",
+        "#E8D5AE",
+        "#B99B78"
+      ],
+      "fruit": [
+        "#FFD2A0",
+        "#F39B65",
+        "#C95E53",
+        "#853D51"
+      ],
+      "accent": {
+        "spots": "#FFF0CC"
+      }
     }
   },
   "mutations": {

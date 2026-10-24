@@ -11,6 +11,7 @@ export interface PlantReconciler {
   update(previous: GardenSnapshot, current: GardenSnapshot, alpha: number, reducedMotion: boolean): void;
   /** Writes the highest visible semantic plant surface in world space. */
   getTop(plotId: PlotId, target: Vector3): boolean;
+  shiver(plotId: PlotId, nowMs: number, durationMs: number): void;
   /** Switches to the authored Blender plants; existing rigs are rebuilt on the next update. */
   setModels(models: PlantModels): void;
   dispose(): void;
@@ -99,7 +100,7 @@ export function createPlantReconciler(
       for (const plot of current.plots) {
         seen.add(plot.id);
         const plant = plot.plant;
-        if (!plant || (plant.speciesId !== 'sunny-sprout' && plant.speciesId !== 'bubble-berry' && plant.speciesId !== 'twistroot') || !anchors.has(plot.id)) { remove(plot.id); continue; }
+        if (!plant || (plant.speciesId !== 'sunny-sprout' && plant.speciesId !== 'bubble-berry' && plant.speciesId !== 'twistroot' && plant.speciesId !== 'puffcap') || !anchors.has(plot.id)) { remove(plot.id); continue; }
         let entry = entries.get(plot.id);
         if (entry && (entry.speciesId !== plant.speciesId || entry.plantedAt !== plant.plantedAt)) { remove(plot.id); entry = undefined; }
         if (!entry && !models && options.waitForModels) continue;
@@ -110,7 +111,8 @@ export function createPlantReconciler(
             ? createSunnySprout(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
             : plant.speciesId === 'bubble-berry'
               ? createBubbleBerry(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
-              : createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0);
+              : plant.speciesId === 'twistroot' ? createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
+                : createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0);
           entry = { speciesId: plant.speciesId, plantedAt: plant.plantedAt, rig };
           entries.set(plot.id, entry);
           anchors.get(plot.id)!.add(entry.rig.root);
@@ -133,6 +135,10 @@ export function createPlantReconciler(
       const entry = entries.get(plotId);
       if (!entry) return false;
       return entry.rig.getTop ? entry.rig.getTop(target) : getSemanticTop(entry.rig.root, target);
+    },
+    shiver(plotId, nowMs, durationMs) {
+      const entry = entries.get(plotId);
+      entry?.rig.shiver?.(nowMs, durationMs);
     },
     dispose() {
       if (disposed) return;

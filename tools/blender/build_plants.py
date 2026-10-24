@@ -303,6 +303,22 @@ bd = part('twistroot_bands', bands, f'{P}.accent.growth-ring', root, (0, 0, 0), 
 morph(bd, lambda co: Vector((co.x * 0.62, co.y * 0.62, co.z * 0.13)))
 part('twistroot_crown', crown, f'{P}.leaf.1', root, tip_point, (0.2, 1.0), attach='twistroot_root', fly=True)
 
+# ---------------------------------------------------------------- Puffcap: a broad, spotted mushroom
+root = species_root('puffcap', 4.4)
+P = 'plants.puffcap'
+stem_bm = bmesh.new()
+bmesh.ops.create_cone(stem_bm, segments=24, radius1=0.20, radius2=0.16, depth=0.92)
+for v in stem_bm.verts: v.co.z += 0.46
+stem = part('puffcap_stem', stem_bm, f'{P}.stem.1', root, (0, 0, 0), (0.0, 0.72))
+morph(stem, lambda co: Vector((co.x * 0.72, co.y * 0.72, co.z * 0.16)))
+cap_center = (0, 0, 0.91)
+part('puffcap_cap', fruit_sphere(0.66, cap_center, 48, 28, squash=0.54), f'{P}.fruit.1', root,
+     (0, 0, 0.55), (0.35, 1.0), attach='puffcap_stem', ripe=True, fly=True)
+spots = bmesh.new()
+for x, y, z, r in ((-.27, -.20, 1.15, .09), (.23, -.26, 1.18, .075), (.02, .20, 1.22, .08), (-.42, .02, 1.12, .06), (.42, .03, 1.11, .06)):
+    merge(spots, fruit_sphere(r, (x, y, z), 16, 10))
+part('puffcap_spots', spots, f'{P}.accent.spots', root, (0, 0, .55), (.35, 1.0), attach='puffcap_stem', ripe=True, fly=True)
+
 print('objects', len(bpy.data.objects),
       'tris', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == 'MESH'))
 if os.environ.get('PLANTS_NO_EXPORT') != '1':

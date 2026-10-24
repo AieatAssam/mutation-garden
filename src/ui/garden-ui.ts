@@ -1,4 +1,5 @@
 import type { SpeciesId } from '../sim';
+import type { ShopItemId } from '../sim';
 import './garden-ui.css';
 
 export interface SeedDescriptor {
@@ -18,6 +19,10 @@ export interface GardenUIOptions {
   readonly onToggleSound?: () => void;
   readonly onToggleMusic?: () => void;
   readonly onHarvestAll?: () => void;
+  readonly onBuy?: (item: ShopItemId) => void;
+  /** Wipes the save after the player confirms; the app reloads into a new garden. */
+  readonly onReset?: () => void;
+  readonly onWaterAll?: () => void;
 }
 
 export interface GardenUIUpdate {
@@ -33,6 +38,8 @@ export interface GardenUIUpdate {
   readonly reducedMotion?: boolean;
   /** Ripe plants right now; two or more show the Harvest all button. */
   readonly ripeCount?: number;
+  readonly owned?: readonly ShopItemId[];
+  readonly fertiliser?: number;
 }
 
 export interface GardenUI {
@@ -126,6 +133,38 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   };
   const soundButton = toggle('Sound', ['M4 9h4l5-4v14l-5-4H4Z', 'M16.5 8.5a5 5 0 0 1 0 7', 'M19 6a8.5 8.5 0 0 1 0 12'], options.onToggleSound);
   const musicButton = toggle('Music', ['M9 18V6l10-2v12', 'M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z', 'M19 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z'], options.onToggleMusic);
+  const shopButton = document.createElement('button');
+  shopButton.type = 'button'; shopButton.className = 'garden-ui__shop'; shopButton.setAttribute('aria-label', 'Shop');
+  shopButton.innerHTML = '<span aria-hidden="true">▣</span> Shop';
+  const shop = document.createElement('div'); shop.className = 'garden-ui__shop-backdrop'; shop.hidden = true;
+  const sheet = document.createElement('section'); sheet.className = 'garden-ui__shop-sheet'; sheet.setAttribute('aria-label', 'Shop');
+  const shopHead = document.createElement('header'); shopHead.innerHTML = '<strong>Shop</strong>';
+  const close = document.createElement('button'); close.type = 'button'; close.className = 'garden-ui__shop-close'; close.textContent = 'Close';
+  shopHead.append(close); sheet.append(shopHead);
+  const shopItems: readonly { id: ShopItemId; title: string; desc: string; price: number; level: number }[] = [
+    { id: 'plot-6', title: 'Plot 7', desc: 'Grow the island west.', price: 40, level: 2 },
+    { id: 'plot-7', title: 'Plot 8', desc: 'Add another garden bed.', price: 120, level: 4 },
+    { id: 'big-can', title: 'Big can', desc: 'Tap once to water every growing plant.', price: 60, level: 3 },
+    { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: 25, level: 1 },
+    { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: 150, level: 5 },
+  ];
+  const shopRows = shopItems.map((item) => {
+    const row = document.createElement('article'); row.className = 'garden-ui__shop-row';
+    const copy = document.createElement('div'); copy.innerHTML = `<strong>${item.title}</strong><span>${item.desc}</span><span>Level ${item.level} · ${item.price} coins</span>`;
+    const action = document.createElement('button'); action.type = 'button'; action.className = 'garden-ui__buy';
+    action.addEventListener('click', () => options.onBuy?.(item.id));
+    row.append(copy, action); sheet.append(row); return { item, row, action };
+  });
+  const bigCan = document.createElement('button'); bigCan.type = 'button'; bigCan.className = 'garden-ui__water-all'; bigCan.textContent = 'Water all'; bigCan.hidden = true;
+  bigCan.addEventListener('click', () => options.onWaterAll?.());
+  close.addEventListener('click', () => { shop.hidden = true; });
+  shopButton.addEventListener('click', () => { shop.hidden = false; });
+  shop.addEventListener('click', (event) => { if (event.target === shop) shop.hidden = true; });
+  const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'garden-ui__reset';
+  reset.textContent = 'Start over';
+  reset.addEventListener('click', () => options.onReset?.());
+  sheet.append(reset);
+  shop.append(sheet); overlay.append(shop, bigCan);
 
   // The objective line shows only while there is something to say, so it rarely covers the garden.
   const hint = document.createElement('p');
@@ -195,6 +234,8 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
 
   overlay.append(coinStatus, levelBadge, toggles, hint, stamp, away, seedTray);
   seedTray.append(harvestAll);
+  // Main actions live in the bottom third (AGENTS.md): Shop is a tab on the seed tray.
+  seedTray.append(shopButton);
   container.append(overlay);
 
   // The counter rolls toward the authoritative value with an overshoot ease (motion.md 7).
@@ -240,6 +281,18 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     harvestAll.textContent = `Harvest all ${ripe}`;
     soundButton.setAttribute('aria-pressed', String(state.sound ?? true));
     musicButton.setAttribute('aria-pressed', String(state.music ?? true));
+    const owned = state.owned ?? [];
+    trayLabel.textContent = state.fertiliser ? `Seeds · Fertiliser x${state.fertiliser}` : 'Seeds';
+    bigCan.hidden = !owned.includes('big-can');
+    bigCan.textContent = `Water all${state.fertiliser ? ` · Fertiliser x${state.fertiliser}` : ''}`;
+    for (const { item, row, action } of shopRows) {
+      const has = owned.includes(item.id);
+      const locked = level < item.level;
+      const affordable = state.coins >= item.price;
+      row.classList.toggle('is-muted', locked || !affordable);
+      action.disabled = (has && item.id !== 'fertiliser') || locked || !affordable;
+      action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? `Level ${item.level}` : `Buy · ${item.price}`;
+    }
     for (const seed of seedButtons) {
       const selected = seed.species.id === state.selectedId;
       const locked = seed.species.unlockLevel > level;

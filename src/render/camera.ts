@@ -18,6 +18,8 @@ const PLOT_TARGET_CENTERS = [
   [-1.05, 0.65, 0], [1.05, 0.65, 0],
   [-1.05, 0.65, -2], [1.05, 0.65, -2],
 ] as const;
+const EXPANDED_TARGET_CENTERS = [...PLOT_TARGET_CENTERS, [-5.25, 0.65, 0], [-7.35, 0.65, 0]] as const;
+const targets = (camera: OrthographicCamera) => panStates.get(camera)?.expanded ? EXPANDED_TARGET_CENTERS : PLOT_TARGET_CENTERS;
 
 interface CameraPanState {
   basePosition: Vector3;
@@ -26,6 +28,7 @@ interface CameraPanState {
   viewportWidth: number;
   viewportHeight: number;
   lastSaturatedInput: { deltaXCss: number; deltaYCss: number } | undefined;
+  expanded: boolean;
 }
 
 const panStates = new WeakMap<OrthographicCamera, CameraPanState>();
@@ -39,7 +42,7 @@ function horizontalPanDeltaBounds(camera: OrthographicCamera, width: number): re
   camera.updateMatrixWorld(true);
   let minDelta = Number.NEGATIVE_INFINITY;
   let maxDelta = Number.POSITIVE_INFINITY;
-  for (const center of PLOT_TARGET_CENTERS) {
+  for (const center of targets(camera)) {
     const screenX = (new Vector3(...center).project(camera).x + 1) * width / 2;
     minDelta = Math.max(minDelta, PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN - screenX);
     maxDelta = Math.min(maxDelta, width - PLOT_TARGET_HALF_SIZE - PLOT_TARGET_MARGIN - screenX);
@@ -66,7 +69,7 @@ function maximumCameraZoom(camera: OrthographicCamera, state: CameraPanState): n
   const availableX = state.viewportWidth / 2 - margin;
   const availableY = state.viewportHeight / 2 - margin;
   let limit = MAX_CAMERA_ZOOM;
-  for (const center of PLOT_TARGET_CENTERS) {
+  for (const center of targets(camera)) {
     const projected = new Vector3(...center).project(camera);
     const reachX = Math.abs(projected.x) * state.viewportWidth / 2;
     const reachY = Math.abs(projected.y) * state.viewportHeight / 2;
@@ -113,7 +116,7 @@ function keepPlotTargetsInViewVertically(camera: OrthographicCamera, state: Came
   const margin = PLOT_TARGET_HALF_SIZE + PLOT_TARGET_MARGIN;
   let top = Number.POSITIVE_INFINITY;
   let bottom = Number.NEGATIVE_INFINITY;
-  for (const center of PLOT_TARGET_CENTERS) {
+  for (const center of targets(camera)) {
     const y = (1 - new Vector3(...center).project(camera).y) * state.viewportHeight / 2;
     top = Math.min(top, y);
     bottom = Math.max(bottom, y);
@@ -135,7 +138,7 @@ function stampHudShift(camera: OrthographicCamera, state: CameraPanState): Vecto
   applyPose(camera, state);
   camera.updateMatrixWorld(true);
   let topY = Number.POSITIVE_INFINITY;
-  for (const center of PLOT_TARGET_CENTERS) {
+  for (const center of targets(camera)) {
     const projected = new Vector3(center[0], STAMP_TOP_Y, center[2]).project(camera);
     topY = Math.min(topY, (1 - projected.y) * state.viewportHeight / 2);
   }
@@ -160,11 +163,23 @@ function getPanState(camera: OrthographicCamera): CameraPanState {
       offset: new Vector3(),
       viewportWidth: 0,
       viewportHeight: 0,
-      lastSaturatedInput: undefined,
+    lastSaturatedInput: undefined, expanded: false,
     };
     panStates.set(camera, state);
   }
   return state;
+}
+
+/** Brief 2 cm camera bump for a large harvest combo. */
+export function nudgeGardenCamera(camera: OrthographicCamera, distance = 0.02): void {
+  const state = panStates.get(camera);
+  if (!state) return;
+  state.offset.x += distance;
+  applyPose(camera, state);
+  setTimeout(() => {
+    state.offset.x -= distance;
+    applyPose(camera, state);
+  }, 100);
 }
 
 export function createGardenCamera(): OrthographicCamera {
@@ -182,12 +197,12 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   const safeHeight = height;
   const aspect = safeWidth / safeHeight;
   const portrait = aspect < 1;
-  // Portrait fits the beds plus a margin to the phone width and lets the island run off the sides.
-  const viewHeight = portrait ? Math.min(16.4, 6.2 / aspect) : Math.min(9.4, safeHeight / 56);
-
   const state = getPanState(camera);
+  // Portrait fits the beds plus a margin to the phone width and lets the island run off the sides.
+  const viewHeight = portrait ? Math.min(state.expanded ? 32.4 : 16.4, (state.expanded ? 14.4 : 6.2) / aspect) : Math.min(9.4, safeHeight / 56);
+
   state.basePosition.set(3.6, 8.5, 11);
-  state.baseTarget.set(0.35, portrait ? 0.2 : 1.2, 0.3);
+  state.baseTarget.set(state.expanded ? -3 : 0.35, portrait ? 0.2 : 1.2, 0.3);
   state.viewportWidth = safeWidth;
   state.viewportHeight = safeHeight;
   state.lastSaturatedInput = undefined;
@@ -218,6 +233,13 @@ export function resizeGardenCamera(camera: OrthographicCamera, width: number, he
   keepPlotTargetsInView(camera, state);
   keepStampsBelowHud(camera, state);
   applyPose(camera, state);
+}
+
+export function setGardenCameraExpanded(camera: OrthographicCamera, expanded: boolean): void {
+  const state = panStates.get(camera);
+  if (!state || state.expanded === expanded) return;
+  state.expanded = expanded;
+  resizeGardenCamera(camera, state.viewportWidth, state.viewportHeight);
 }
 
 /** Apply a finite, positive zoom increment while keeping every plot target in view. */

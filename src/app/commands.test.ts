@@ -88,7 +88,8 @@ describe('createPlotActivationGuard', () => {
     expect(accept(plant, 1_000)).toBe(true);
     expect(accept(harvest, 1_001)).toBe(true);
     expect(accept({ type: 'Harvest', plotIds: ['plot-1'] }, 1_001)).toBe(true);
-    expect(accept({ type: 'Plant', plotId: 'plot-6', seedId: 'sunny-sprout' }, 1_001)).toBe(false);
+    expect(accept({ type: 'Plant', plotId: 'plot-6', seedId: 'sunny-sprout' }, 1_001)).toBe(true);
+    expect(accept({ type: 'Plant', plotId: 'plot-8', seedId: 'sunny-sprout' }, 1_001)).toBe(false);
   });
 
   it('allows repeated Harvest intents while preserving the latest Harvest time', () => {

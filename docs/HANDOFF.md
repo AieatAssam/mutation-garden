@@ -2,13 +2,19 @@
 
 Living note for whoever picks this up next (human, Claude or Codex). Update it at every stopping point.
 
-## Where things are (2026-10-22)
+## Stopping point (2026-10-24)
 
-- **main** has S1 (Blender island, #173), S2 (authored plants, #174), S3 (juice, yield, combo, watering, sound, #175) and S4 (levels, saves, first minute, HUD pass, #176). CI green.
-- **Merged:** M1-S5 (#177): wind (plants lean, leaves flutter, grass and flowers bend in a shader), drifting paper clouds, butterflies, falling leaves, island drop-in, one-time pixel-ratio probe. Critique gate run: issue #178 (13 findings, none high).
-- **In flight:** critique fixes, PR #179 on `m1/critique-fixes`: standing objective line, Harvest all 52 px above the tray, plot pulse ring, Seed Token on prices, unaffordable seed state and coin nudge, Sunny Sprout rebuilt (fruit wider than leaves, 8 shallow ribs), berry highlight dots facing the light, portrait view about 10% closer, max zoom solved from the resting pose, flow e2e specs (first minute, water, Harvest all). Done in the branch: sim schema 2 with XP and levels (Bubble Berry at 2, Twistroot at 3), versioned IndexedDB saves with backup and recovery, autosave, settings, sound and music toggles with a generative music loop, first-minute hints, "While you were away" card, coin counter roll-up, level-up stamp, and a UX pass after the look prototype (seed cards with fruit swatch and price, a top card with level, progress and objective, a Harvest all button, tan card shadows instead of red).
+- **PR #188 (m2/s1-mutations):** M2-S1 complete and reviewed (Codex Sol; six findings fixed). Mutation engine, Giant/Golden/Glowing guaranteed rules, payouts and first-find bonus, shop (Plot 7/8 raise a joined west island lobe, Big can, fertiliser, lucky charm), Puffcap, Start over, shop above the tray, reveal waits for a tap. CI runs Playwright with one worker (browser crashed with two). Merge when CI is green.
+- **Branch m3/s1-crate-stall (pushed, no PR yet):** built on an older #188 head. Crate (12), market stall object, timed selling (1.2 s/fruit), fruit-hop and progress ring, save schema 4. Balance pass measured with a greedy bot (src/sim/balance.test.ts): first harvest 9 s, Level 2 1:12, first purchase 2:42, Plot 7 4:42, Puffcap 8:19; first-find bonus 3x. Notification reading-time helper and queue exist but not every notice uses them yet. Browser tests on this branch were not run after the balance pass. Next: merge main after #188, then finish notices and run the full gates.
+- **Plans:** M3 economy (#180-#183), M4 automation objects (#184-#187), M5 more mutations, M6 lab. Design in docs/design.md "Economy and automation".
+- **Working method:** implementation by Codex CLI on gpt-6-luna; headless Blender crashes for Codex, so GLBs are rebuilt through the Blender MCP. Don't run two Playwright suites at once (ports 4173/4174/42741).
+
+## Where things are (2026-10-23)
+
+- **M1 accepted:** S1–S5 merged (#173–#177); critique #178 is closed and its fixes merged in #179. Acceptance is complete. Open gap: profile on a real mid-range phone.
+- **M2 active:** S1 is in progress on `m2/s1-mutations`; owner direction dated 2026-10-23 replans later work as M3 economy, M4 automation, M5 mutations/polish and M6 lab. Design and milestone docs are updated; no implementation changes are included here.
 - **E2E with later seeds:** specs call `startWithSave(page)` (`tests/e2e/garden-save.ts`), which seeds a level-3 save before the app opens IndexedDB.
-- **Research:** [research/viral-findings.md](research/viral-findings.md) and design.md section 11 map adopted ideas to milestones.
+- **Research:** [research/viral-findings.md](research/viral-findings.md) and [design section 11](design.md#11-viral-and-retention-features) map adopted ideas to milestones.
 
 ## How to work here
 
@@ -20,6 +26,7 @@ Living note for whoever picks this up next (human, Claude or Codex). Update it a
 
 ## Known gaps
 
+- Profile on a real mid-range phone.
 - Run long local checks with caffeinate on: a sleeping Mac stalls Playwright and leaves dev servers on ports 4173/4174/42741 (kill them before re-running).
 - The portrait camera keeps back-row stamps below the objective line (112 px band); landscape puts the objective in the top row (70 px band). See `topHudPx` in `src/render/camera.ts` and the `min-aspect-ratio` rule in `src/ui/garden-ui.css`.
 
@@ -35,7 +42,11 @@ Living note for whoever picks this up next (human, Claude or Codex). Update it a
 
 ## Log
 
-- 2026-10-23: S5 merged (#177). Critique fixes reviewed (vertical plot clamp, one-line objective, away card vs Harvest all, sturdier watering spec) in #179. M1 acceptance ticked; next is M2.
+- 2026-10-23: Owner directed crate-and-stall selling, eight seeds, the automation ladder, offline automation and three more mutations. Replanned M2–M6; next: finish and accept M2-S1, then build M3 economy.
+
+- 2026-10-23: Owner directed M2-S1 toward a real coin sink and mutation payout loop: guaranteed Giant/Golden rules, Shop purchases, west plots, Puffcap→Glowing, fertiliser, Big can and Lucky charm. Implementation is in progress on `m2/s1-mutations`.
+
+- 2026-10-23: M1 accepted; critique #178 closed and fixes merged in #179. M2 planned with ADR 0010; next: S1 on `m2/s1-mutations`.
 
 - 2026-10-22: S4 merged (#176). S5 PR #177; CI E2E was cancelled at 20 min by a 14-minute browser install, so the job now caches browsers and allows 35 min. M1 critique gate: #178.
 

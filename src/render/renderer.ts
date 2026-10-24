@@ -1,5 +1,7 @@
 import {
   AmbientLight,
+  CubeReflectionMapping,
+  CubeTexture,
   ColorManagement,
   DirectionalLight,
   Group,
@@ -16,7 +18,7 @@ import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
 import { GARDEN_MODEL_URL, loadScenery, type Scenery } from './scenery';
-import { createGardenCamera, panGardenCamera, resizeGardenCamera, zoomGardenCamera } from './camera';
+import { createGardenCamera, nudgeGardenCamera, panGardenCamera, resizeGardenCamera, setGardenCameraExpanded, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
 import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
 import { createParticles } from './motion/particles';
@@ -48,6 +50,8 @@ export interface Renderer {
   onEvents(events: readonly SimEvent[], reducedMotion: boolean): void;
   /** Screen point (CSS px, viewport) just above a plot's plant, for UI rewards. */
   projectPlot(plotId: PlotId): { x: number; y: number } | null;
+  shiver(plotId: PlotId, durationMs: number): void;
+  nudge?(): void;
   pick(clientX: number, clientY: number): PickResult;
   /** Resolves once the authored island and plant models are in the scene (or failed to load). */
   whenLoaded(): Promise<void>;
@@ -80,6 +84,21 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   canvas.style.background = `linear-gradient(180deg, ${sky.zenith} 0%, ${sky.mid} 45%, ${sky.horizon} 85%)`;
 
   const scene = new Scene();
+  let environment: CubeTexture | null = null;
+  if (typeof document !== 'undefined') {
+    environment = new CubeTexture(Array.from({ length: 6 }, () => {
+      const face = document.createElement('canvas'); face.width = face.height = 16;
+      const context = face.getContext('2d')!;
+      const gradient = context.createLinearGradient(0, 0, 0, 16);
+      gradient.addColorStop(0, sky.zenith); gradient.addColorStop(0.55, sky.mid); gradient.addColorStop(1, sky.horizon);
+      context.fillStyle = gradient; context.fillRect(0, 0, 16, 16);
+      return face;
+    }));
+    environment.mapping = CubeReflectionMapping;
+    environment.colorSpace = SRGBColorSpace;
+    environment.needsUpdate = true;
+    scene.environment = environment;
+  }
   const camera = createGardenCamera();
 
   const day = palette.lighting.day;
@@ -127,10 +146,11 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     if (disposed) return;
     const warm = new Group();
     const rigs = plantModels
-      ? (['sunny-sprout', 'bubble-berry', 'twistroot'] as const).map((species) => createAuthoredRig(species, plantModels!, materials))
+      ? (['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap'] as const).map((species) => createAuthoredRig(species, plantModels!, materials))
       : [];
     for (const rig of rigs) {
-      rig.update({ speciesId: 'sunny-sprout', plantedAt: 0, stage: 'Harvestable', progress: 1 }, 0, true);
+      rig.update({ speciesId: rig.root.name as SpeciesId, plantedAt: 0, stage: 'Harvestable', progress: 1,
+        mutations: rig.root.name === 'sunny-sprout' ? ['golden'] : rig.root.name === 'puffcap' ? ['glowing'] : [] }, 0, true);
       warm.add(rig.root);
     }
     scene.add(warm);
@@ -197,6 +217,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }
 
   const particles = createParticles();
+  const lastTell = new Map<PlotId, number>();
   scene.add(particles.mesh);
   const pulse = createPlotPulse();
   const flights = createHarvestFlights(() => plantModels, materials);
@@ -242,6 +263,19 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
           particles.burst({ origin: fruit, count: 14,
             colors: [ramp(event.speciesId).fruit[0], ramp(event.speciesId).fruit[1], ramp(event.speciesId).leaf[1]],
             speed: 2.2, up: 1.8, gravity: 6, lifeMs: 480, size: 0.15 }, now, reducedMotion);
+          break;
+        }
+        case 'Mutated': {
+          const top = new Vector3();
+          if (plants.getTop(event.plotId, top)) {
+            if (event.firstDiscovery && !reducedMotion) plants.shiver(event.plotId, currentSnapshot?.nowMs ?? 0, 300);
+            const trait = event.mutations[0];
+            const colors = trait === 'giant' ? [palette.ui.coin.emboss, palette.ink['paper-white']]
+              : trait === 'golden' ? palette.plants[event.speciesId].fruit.slice(0, 2)
+                : [palette.environment.water[0], palette.environment.water[1]];
+            particles.burst({ origin: top, count: event.firstDiscovery ? 16 : 7, colors,
+              speed: 0.8, up: 1.1, gravity: 2, lifeMs: event.firstDiscovery ? 1000 : 500, size: 0.1 }, now, reducedMotion);
+          }
           break;
         }
         default:
@@ -322,7 +356,33 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       currentSnapshot = current;
       snapshotAlpha = Math.min(1, Math.max(0, alpha));
       currentReducedMotion = reducedMotion;
+      const expanded = current.plots.length > 6;
+      scenery?.setExpanded(expanded, clock(), reducedMotion);
+      setGardenCameraExpanded(camera, expanded);
+      for (const plot of garden.plots) {
+        const unlocked = current.plots.some((entry) => entry.id === plot.plotId);
+        plot.visible = unlocked;
+        plot.userData.locked = !unlocked;
+      }
       plants.update(previous, current, alpha, reducedMotion);
+      const activeTells = new Set<PlotId>();
+      for (const plot of current.plots) {
+        const plant = plot.plant;
+        if (!plant?.tell || (plant.stage !== 'Sprout' && plant.stage !== 'Growing' && plant.stage !== 'Mature' && plant.stage !== 'Harvestable')) continue;
+        activeTells.add(plot.id);
+        const last = lastTell.get(plot.id) ?? -Infinity;
+        if ((reducedMotion && lastTell.has(plot.id)) || last + 4000 > clock()) continue;
+        const top = new Vector3();
+        if (plants.getTop(plot.id, top)) particles.burst({ key: `tell:${plot.id}`, origin: top, count: 1,
+          colors: plant.tell === 'giant' ? [palette.ui.coin.emboss] : [palette.environment.water[0]],
+          speed: 0, up: reducedMotion ? 0 : 0.18, gravity: reducedMotion ? 0 : 0.1,
+          lifeMs: reducedMotion ? 1_000_000_000 : 600, size: 0.055 }, clock(), reducedMotion);
+        lastTell.set(plot.id, clock());
+      }
+      for (const plotId of lastTell.keys()) if (!activeTells.has(plotId)) {
+        lastTell.delete(plotId);
+        particles.remove(`tell:${plotId}`);
+      }
       draw();
     },
     whenLoaded() {
@@ -338,6 +398,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       camera.updateMatrixWorld(true);
       const point = anchor.getWorldPosition(new Vector3()).setY(anchor.position.y + 1.2).project(camera);
       return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };
+    },
+    shiver(plotId, durationMs) {
+      if (!disposed && !currentReducedMotion) plants.shiver(plotId, currentSnapshot?.nowMs ?? 0, durationMs);
+    },
+    nudge() {
+      if (!disposed && !currentReducedMotion) nudgeGardenCamera(camera, 0.02);
     },
     pick(clientX, clientY) {
       if (disposed) return null;
@@ -357,6 +423,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       flights.dispose();
       garden.dispose();
       materials.dispose();
+      environment?.dispose();
       gl.dispose();
     },
   };

@@ -28,7 +28,7 @@ function part(name: string, materialName: string, geometry = new BoxGeometry(0.2
 
 function scene(): Group {
   const root = new Group();
-  for (const species of ['sunny-sprout', 'bubble-berry', 'twistroot'] as SpeciesId[]) {
+  for (const species of ['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap'] as SpeciesId[]) {
     const group = new Group();
     group.name = species;
     const fruit = part(`${species}_fruit`, `plants.${species}.fruit.1`, undefined,
@@ -69,6 +69,7 @@ describe('authored plants', () => {
     const rig = createAuthoredRig('sunny-sprout', models, library);
     const body = rig.root.getObjectByName('plant-body')!;
     const stemMesh = body.getObjectByName('sunny-sprout_stem') as Mesh;
+    const stemHull = body.children.find((child) => child.userData.part === 'sunny-sprout_stem-outline') as Mesh;
     const fruitMesh = body.getObjectByName('sunny-sprout_fruit') as Mesh;
 
     for (const progress of [0.1, 0.25, 0.4]) {
@@ -93,6 +94,12 @@ describe('authored plants', () => {
     rig.update({ ...plant(1, 'Harvestable'), size: 'big' }, 0, true);
     expect(fruitMesh.scale.x / regularFruit, 'big fruit is visibly bigger').toBeCloseTo(1.2);
     expect(stemMesh.scale.x, 'the stem keeps its size').toBe(1);
+    const fruitHull = hulls[0]!;
+    rig.update({ ...plant(1, 'Harvestable'), mutations: ['golden'] }, 0, true);
+    expect(fruitHull.visible, 'real-material fruit loses the ink outline').toBe(false);
+    expect(stemHull.visible, 'the printed stem outline stays visible').toBe(true);
+    rig.update(plant(1, 'Harvestable'), 0, true);
+    expect(fruitHull.visible, 'ordinary fruit keeps its ink outline').toBe(true);
     const top = new Vector3();
     expect(rig.getTop!(top)).toBe(true);
     expect(top.y).toBeGreaterThan(1);

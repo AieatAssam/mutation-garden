@@ -3,7 +3,7 @@ import type { Command, GardenSnapshot, PlotId, SpeciesId } from '../sim';
 export const PLOT_ACTIVATION_GUARD_MS = 2_500;
 
 const PLOT_IDS: readonly PlotId[] = [
-  'plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5',
+  'plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5', 'plot-6', 'plot-7',
 ];
 
 /** Create a bounded per-plot guard for rapid repeat activations. */
@@ -17,6 +17,7 @@ export function createPlotActivationGuard(
   const lastAcceptedIntent: ({ type: Command['type']; atMs: number } | undefined)[] = Array(PLOT_IDS.length).fill(undefined);
 
   return (command, nowMs) => {
+    if (command.type === 'Buy' || command.type === 'WaterAll') return true;
     const plotIds = command.type === 'Harvest' ? command.plotIds : [command.plotId];
     if (plotIds.length === 0 || !Number.isSafeInteger(nowMs) || nowMs < 0) return false;
     const plotIndices = plotIds.map((plotId) => PLOT_IDS.indexOf(plotId));

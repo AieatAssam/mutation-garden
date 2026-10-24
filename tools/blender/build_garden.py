@@ -539,6 +539,171 @@ flat_polygon('creature-leaf', leaf_points, 'environment.grass.1', depth=0.006)
 
 # ---------------------------------------------------------------- join by material, build hulls
 
+# ---------------------------------------------------------------- west island chunk (rises when Plot 7 is bought)
+# A smaller lobe of the same island: grass cap with lip and turf drips, faceted rock strata, roots and two
+# real beds (plot-6 at x -5.25, plot-7 at x -7.35). It overlaps the main island's west edge so it reads as
+# the island growing, not a separate disc. Kept out of the merge; hulls are named chunk-west-outline-<n>.
+LX, LY = -5.85, 0.0
+
+
+def lobe_radius(t):
+    rx, ry = 2.95, 1.85
+    base = 1.0 / math.sqrt((math.cos(t) / rx) ** 2 + (math.sin(t) / ry) ** 2)
+    return base * (1 + 0.04 * math.sin(4 * t + 0.5) + 0.03 * math.sin(7 * t + 1.7))
+
+
+def lobe_ring(bm, n, scale, z_fn):
+    return [bm.verts.new((LX + lobe_radius(t) * scale * math.cos(t), LY + lobe_radius(t) * scale * math.sin(t), z_fn(t)))
+            for t in (2 * math.pi * i / n for i in range(n))]
+
+
+chunk = link(bpy.data.objects.new('chunk-west', None))
+chunk_parts, chunk_hull_thick, chunk_hull_thin = [], [], []
+
+
+def keep(o, hull=None):
+    o['keep'] = True
+    o.parent = chunk
+    chunk_parts.append(o)
+    if hull is not None:
+        hull.append(o)
+    return o
+
+
+NL = 72
+bm = bmesh.new()
+mid = bm.verts.new((LX, LY, GROUND))
+l_top = lobe_ring(bm, NL, 0.90, lambda t: GROUND)
+for i in range(NL):
+    bm.faces.new((mid, l_top[i], l_top[(i + 1) % NL]))
+l_lip_a = lobe_ring(bm, NL, 0.975, lambda t: GROUND - 0.01)
+l_lip_b = lobe_ring(bm, NL, 1.0, lambda t: GROUND - 0.07)
+l_side = lobe_ring(bm, NL, 1.0, lambda t: GROUND - 0.2)
+l_drip = lobe_ring(bm, NL, 0.985, lambda t: GROUND - 0.3 - 0.14 * max(0.0, math.sin(9 * t + 1.1)) ** 3)
+l_under = lobe_ring(bm, NL, 0.9, lambda t: GROUND - 0.32)
+for ra, rb in ((l_top, l_lip_a), (l_lip_a, l_lip_b), (l_lip_b, l_side), (l_side, l_drip), (l_drip, l_under)):
+    bridge(bm, ra, rb)
+bm.faces.new(list(reversed(l_under)))
+bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+l_cap = mesh_obj('chunk-west-grass', bm, 'environment.grass.1', smooth=True)
+l_cap.data.materials.append(mat('environment.grass.0'))
+l_cap.data.materials.append(mat('environment.grass.2'))
+for poly in l_cap.data.polygons:
+    zs = [l_cap.data.vertices[v].co.z for v in poly.vertices]
+    poly.material_index = 2 if min(zs) < GROUND - 0.12 else (1 if min(zs) < GROUND - 0.005 else 0)
+keep(l_cap, chunk_hull_thick)
+
+for bi, (ft, fb, zt, zb, pi) in enumerate(((0.95, 0.80, GROUND - 0.30, -0.70, 0), (0.82, 0.58, -0.65, -1.55, 1),
+                                         (0.60, 0.30, -1.50, -2.45, 2), (0.32, 0.04, -2.40, -3.20, 3))):
+    n = 14 - bi * 2
+    bm = bmesh.new()
+    phase = rng.uniform(0, 1)
+    top = [bm.verts.new((LX + lobe_radius(t) * ft * (1 + rng.uniform(-0.06, 0.06)) * math.cos(t),
+                         LY + lobe_radius(t) * ft * (1 + rng.uniform(-0.06, 0.06)) * math.sin(t), zt + rng.uniform(-0.05, 0.05)))
+           for t in (2 * math.pi * (i + phase) / n for i in range(n))]
+    bot = [bm.verts.new((LX + lobe_radius(t) * fb * (1 + rng.uniform(-0.08, 0.08)) * math.cos(t),
+                         LY + lobe_radius(t) * fb * (1 + rng.uniform(-0.08, 0.08)) * math.sin(t), zb + rng.uniform(-0.08, 0.08)))
+           for t in (2 * math.pi * (i + phase + 0.5) / n for i in range(n))]
+    for i in range(n):
+        bm.faces.new((top[i], top[(i + 1) % n], bot[i]))
+        bm.faces.new((top[(i + 1) % n], bot[(i + 1) % n], bot[i]))
+    bm.faces.new(list(reversed(top)))
+    bm.faces.new(bot)
+    bmesh.ops.recalc_face_normals(bm, faces=bm.faces)
+    keep(mesh_obj(f'chunk-west-rock-{bi}', bm, f'environment.island-rock.{pi}', smooth=False), chunk_hull_thick)
+
+for k in range(3):
+    t = math.pi * (0.55 + 0.45 * k) + rng.uniform(-0.15, 0.15)
+    r0 = lobe_radius(t) * 0.85
+    length = rng.uniform(0.8, 1.4)
+    pts = [(LX + (r0 - 0.12 * f) * math.cos(t), LY + (r0 - 0.12 * f) * math.sin(t), -0.65 - length * f)
+           for f in (s_ / 5 for s_ in range(6))]
+    cu = bpy.data.curves.new(f'chunk-west-root-{k}', 'CURVE')
+    cu.dimensions = '3D'
+    sp = cu.splines.new('POLY')
+    sp.points.add(len(pts) - 1)
+    for pt, c in zip(sp.points, pts):
+        pt.co = (*c, 1)
+    cu.bevel_depth = 0.035
+    cu.bevel_resolution = 2
+    o = link(bpy.data.objects.new(f'chunk-west-root-{k}', cu))
+    o.data.materials.append(mat('environment.wood-crate.2'))
+    bpy.ops.object.select_all(action='DESELECT')
+    bpy.context.view_layer.objects.active = o
+    o.select_set(True)
+    bpy.ops.object.convert(target='MESH')
+    keep(bpy.context.active_object)
+
+for x in (-5.25, -7.35):
+    y = 0.0
+    h = 0.26
+    zc = GROUND + h / 2 - 0.04
+    t = 0.13
+    L = BED
+    for dx, dy, sx, sy in ((0, L / 2 - t / 2, L - 0.1, t), (0, -L / 2 + t / 2, L - 0.1, t),
+                           (L / 2 - t / 2, 0, t, L - 0.1), (-L / 2 + t / 2, 0, t, L - 0.1)):
+        keep(rounded_box('environment.wood-crate.1', (sx, sy, h), (x + dx, y + dy, zc), 0.045), chunk_hull_thin)
+    for cx in (-1, 1):
+        for cy in (-1, 1):
+            keep(rounded_box('environment.wood-crate.2', (0.19, 0.19, h + 0.06),
+                             (x + cx * (L / 2 - 0.08), y + cy * (L / 2 - 0.08), zc + 0.03), 0.05), chunk_hull_thin)
+    keep(rounded_box('environment.soil.1', (L - 0.2, L - 0.2, 0.2), (x, y, SOIL_TOP - 0.1), 0.06))
+    for fy in (-0.45, 0, 0.45):
+        rid = prim('cylinder', 'environment.soil.0', loc=(x, y + fy, SOIL_TOP), rot=(0, math.pi / 2, 0),
+                   vertices=10, radius=0.11, depth=L - 0.36)
+        rid.scale.y = 0.5
+        bpy.ops.object.transform_apply(location=False, rotation=False, scale=True)
+        bev = rid.modifiers.new('bevel', 'BEVEL'); bev.width = 0.05; bev.segments = 1
+        bpy.ops.object.modifier_apply(modifier=bev.name)
+        for poly in rid.data.polygons:
+            poly.use_smooth = True
+        keep(rid)
+
+# A few tufts and a rock on the new lobe so it matches the island's dressing.
+for k in range(14):
+    t = rng.uniform(0, 2 * math.pi)
+    r = lobe_radius(t) * rng.uniform(0.55, 0.92)
+    x, y = LX + r * math.cos(t), LY + r * math.sin(t)
+    if abs(y) < BED / 2 + 0.1 and -8.2 < x < -4.4:
+        continue
+    for bl in range(4):
+        ang = 2 * math.pi * bl / 4 + rng.uniform(-0.3, 0.3)
+        hh = rng.uniform(0.14, 0.24)
+        tilt = rng.uniform(0.25, 0.5)
+        tuft = prim('cone', 'environment.grass.0', loc=(x + 0.03 * math.cos(ang), y + 0.03 * math.sin(ang), GROUND + hh / 2 - 0.01),
+                    vertices=4, radius1=0.035, radius2=0, depth=hh, rot=(-tilt * math.sin(ang), tilt * math.cos(ang), 0), smooth=False)
+        tuft['wind'] = True
+        keep(tuft)
+
+
+def chunk_hull(objs, thickness):
+    dupes = []
+    for o in objs:
+        d = o.copy(); d.data = o.data.copy(); link(d)
+        d.parent = None
+        d.matrix_world = o.matrix_world.copy()
+        d.data.materials.clear()
+        bmh = bmesh.new(); bmh.from_mesh(d.data)
+        bmesh.ops.remove_doubles(bmh, verts=bmh.verts, dist=0.002)
+        bmh.to_mesh(d.data); bmh.free()
+        dupes.append(d)
+    bpy.ops.object.select_all(action='DESELECT')
+    for d in dupes:
+        d.select_set(True)
+    bpy.context.view_layer.objects.active = dupes[0]
+    bpy.ops.object.join()
+    hull = bpy.context.active_object
+    hull.name = f'chunk-west-outline-{round(thickness * 1000)}'
+    hull.data.materials.append(mat('ink.press-ink'))
+    hull.data.shade_smooth()
+    hull['keep'] = True
+    hull.parent = chunk
+    hull.matrix_parent_inverse = chunk.matrix_world.inverted()
+
+
+chunk_hull(chunk_hull_thick, 0.06)
+chunk_hull(chunk_hull_thin, 0.035)
+
 if os.environ.get('GARDEN_STOP_BEFORE_JOIN') == '1':
     raise SystemExit('stopped before join')
 

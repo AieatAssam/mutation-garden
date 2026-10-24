@@ -149,13 +149,13 @@ export function createGardenPicker(
         }
       }
 
-      const bedHit = raycaster.intersectObjects(bedTargets, false)[0];
+      const bedHit = raycaster.intersectObjects(bedTargets.filter((_, index) => garden.plots[index]!.userData.locked !== true), false)[0];
       if (bedHit) {
         const index = bedTargets.indexOf(bedHit.object as typeof bedTargets[number]);
         return index < 0 ? null : { kind: 'plot', plotId: garden.plots[index]!.plotId };
       }
 
-      const plotHit = raycaster.intersectObjects(plotTargets, false)[0];
+      const plotHit = raycaster.intersectObjects(plotTargets.filter((_, index) => garden.plots[index]!.userData.locked !== true), false)[0];
       if (plotHit) {
         const index = plotTargets.indexOf(plotHit.object as typeof plotTargets[number]);
         return index < 0 ? null : { kind: 'plot', plotId: garden.plots[index]!.plotId };

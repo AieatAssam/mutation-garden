@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, Group, Matrix3, Matrix4, Mesh, MeshBasicMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, Group, Matrix3, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SpeciesId } from '../../sim';
 import type { MaterialLibrary } from '../materials';
@@ -37,9 +37,9 @@ export interface PlantModels {
   dispose(): void;
 }
 
-const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot'];
+const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap'];
 /** Display size per species, tuned so each plant fills its bed at phone size. */
-export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4 };
+export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4, puffcap: 1.25 };
 const RIPE_SWELL = 1.14;
 /** Harvested parts show their rolled yield size (design.md 4.3). */
 export const YIELD_SCALE = { small: 0.88, regular: 1, big: 1.2 } as const;
@@ -183,6 +183,15 @@ export function createAuthoredRig(
   const fruitRamp = palette.plants[species].fruit;
   const base = materials.toon(fruitRamp[1]);
   const fruitMaterial = base.clone() as MeshToonMaterial;
+  const goldenMaterial = new MeshStandardMaterial({ color: palette.ui.coin.face, metalness: 0.82, roughness: 0.22 });
+  const glowingMaterial = new MeshStandardMaterial({ color: palette.mutations.glowing.core, emissive: palette.mutations.glowing.emissive, emissiveIntensity: 0.8, roughness: 0.8 });
+  goldenMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.uGleam = { value: 0 };
+    goldenMaterial.userData.gleam = shader.uniforms.uGleam;
+    shader.vertexShader = `varying vec3 vGoldenPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGoldenPosition = transformed;');
+    shader.fragmentShader = `uniform float uGleam;\nvarying vec3 vGoldenPosition;\n${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\nfloat gleam = 1.0 - smoothstep(0.0, 0.12, abs(vGoldenPosition.x - (uGleam * 2.0 - 1.0)));\ndiffuseColor.rgb += vec3(1.0) * gleam * 0.45;');
+  };
+  goldenMaterial.customProgramCacheKey = () => 'golden-fruit-gleam-v1';
   fruitMaterial.onBeforeCompile = base.onBeforeCompile;
   fruitMaterial.customProgramCacheKey = base.customProgramCacheKey;
   const unripe = new Color(fruitRamp[3]);
@@ -218,6 +227,11 @@ export function createAuthoredRig(
   let lastStage: string | null = null;
   let popStartMs = -Infinity;
   let wetStartMs = -Infinity;
+  let giant: boolean | null = null;
+  let giantStartMs = -Infinity;
+  let giantFrom = 1;
+  let shiverStartMs = -Infinity;
+  let shiverDurationMs = 0;
 
   const blob = materials.blob();
   blob.name = 'blob';
@@ -231,6 +245,18 @@ export function createAuthoredRig(
     root,
     update(plant, presentationNowMs, reducedMotion) {
       const progress = clamp01(plant.progress);
+      const hasGiant = plant.mutations?.includes('giant') ?? false;
+      const golden = plant.mutations?.includes('golden') ?? false;
+      const glowing = plant.mutations?.includes('glowing') ?? false;
+      glowingMaterial.emissiveIntensity = glowing ? (reducedMotion ? 0.8 : 0.55 + 0.3 * Math.sin(presentationNowMs / 350)) : 0;
+      const gleam = goldenMaterial.userData.gleam as { value: number } | undefined;
+      if (gleam) gleam.value = reducedMotion ? 0.5 : ((presentationNowMs % 3000) + 3000) % 3000 / 3000;
+      if (giant === null) giant = hasGiant;
+      else if (giant !== hasGiant) {
+        giantFrom = hasGiant ? 1 : 1.8;
+        giant = hasGiant;
+        giantStartMs = presentationNowMs;
+      }
       const ripe = plant.stage === 'Harvestable';
       // Fruit warms part way while growing and only reaches its ripe colour and size when harvestable,
       // so ripeness is an obvious change rather than the end of a gradient (motion.md 4.3).
@@ -244,6 +270,7 @@ export function createAuthoredRig(
         entry.scale = entry.part.fly ? yieldScale : 1;
       }
       for (const { meshes, part, growth, scale: partScale } of animated) {
+        if (part.ripe) meshes[0]!.material = golden ? goldenMaterial : glowing ? glowingMaterial : fruitMaterial;
         // Attached parts ride their parent's tip: offset by how far that tip is from its grown place.
         ride.set(0, 0, 0);
         const parent = part.attach ? byName.get(part.attach) : undefined;
@@ -256,10 +283,11 @@ export function createAuthoredRig(
         const flutter = !reducedMotion && part.name.includes('_leaf')
           ? 0.05 * Math.sin(((presentationNowMs + phaseOffsetMs) / 400) * Math.PI * 2) * (0.5 + 0.5 * Math.abs(wind))
           : 0;
-        for (const mesh of meshes) {
+        for (const [index, mesh] of meshes.entries()) {
           mesh.rotation.z = flutter;
           if (part.morph) mesh.morphTargetInfluences![0] = growth;
-          mesh.visible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0);
+          mesh.visible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0)
+            && !(golden && part.ripe && index === 1);
           mesh.scale.setScalar(Math.max(0.001, size));
           mesh.position.copy(part.origin).add(ride);
         }
@@ -287,10 +315,32 @@ export function createAuthoredRig(
       // Wind blows along +x, so a plant leans towards -z rotation; the ripe wiggle adds on top.
       body.rotation.z = wiggle - WIND_LEAN * wind;
       const breathing = reducedMotion ? 1 : 1 + Math.sin(((presentationNowMs + phaseOffsetMs) / 2400) * Math.PI * 2) * 0.02;
-      root.scale.set(scale, scale * breathing, scale);
+      let giantScale = hasGiant ? 1.8 : 1;
+      if (giantStartMs !== -Infinity) {
+        const duration = reducedMotion ? 300 : 600;
+        const t = clamp01((presentationNowMs - giantStartMs) / duration);
+        if (t >= 1) giantStartMs = -Infinity;
+        else if (reducedMotion) giantScale = giantFrom + (hasGiant ? 1.8 - giantFrom : 1 - giantFrom) * smooth(t);
+        else {
+          const target = hasGiant ? 1.8 : 1;
+          const direction = target >= giantFrom ? 1 : -1;
+          giantScale = giantFrom + (target - giantFrom) * smooth(t)
+            + direction * 0.14 * Math.sin(t * Math.PI * 4) * (1 - t);
+          giantScale = Math.max(0.1, giantScale);
+        }
+      }
+      const shiver = !reducedMotion && presentationNowMs - shiverStartMs < shiverDurationMs
+        ? 0.055 * Math.sin(((presentationNowMs - shiverStartMs) / 42) * Math.PI * 2)
+          * (1 - clamp01((presentationNowMs - shiverStartMs) / shiverDurationMs)) : 0;
+      root.rotation.z = shiver;
+      root.scale.set(scale * giantScale, scale * giantScale * breathing, scale * giantScale);
       const size = 0.35 + 0.65 * smooth(progress);
       const lift = 1 - 0.25 * Math.min(1, hop.y / 0.05);
       blob.scale.set(0.95 * size * lift, 0.95 * size * lift, 1);
+    },
+    shiver(presentationNowMs, durationMs) {
+      shiverStartMs = presentationNowMs;
+      shiverDurationMs = durationMs;
     },
     getTop(target) {
       let found = false;
@@ -315,6 +365,8 @@ export function createAuthoredRig(
       if (disposed) return;
       disposed = true;
       fruitMaterial.dispose();
+      goldenMaterial.dispose();
+      glowingMaterial.dispose();
       wetGeometry.dispose();
       wetMaterial.dispose();
       root.clear();

@@ -28,17 +28,19 @@ export function createGarden(): Garden {
   root.name = 'garden';
 
   const plots: PlotAnchor[] = [];
-  for (let row = 0; row < PLOT_ZS.length; row += 1) {
-    for (let column = 0; column < PLOT_XS.length; column += 1) {
-      const id = `plot-${row * 2 + column}` as PlotId;
+  for (let index = 0; index < 8; index += 1) {
+      const row = Math.floor(index / 2); const column = index % 2;
+      const id = `plot-${index}` as PlotId;
       const anchor = new Group() as PlotAnchor;
       Object.defineProperty(anchor, 'plotId', { value: id, enumerable: true });
       anchor.name = id;
-      anchor.position.set(PLOT_XS[column]!, SOIL_TOP, PLOT_ZS[row]!);
+      anchor.position.set(index < 6 ? PLOT_XS[column]! : (index === 6 ? -5.25 : -7.35), SOIL_TOP,
+        index < 6 ? PLOT_ZS[row]! : 0);
+      if (index >= 6) anchor.visible = false;
+      if (index >= 6) anchor.userData.locked = true;
       anchor.userData.plotId = id;
       plots.push(anchor);
       root.add(anchor);
-    }
   }
   Object.defineProperty(root, 'plots', { value: plots, enumerable: true });
 

@@ -4,11 +4,12 @@ import { createInitialState, INITIAL_COINS, SPECIES } from '../index';
 const expectedStages = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'];
 
 describe('starter species content', () => {
-  it('contains exactly the three starter species with unique stable IDs', () => {
+  it('contains unique stable species IDs', () => {
     expect(SPECIES.map(({ id }) => id)).toEqual([
       'sunny-sprout',
       'bubble-berry',
       'twistroot',
+      'puffcap',
     ]);
     expect(new Set(SPECIES.map(({ id }) => id)).size).toBe(SPECIES.length);
   });
@@ -17,6 +18,7 @@ describe('starter species content', () => {
     { id: 'sunny-sprout', name: 'Sunny Sprout', seedCost: 1, baseValue: 2 },
     { id: 'bubble-berry', name: 'Bubble Berry', seedCost: 3, baseValue: 6 },
     { id: 'twistroot', name: 'Twistroot', seedCost: 5, baseValue: 10 },
+    { id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14 },
   ])('defines $name with the M1-02 price and reward', (expected) => {
     const species = SPECIES.find(({ id }) => id === expected.id);
 

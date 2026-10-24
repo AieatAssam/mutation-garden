@@ -14,6 +14,15 @@ describe('save codec', () => {
     expect(decodeSave({ ...envelope, schema: 99 })).toMatchObject({ ok: false, reason: 'save is from a newer version' });
     const bad = { ...envelope.state, plots: [{ id: 'plot-0', plant: { speciesId: 'cactus', plantedAt: 1 } }] };
     expect(decodeSave({ ...envelope, state: bad, checksum: checksum(JSON.stringify(bad)) })).toMatchObject({ ok: false, reason: 'invalid state' });
+    for (const order of [
+      { index: -1, progress: 0 }, { index: 0, progress: 3 }, { index: 99, progress: 0 },
+      { index: 0, progress: -1 }, { index: 0, progress: 0, title: 'forged' },
+      { index: 2, progress: 1 }, { index: 3, progress: 0 },
+    ]) {
+      const invalid = { ...envelope.state, order };
+      expect(decodeSave({ ...envelope, state: invalid, checksum: checksum(JSON.stringify(invalid)) }))
+        .toMatchObject({ ok: false, reason: 'invalid state' });
+    }
     expect(decodeSave('nonsense')).toMatchObject({ ok: false });
   });
 
@@ -53,7 +62,7 @@ describe('save codec', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-2.json', 'utf8'));
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
-    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 4, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null });
+    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 5, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null, order: { index: 0, progress: 0 } });
   });
 
   it('migrates the M2 schema 3 fixture with mutations to an empty, idle crate', () => {
@@ -61,9 +70,40 @@ describe('save codec', () => {
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
-      expect(decoded.state).toMatchObject({ schema: 4, crate: [], sellingSince: null });
+      expect(decoded.state).toMatchObject({ schema: 5, crate: [], sellingSince: null, order: { index: 0, progress: 0 } });
       expect(decoded.state.plots[0]?.plant).toMatchObject({ mutations: ['golden'] });
     }
+  });
+
+  it('migrates schema 4 without changing saved fields and starts its first order', () => {
+    const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-4.json', 'utf8'));
+    const original = fixture.state;
+    const decoded = decodeSave(fixture);
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok) {
+      expect(decoded.state).toMatchObject({ schema: 5, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser });
+      expect({ ...decoded.state, schema: 4, order: undefined }).toEqual({ ...original, order: undefined });
+    }
+  });
+
+  it('does not replay an order reward after saving and resuming', () => {
+    const fruit = { speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 2, xp: 0 };
+    const state = { ...garden(), order: { index: 0, progress: 2 }, crate: [fruit], sellingSince: 0 };
+    const completed = step(state, [], 1_200);
+    expect(completed.events).toContainEqual({ type: 'OrderCompleted', title: 'Sell 3 Sunny Sprouts', coins: 6, xp: 10 });
+    const decoded = decodeSave(encodeSave(completed.state, 1_200, 'test'));
+    expect(decoded.ok).toBe(true);
+    if (decoded.ok) {
+      const resumed = step(decoded.state, [], 2_400);
+      expect(resumed.events).not.toContainEqual(expect.objectContaining({ type: 'OrderCompleted' }));
+      expect(resumed.state).toMatchObject({ order: { index: 1, progress: 0 }, coins: completed.state.coins, xp: completed.state.xp });
+    }
+  });
+
+  it('persists partial order progress across a save', () => {
+    const state = { ...garden(), order: { index: 0, progress: 2 } };
+    const decoded = decodeSave(encodeSave(state, 1_000, 'test'));
+    expect(decoded).toMatchObject({ ok: true, state: { order: { index: 0, progress: 2 } } });
   });
 });
 

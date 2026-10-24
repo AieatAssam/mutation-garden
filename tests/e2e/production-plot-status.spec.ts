@@ -7,11 +7,11 @@ import { getPlotStatusDialFacing } from '../../src/render/plot-status';
 import { captureVisibleBodyMasks } from './production-body-mask';
 import { palette } from '../../src/render/palette';
 import { expectHarvestPaid } from './payout';
-import { SPECIES } from '../../src/sim';
+import { SPECIES, xpForLevel } from '../../src/sim';
 import { startWithSave } from './garden-save';
 
 // These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
-test.beforeEach(async ({ page }, info) => startWithSave(page, 25, {
+test.beforeEach(async ({ page }, info) => startWithSave(page, xpForLevel(3), {
   ...(info.title === 'six ripe plants stay under the production renderer draw-call budget'
     ? { coins: 40, mutationRngState: 2, scriptedGiantUsed: true, scriptedGoldenUsed: true } : {}),
 }));

@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { Vector3 } from 'three';
 import { createGardenCamera, resizeGardenCamera, setGardenCameraExpanded } from '../../src/render/camera';
-import { mutationRoll, nextRandom } from '../../src/sim';
+import { mutationRoll, nextRandom, SHOP_PRICES, xpForLevel } from '../../src/sim';
 import { startWithSave } from './garden-save';
 
 test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info) => {
@@ -12,8 +12,8 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
     const mutationSeed = Math.floor(nextRandom(value).value * 0x1_0000_0000);
     return mutationRoll(mutationSeed, 'golden') >= 0.01 && mutationRoll(mutationSeed, 'glowing') >= 0.01;
   })!;
-  await startWithSave(page, 16, {
-    coins: 43, mutationRngState, plantCount: 100,
+  await startWithSave(page, xpForLevel(3), {
+    coins: SHOP_PRICES['plot-6'] + 3, mutationRngState, plantCount: 100,
   });
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
@@ -21,7 +21,8 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
   if (mobile) await shopButton.tap(); else await shopButton.click();
   const plot7 = page.locator('.garden-ui__shop-row').filter({ hasText: 'Plot 7' });
   await expect(plot7).toBeVisible();
-  if (mobile) await plot7.getByRole('button', { name: 'Buy · 40' }).tap(); else await plot7.getByRole('button', { name: 'Buy · 40' }).click();
+  const buyPlot7 = plot7.getByRole('button', { name: `Buy · ${SHOP_PRICES['plot-6']}` });
+  if (mobile) await buyPlot7.tap(); else await buyPlot7.click();
   await expect(page.getByRole('button', { name: 'Shop' })).toBeVisible();
   if (mobile) await page.touchscreen.tap(8, 170); else await page.mouse.click(8, 170);
   await expect(page.locator('.garden-ui__shop-backdrop')).toBeHidden();
@@ -51,8 +52,8 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
   await page.waitForTimeout(3_000);
   if (mobile) await page.touchscreen.tap(point.x, point.y); else await page.mouse.click(point.x, point.y);
   await expect(page.getByText('New mutation: Giant!')).toBeVisible({ timeout: 12_000 });
-  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('120');
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('36');
   if (mobile) await page.touchscreen.tap(10, 10); else await page.mouse.click(10, 10);
   await expect(page.getByText('New mutation: Giant!')).toHaveCount(0);
-  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('120');
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('36');
 });

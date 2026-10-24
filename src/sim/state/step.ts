@@ -6,6 +6,7 @@ import { collectGrowthEvents } from '../plants/growth';
 import { evaluateMature } from '../plants/mutate';
 import { buy, waterAll } from '../plants/shop';
 import { levelForXp, SELL_INTERVAL_MS, SPECIES } from '../content/species';
+import { nextOrder, orderEventCount, ORDER_DECK } from '../content/orders';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -65,6 +66,31 @@ export function step(
   const mutationResult = evaluateMature(nextState, effectiveNowMs);
   nextState = mutationResult.state;
   events.push(...mutationResult.events);
+
+  const order = nextState.order;
+  const definition = ORDER_DECK[order.index];
+  if (definition) {
+    let progress = order.progress;
+    for (const event of events) {
+      progress += orderEventCount(definition, event);
+      if (progress < definition.target) continue;
+      nextState = {
+        ...nextState,
+        coins: nextState.coins + definition.rewardCoins,
+        xp: nextState.xp + definition.rewardXp,
+        order: nextOrder(order.index, levelForXp(nextState.xp + definition.rewardXp)),
+      };
+      events.push({ type: 'OrderCompleted', title: definition.title, coins: definition.rewardCoins, xp: definition.rewardXp });
+      break;
+    }
+    if (progress < definition.target && progress !== order.progress) nextState = { ...nextState, order: { ...order, progress } };
+  }
+
+  for (let level = levelForXp(state.xp) + 1; level <= levelForXp(nextState.xp); level += 1) {
+    if (!events.some((event) => event.type === 'LevelUp' && event.level === level)) {
+      events.push({ type: 'LevelUp', level, unlocked: SPECIES.filter((entry) => entry.unlockLevel === level).map(({ id }) => id) });
+    }
+  }
 
   return { state: nextState, events };
 }

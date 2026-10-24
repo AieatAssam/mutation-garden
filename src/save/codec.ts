@@ -1,4 +1,4 @@
-import { SIM_SCHEMA_VERSION, SPECIES } from '../sim';
+import { levelForXp, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
 import type { GardenState, TraitId } from '../sim';
 
 /** The stored and exported save format (docs/architecture.md, Saves). Keep it stable. */
@@ -46,6 +46,7 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
     }) : state.plots,
   }),
   3: (state) => ({ ...state, schema: 4, crate: [], sellingSince: null }),
+  4: (state) => ({ ...state, schema: 5, order: { index: 0, progress: 0 } }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
@@ -71,6 +72,12 @@ export function validateState(value: unknown): value is GardenState {
     || !(state.sellingSince === null || (isCount(state.sellingSince) && state.sellingSince <= (state.lastNowMs as number)))) return false;
   if (!Number.isInteger(state.mutationRngState) || (state.mutationRngState as number) < 0 || (state.mutationRngState as number) > 0xffff_ffff) return false;
   if (!isCount(state.plantCount) || !isCount(state.fertiliser) || !Array.isArray(state.owned) || !state.owned.every((item) => ['plot-6', 'plot-7', 'big-can', 'lucky-charm'].includes(item as string)) || new Set(state.owned).size !== state.owned.length || typeof state.scriptedGiantUsed !== 'boolean' || typeof state.scriptedGoldenUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string')) return false;
+  if (!state.order || typeof state.order !== 'object' || Array.isArray(state.order)) return false;
+  const order = state.order as Record<string, unknown>;
+  if (Object.keys(order).sort().join(',') !== 'index,progress' || !isCount(order.index) || !isCount(order.progress) || order.index >= ORDER_DECK.length) return false;
+  const activeOrder = ORDER_DECK[order.index]!;
+  if (order.progress >= activeOrder.target || (activeOrder.event === 'HarvestCompleted' && order.progress !== 0)
+    || activeOrder.unlockLevel > levelForXp(state.xp as number)) return false;
   const traits: TraitId[] = ['giant', 'golden', 'glowing', 'crystal', 'rainbow'];
   if (!state.badLuck || typeof state.badLuck !== 'object' || !traits.every((trait) => isCount((state.badLuck as Record<string, unknown>)[trait]))) return false;
   if (!Array.isArray(state.plots) || state.plots.length === 0) return false;

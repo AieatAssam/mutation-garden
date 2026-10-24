@@ -117,6 +117,10 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
           const target = options.coinTarget()?.getBoundingClientRect();
           if (target) floatLabel(`+${event.value} coins`, target.left + target.width / 2, target.top, 'coins', reducedMotion);
           bumpCounter(reducedMotion);
+        } else if (event.type === 'OrderCompleted') {
+          const target = options.coinTarget()?.getBoundingClientRect();
+          if (target) floatLabel(`+${event.coins} order bonus`, target.left + target.width / 2, target.top, 'coins', reducedMotion);
+          bumpCounter(reducedMotion);
         } else if (event.type === 'HarvestCompleted' && event.count > 1) {
           const banner = document.createElement('div');
           banner.className = 'rewards__combo';

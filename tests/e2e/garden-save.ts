@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { createInitialState } from '../../src/sim';
+import { createInitialState, xpForLevel } from '../../src/sim';
 import { encodeSave } from '../../src/save/codec';
 
 /**
@@ -7,8 +7,8 @@ import { encodeSave } from '../../src/save/codec';
  * The save is written before the app opens IndexedDB, and only if no save exists yet, so reloads
  * keep whatever the spec did.
  */
-export async function startWithSave(page: Page, xp = 25, options: {
-  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; crateCount?: number; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number; schema?: number;
+export async function startWithSave(page: Page, xp = xpForLevel(3), options: {
+  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; crateCount?: number; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number; schema?: number; discoveries?: readonly string[]; rewardsPaid?: readonly string[]; order?: { index: number; progress: number };
 } = {}): Promise<void> {
   const initial = createInitialState(options.seed ?? 20261022, 0, { xp });
   const plots = initial.plots.map((plot) => {
@@ -21,7 +21,7 @@ export async function startWithSave(page: Page, xp = 25, options: {
     return plot;
   });
   const crate = Array.from({ length: options.crateCount ?? 0 }, () => ({ speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 1, xp: 1 }));
-  const envelope = { ...encodeSave({ ...initial, coins: options.coins ?? initial.coins, plots, crate, mutationRngState: options.mutationRngState ?? 2, plantCount: options.plantCount ?? 100, scriptedGiantUsed: options.scriptedGiantUsed ?? true, scriptedGoldenUsed: options.scriptedGoldenUsed ?? true }, options.savedAt ?? 0, 'e2e'), ...(options.schema ? { schema: options.schema } : {}) };
+  const envelope = { ...encodeSave({ ...initial, coins: options.coins ?? initial.coins, plots, crate, mutationRngState: options.mutationRngState ?? 2, plantCount: options.plantCount ?? 100, scriptedGiantUsed: options.scriptedGiantUsed ?? true, scriptedGoldenUsed: options.scriptedGoldenUsed ?? true, discoveries: options.discoveries ?? initial.discoveries, rewardsPaid: options.rewardsPaid ?? initial.rewardsPaid, ...(options.order === undefined ? {} : { order: options.order }) }, options.savedAt ?? 0, 'e2e'), ...(options.schema ? { schema: options.schema } : {}) };
   await page.addInitScript((save) => {
     const injected = 'mutation-garden-e2e-save-injected';
     if (sessionStorage.getItem(injected)) return;

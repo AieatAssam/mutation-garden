@@ -17,7 +17,7 @@ Four feelings, in the order the player meets them:
 
 1. **"That felt nice."** Planting and harvesting are tactile on their own, before any goal exists. (0–30 s)
 2. **"I want the next one."** A visible bar is always nearly full: the next level, the next order, the next unlock. (30 s – 5 min)
-3. **"Wait, what was that?"** A plant comes up different: golden, glowing, huge. The game stops to celebrate it. (first mutation by 3 min, scripted)
+3. **"Wait, what was that?"** A plant comes up different: golden, glowing, huge. The game stops to celebrate it. (first deliberate mutation in the first few minutes)
 4. **"I could make that happen again."** The player learns a rule and sets up their garden to trigger it on purpose. (5–20 min)
 
 The rest of the design exists to make those four moments land, then repeat at larger scale.
@@ -49,13 +49,13 @@ Targets come from brief section 7. Each row is a moment we design, build and tes
 | ~1 s | First plant | Seed drops, squashes into soil, dust puff, plant sound. Coin counter ticks down by 1 with a bump. The pulse moves to the next empty plot. |
 | ~8 s | First mutation | Greedy adjacent planting matures the first Golden. The first-find bonus pays coins and XP. |
 | ~9 s | First ripe and harvest | Sunny Sprout ripens: colour warms, hop, gleam sweep, ripe chime. Tap to harvest into the crate. |
-| ~1:12 | Level 2 | XP bar fills. Level-up stamp. **Unlocks Bubble Berry seed** (card flips in on the tray). |
-| ~1:30 | First order | Order board appears: "Harvest 4 Bubble Berries" for a coin bonus and XP. |
-| ~2:42 | First purchase | Buy the Big can for 90 coins. |
-| ~4:42 | Plot 7 | Buy Plot 7 for 80 coins at Level 3. The west island chunk rises and adds a plantable plot. |
+| ~1:09 | Level 2 | XP bar fills. Level-up stamp. **Unlocks Bubble Berry seed** (card flips in on the tray). |
+| After the first plant | First order | "Sell 3 Sunny Sprouts" gives a short goal. Open Journal for its progress and reward. Immediate planting, watering and selling instructions take priority. |
+| ~2:49 | First purchase | Buy the Big can for 90 coins. |
+| ~4:49 | Plot 7 | Buy Plot 7 for 80 coins at Level 3. The west island chunk rises and adds a plantable plot. |
 | later | Level 3 | Unlocks Twistroot, the Big can and Plot 7. The Big can waters every growing plant once per tap. |
 | ~3:00 | Rule learned | Journal entry for Giant says: "Water a plant twice while it grows." The player can cause it from Level 1. |
-| ~8:19 | Puffcap | Level 4 unlocks Puffcap. Plants beside it always become Glowing. |
+| ~8:26 | Puffcap | Level 4 unlocks Puffcap. Plants beside it always become Glowing. |
 | ~9:00 | Golden hint | An order asks for "1 Golden fruit". Journal silhouette for Golden reads "Plant next to two Sunny Sprouts." |
 | ~10:00 | New species or expansion | Level 6 unlocks Lantern Pod or a second island tier, whichever comes first. |
 | ~20:00 | Strategy | The player has 3–4 mutation rules, 8–9 plots, 2 tools and is arranging plots on purpose. Session ends on an unfinished order or a planted Twistroot due back soon. |
@@ -68,10 +68,10 @@ Seed 123, new garden (`createInitialState` defaults), greedy balance harness; el
 |---|---:|
 | First harvest | 9 s |
 | First mutation | 8 s |
-| Level 2 | 1:12 |
-| First shop purchase | 2:42 |
-| Plot 7 | 4:42 |
-| Level 4 / Puffcap | 8:19 |
+| Level 2 | 1:09 |
+| First shop purchase | 2:49 |
+| Plot 7 | 4:49 |
+| Level 4 / Puffcap | 8:26 |
 
 ## 4. Core loop rules (M1)
 
@@ -154,7 +154,7 @@ Rules:
 | 2 | Bubble Berry | seed |
 | 3 | Twistroot, Big can, Plot 7 (island grows west) | seed, tool, plot |
 | 4 | Puffcap, Plot 8 | seed, plot |
-| 5 | Plant all, order board slot 2 | tool, UI |
+| 5 | Plant all | tool |
 | 5 | Lucky charm | shop |
 | 6 | Plot 9 and further tools | shop |
 | 5 | Sprinkler | automation |
@@ -178,7 +178,22 @@ Rules:
 - Seeds stay in the tray once unlocked. Puffcap costs 6 coins.
 
 ### 7.3 Orders
-Three order slots (one at first). Each order asks for a simple set ("4 Bubble Berries", "1 Golden anything", "a 3-combo swipe") and pays coins + XP + sometimes a seed packet. Orders refresh 30 s after completion. They give the player a reason to plant a specific mix.
+**Owner change (2026-10-24):** the research engagement pass ships one recurring order at a time. It has no expiry or refresh wait. Orders progress from successful actions after activation, survive reload, and pay once automatically. Completing one activates the next available entry in this fixed cycle; locked crops are skipped. Extra actions in the completion tick do not also advance the next order.
+
+| Order | Target | Coins / XP |
+|---|---:|---:|
+| Sell Sunny Sprouts | 3 | 6 / 10 |
+| Water | 4 accepted waters | 4 / 10 |
+| Harvest together | 3 in one batch | 6 / 10 |
+| Sell Bubble Berries | 2, Level 2+ | 8 / 12 |
+| Sell Giant fruit | 1 | 6 / 10 |
+| Sell Twistroots | 2, Level 3+ | 12 / 20 |
+
+The Journal shows the exact reward and current count. The objective line shows the order when there is no more immediate instruction. Orders add direction; planting, discoveries and shop unlocks remain available independently. Seed-packet rewards need a defined packet inventory and are deferred.
+
+### Discovery catalogue (research engagement pass)
+
+The Journal records four current species across the three implemented traits: Giant, Golden and Glowing. Found entries persist and carry an honest "First on this device" stamp. Recipes remain readable after discovery so players can reproduce them. Natural odds come from the real mutation table, start at Level 2, and include an owned Lucky charm. Live pre-maturity plot counts make watering and neighbour conditions visible. Crystal and Rainbow enter the catalogue when their outcomes are implemented; no recipe promises an unavailable result.
 
 ### 7.4 Offline
 Plants and owned automations run from saved timestamps in the deterministic sim. Offline work is capped at 2 h; crate capacity and sell queues apply as during play. Return summary lists plants grown, plots watered, fruit harvested, and coins sold. Reprocessing the same interval cannot pay twice.

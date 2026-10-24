@@ -1,10 +1,10 @@
 // Boot: wires the sim loop to rendering, input, UI rewards and sound.
 import { createRenderer } from '../render/renderer';
 import { palette } from '../render/palette';
-import { createInitialState, getSnapshot, SPECIES, step } from '../sim';
+import { createInitialState, getSnapshot, MUTATIONS, SPECIES, step } from '../sim';
 import type { Command, GardenSnapshot, GardenState, SimEvent, SpeciesId } from '../sim';
 import { chooseBackend, createSaveStore, DEFAULT_SETTINGS, StaleSaveError, type Settings } from '../save/store';
-import { hintFor } from './hints';
+import { hintFor, mutationOpportunitiesFor } from './hints';
 import { createPointerInput } from '../input/pointer';
 import { createGardenUI } from '../ui/garden-ui';
 import { createRewardLayer } from '../ui/rewards';
@@ -54,6 +54,14 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   const gardenUI = createGardenUI(uiRoot, {
     species: SPECIES
       .map(({ id, name, seedCost, unlockLevel }) => ({ id, name, cost: seedCost, unlockLevel, color: palette.plants[id].fruit[1] })),
+    journalTraits: [
+      { id: 'giant', name: 'Giant', multiplier: MUTATIONS.giant.value, naturalChance: MUTATIONS.giant.naturalChance,
+        rule: 'Water twice while the plant sprouts and grows.' },
+      { id: 'golden', name: 'Golden', multiplier: MUTATIONS.golden.value, naturalChance: MUTATIONS.golden.naturalChance,
+        rule: 'Keep two Sunny Sprout neighbours beside a growing plant.' },
+      { id: 'glowing', name: 'Glowing', multiplier: MUTATIONS.glowing.value, naturalChance: MUTATIONS.glowing.naturalChance,
+        rule: 'Keep a Puffcap beside a growing plant.', hintLevel: 4, prerequisite: 'Unlock Puffcap at Level 4 for the guaranteed recipe.' },
+    ],
     selectedId: selectedSpeciesId,
     coins,
     onSelect: (speciesId) => {
@@ -94,6 +102,10 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       crateCount: snapshot.crateCount ?? 0,
       crateCapacity: snapshot.crateCapacity ?? 12,
       selling: snapshot.selling ?? false,
+      discoveries: snapshot.discoveries ?? [],
+      naturalChanceBonus: snapshot.owned?.includes('lucky-charm') ? 0.03 : 0,
+      opportunities: mutationOpportunitiesFor(snapshot),
+      ...(snapshot.order ? { order: snapshot.order } : {}),
     });
   };
   const notices = createNoticeQueue((current) => {
@@ -166,6 +178,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
             gardenUI.levelUp(event.level, names, motion.matches);
           }
           if (event.type === 'Harvested') gardenUI.hideAway();
+          if (event.type === 'OrderCompleted') showNotice(`Order complete. +${event.coins} coins, +${event.xp} XP.`);
           if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
           if (event.type === 'CommandRejected' && event.reason === 'crate-full') {
             gardenUI.crateFull(motion.matches);
@@ -179,6 +192,11 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         for (const event of events.filter((item) => item.type === 'Mutated')
           .sort((a, b) => Number(b.mutations.includes('giant')) - Number(a.mutations.includes('giant')))) {
           mutationReveal.show(event, motion.matches);
+          if (event.firstDiscovery && !motion.matches) {
+            uiRoot.querySelector('.garden-ui__journal')?.animate([
+              { transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' },
+            ], { duration: 420 });
+          }
           sfx.mutation(event.firstDiscovery);
           if (event.firstDiscovery && !motion.matches && 'vibrate' in navigator) navigator.vibrate([20, 40, 20]);
         }
@@ -290,7 +308,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         });
       };
       scheduleSave = (events) => {
-        if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered' || type === 'FruitSold')) return;
+        if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered' || type === 'FruitSold'
+          || type === 'Mutated' || type === 'Bought' || type === 'OrderCompleted')) return;
         clearTimeout(pending);
         pending = setTimeout(saveNow, 800) as unknown as number;
       };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, nextRandom, step } from '../index';
+import { createInitialState, getSnapshot, nextRandom, step } from '../index';
 
 describe('M2 mutation rules', () => {
   it('keeps planting size draws on the garden RNG stream', () => {
@@ -43,6 +43,40 @@ describe('M2 mutation rules', () => {
   it('does not count a Sunny Sprout as its own Golden neighbour', () => {
     const planted = step(createInitialState(90, 0), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
     expect(step(planted, [], 24_000).state.plots[0]?.plant?.mutations ?? []).not.toContain('golden');
+  });
+
+  it('shows Golden only when an eligible plant has an adjacent empty plot and coins for Sunny', () => {
+    let sunny = createInitialState(21, 0);
+    sunny = step(sunny, [
+      { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' },
+    ], 0).state;
+    expect(getSnapshot(sunny).nearMiss).toBe('Plant one more Sunny Sprout beside it for Golden.');
+
+    let state = createInitialState(21, 0, { xp: 900 });
+    state = step(state, [
+      { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },
+    ], 0).state;
+    expect(getSnapshot(state).nearMiss).toBe('Plant one more Sunny Sprout beside it for Golden.');
+
+    const noCoins = { ...state, coins: 0 };
+    expect(getSnapshot(noCoins).nearMiss).toBeNull();
+
+    const blocked = step(state, [{ type: 'Plant', plotId: 'plot-3', seedId: 'bubble-berry' }], 0).state;
+    expect(getSnapshot(blocked).nearMiss).toBeNull();
+
+    let full = createInitialState(22, 0, { xp: 900 });
+    full = step(full, [
+      { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },
+      { type: 'Plant', plotId: 'plot-2', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-3', seedId: 'bubble-berry' },
+      { type: 'Plant', plotId: 'plot-4', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-5', seedId: 'sunny-sprout' },
+    ], 0).state;
+    expect(full.plots.every(({ plant }) => plant !== null)).toBe(true);
+    expect(getSnapshot(full).nearMiss).toBeNull();
   });
 
   it('always gives Glowing beside a Puffcap', () => {

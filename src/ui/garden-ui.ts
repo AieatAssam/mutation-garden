@@ -1,6 +1,7 @@
-import { SHOP_PRICES, type ShopItemId, type SpeciesId } from '../sim';
+import { SHOP_PRICES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
 import './garden-ui.css';
 import { readingTimeMs } from './notice-queue';
+import { createDiscoveryJournal, type JournalOrder, type JournalTraitDescriptor } from './discovery-journal';
 
 export interface SeedDescriptor {
   readonly id: SpeciesId;
@@ -13,6 +14,7 @@ export interface SeedDescriptor {
 
 export interface GardenUIOptions {
   readonly species: readonly SeedDescriptor[];
+  readonly journalTraits?: readonly JournalTraitDescriptor[];
   readonly selectedId: SpeciesId;
   readonly coins: number;
   readonly onSelect: (speciesId: SpeciesId) => void;
@@ -43,6 +45,10 @@ export interface GardenUIUpdate {
   readonly crateCount?: number;
   readonly crateCapacity?: number;
   readonly selling?: boolean;
+  readonly discoveries?: readonly string[];
+  readonly naturalChanceBonus?: number;
+  readonly opportunities?: Partial<Record<TraitId, readonly string[]>>;
+  readonly order?: JournalOrder;
 }
 
 export interface GardenUI {
@@ -166,7 +172,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const bigCan = document.createElement('button'); bigCan.type = 'button'; bigCan.className = 'garden-ui__water-all'; bigCan.textContent = 'Water all'; bigCan.hidden = true;
   bigCan.addEventListener('click', () => options.onWaterAll?.());
   close.addEventListener('click', () => { shop.hidden = true; });
-  shopButton.addEventListener('click', () => { shop.hidden = false; });
+  shopButton.addEventListener('click', () => { journal.close(); shop.hidden = false; });
   shop.addEventListener('click', (event) => { if (event.target === shop) shop.hidden = true; });
   shop.append(sheet); overlay.append(shop, bigCan);
 
@@ -221,6 +227,11 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     return { species, button, detail: detailText, locked: null as boolean | null };
   });
   seedTray.prepend(trayLabel);
+  const journal = createDiscoveryJournal(overlay, {
+    species: options.species,
+    traits: options.journalTraits ?? [],
+    onOpen: () => { shop.hidden = true; },
+  });
 
   const stamp = document.createElement('div');
   stamp.className = 'garden-ui__stamp';
@@ -247,7 +258,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   overlay.append(coinStatus, crateAmount, levelBadge, toggles, hint, stamp, away, seedTray);
   seedTray.append(harvestAll, sell);
   // Main actions live in the bottom third (AGENTS.md): Shop is a tab on the seed tray.
-  seedTray.append(shopButton);
+  const trayTools = document.createElement('div');
+  trayTools.className = 'garden-ui__tray-tools';
+  trayTools.append(journal.button, shopButton);
+  seedTray.append(trayTools);
   container.append(overlay);
 
   // The counter rolls toward the authoritative value with an overshoot ease (motion.md 7).
@@ -311,6 +325,13 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       action.disabled = (has && item.id !== 'fertiliser') || locked || !affordable;
       action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? `Level ${item.level}` : `Buy · ${item.price}`;
     }
+    journal.update({
+      discoveries: state.discoveries ?? [],
+      level,
+      ...(state.naturalChanceBonus === undefined ? {} : { naturalChanceBonus: state.naturalChanceBonus }),
+      ...(state.opportunities === undefined ? {} : { opportunities: state.opportunities }),
+      ...(state.order === undefined ? {} : { order: state.order }),
+    });
     for (const seed of seedButtons) {
       const selected = seed.species.id === state.selectedId;
       const locked = seed.species.unlockLevel > level;
@@ -387,6 +408,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       disposed = true;
       if (rollFrame) cancelAnimationFrame(rollFrame);
       clearTimeout(stampTimer);
+      journal.dispose();
       overlay.remove();
     },
   };

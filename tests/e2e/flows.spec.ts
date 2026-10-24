@@ -32,7 +32,7 @@ async function openGarden(page: Page, mobile: boolean): Promise<(index: number) 
 const waitUntil = (page: Page, timestampMs: number) => expect.poll(() => page.evaluate(() => Date.now()),
   { intervals: [50, 100], timeout: 25_000 }).toBeGreaterThanOrEqual(timestampMs);
 
-test('a new player is guided from the first plant to the first harvest within 30 s', async ({ page }, info) => {
+test('a new player is guided from planting through the first sale within 30 s', async ({ page }, info) => {
   const mobile = info.project.name === 'mobile-portrait';
   const tapPlot = await openGarden(page, mobile);
   const startedAt = await page.evaluate(() => Date.now());
@@ -47,6 +47,11 @@ test('a new player is guided from the first plant to the first harvest within 30
   await tapPlot(0);
   await expect(page.getByRole('status', { name: 'Crate' })).toHaveText('1/12');
   await expect(coins).toHaveText('11');
+  await expect(hint).toHaveText('Tap Sell to sell 1 fruit.');
+  await page.screenshot({ path: `/tmp/mutation-${mobile ? 'phone' : 'desktop'}-first-sale.png`, scale: 'css' });
+  await page.getByRole('button', { name: 'Sell', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Crate' })).toHaveText('0/12');
+  await expect.poll(async () => Number(await coins.textContent())).toBeGreaterThan(11);
   expect(await page.evaluate(() => Date.now()) - startedAt).toBeLessThan(30_000);
 });
 

@@ -43,6 +43,13 @@ export interface PlotSnapshot {
   readonly plant: PlantSnapshot | null;
 }
 
+export interface MutationProgress {
+  readonly plotId: PlotId;
+  readonly giantWaters: number;
+  readonly goldenNeighbours: number;
+  readonly glowingNeighbours: number;
+}
+
 export interface GardenSnapshot {
   readonly coins: number;
   readonly xp: number;
@@ -63,10 +70,17 @@ export interface GardenSnapshot {
   readonly crateCapacity?: 12;
   readonly selling?: boolean;
   readonly nextSaleTime?: number | null;
+  readonly discoveries?: readonly string[];
+  readonly rewardsPaid?: readonly string[];
+  readonly order?: OrderSnapshot;
+  readonly mutationProgress?: readonly MutationProgress[];
 }
 
+export interface OrderProgress { readonly index: number; readonly progress: number }
+export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number }
+
 export interface GardenState {
-  readonly schema: 4;
+  readonly schema: 5;
   readonly coins: number;
   readonly lastNowMs: number;
   readonly rngState: number;
@@ -83,6 +97,7 @@ export interface GardenState {
   readonly xp: number;
   readonly crate: readonly Fruit[];
   readonly sellingSince: number | null;
+  readonly order: OrderProgress;
   readonly plots: readonly PlotState[];
 }
 
@@ -141,6 +156,7 @@ export type SimEvent =
   | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean; readonly bonusCoins: number }
   | { readonly type: 'Bought'; readonly item: ShopItemId }
   | { readonly type: 'FruitSold'; readonly value: number; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[] }
+  | { readonly type: 'OrderCompleted'; readonly title: string; readonly coins: number; readonly xp: number }
   | { readonly type: 'LevelUp'; readonly level: number; readonly unlocked: readonly SpeciesId[] }
   | {
       readonly type: 'CommandRejected';

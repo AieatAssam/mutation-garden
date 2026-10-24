@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Vector3 } from 'three';
 import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
+import { xpForLevel } from '../../src/sim';
 import { startWithSave } from './garden-save';
 
 async function firstPlot(page: Page, project: string): Promise<{ x: number; y: number }> {
@@ -24,7 +25,7 @@ async function activate(page: Page, point: { x: number; y: number }, project: st
 }
 
 test('harvest fills the crate and a stall sale pays one fruit', async ({ page }, info) => {
-  await startWithSave(page, 25, { twistrootPlantedAt: 0 });
+  await startWithSave(page, xpForLevel(3), { twistrootPlantedAt: 0 });
   const point = await firstPlot(page, info.project.name);
   await activate(page, point, info.project.name);
   await expect(page.locator('.garden-ui__crate-amount')).toHaveText('1/12');
@@ -36,7 +37,7 @@ test('harvest fills the crate and a stall sale pays one fruit', async ({ page },
 });
 
 test('a full crate rejects harvest and keeps the ripe plant', async ({ page }, info) => {
-  await startWithSave(page, 25, { twistrootPlantedAt: 0, crateCount: 12 });
+  await startWithSave(page, xpForLevel(3), { twistrootPlantedAt: 0, crateCount: 12 });
   const point = await firstPlot(page, info.project.name);
   await activate(page, point, info.project.name);
   await expect(page.locator('.garden-ui__crate-amount')).toHaveText('▣ 12/12');

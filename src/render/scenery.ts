@@ -181,7 +181,8 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     const geometries: BufferGeometry[] = [];
     chunkRoot.traverse((object) => {
       if (!(object instanceof Mesh)) return;
-      const hull = /^outline-(\d+)$/.exec(object.name);
+      // Chunk hulls are named chunk-west-outline-<thousandths> (Blender names must be unique).
+      const hull = /^(?:chunk-west-)?outline-(\d+)$/.exec(object.name);
       if (hull) { chunk.add(hullOf(object, object.matrixWorld, Number(hull[1]) / 1000)); return; }
       geometries.push(vertexColored(object, object.matrixWorld));
     });

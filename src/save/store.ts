@@ -47,6 +47,8 @@ export interface SaveStore {
    * Throws StaleSaveError, writing nothing, if the slot changed since this store last loaded or saved it.
    */
   save(state: GardenState, savedAt: number): Promise<void>;
+  /** Removes the garden and its backup (settings stay). The next load starts a new garden. */
+  reset(): Promise<void>;
   loadSettings(): Promise<Settings>;
   saveSettings(settings: Settings): Promise<void>;
 }
@@ -85,6 +87,10 @@ export function createSaveStore(backend: SaveBackend, appVersion: string, nowMs:
         return entries;
       });
       known = envelope.checksum;
+    },
+    async reset() {
+      await backend.set([[SLOT, undefined], [BACKUP, undefined]]);
+      known = null;
     },
     async loadSettings() {
       const raw = await backend.get(SETTINGS) as Partial<Settings> | undefined;
@@ -175,7 +181,10 @@ export function localStorageBackend(storage: Storage = localStorage): SaveBacken
     try { return JSON.parse(text); } catch { return text; }
   };
   const set = (entries: Entries) => {
-    for (const [key, value] of entries) storage.setItem(prefix + key, JSON.stringify(value));
+    for (const [key, value] of entries) {
+      if (value === undefined) storage.removeItem(prefix + key);
+      else storage.setItem(prefix + key, JSON.stringify(value));
+    }
   };
   return {
     async get(key) { return get(key); },

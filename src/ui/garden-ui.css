@@ -330,7 +330,8 @@
 }
 
 .garden-ui__seed-name {
-  font: 700 13px/1.1 'Fraunces', Georgia, serif;
+  /* Four cards share a phone-width tray: shrink with the viewport so "Twistroot" fits on any font. */
+  font: 700 min(13px, 3vw)/1.1 'Fraunces', Georgia, serif;
   font-variation-settings: 'SOFT' 100, 'WONK' 1;
   text-align: center;
 }
@@ -513,4 +514,8 @@
 @keyframes garden-ui-short-still {
   0%, 100% { background: var(--mg-ui-panel); }
   30% { background: var(--mg-ui-panel-sunk); }
+}
+
+@media (max-width: 420px) {
+  .garden-ui__tray { gap: 6px; padding-inline: 8px; }
 }

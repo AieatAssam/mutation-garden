@@ -64,12 +64,34 @@ test('Journal shows discoveries, recipes and live odds; closes by button or Esca
   await expect(dialog).toBeVisible();
   await expect(dialog).toHaveCSS('touch-action', 'pan-y');
   await expect(dialog.getByText('First on this device')).toBeVisible();
-  await expect(dialog.getByText('Not found')).toHaveCount(8);
+  await expect(dialog.locator('.discovery-journal__pairs')).toBeHidden();
+  await expect(dialog.locator('.discovery-journal__recipes')).toBeVisible();
+  if (mobile) await expect.poll(() => dialog.locator('.discovery-journal__catalogue')
+    .evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  await expect(dialog.locator('.discovery-journal__catalogue .discovery-journal__silhouette')).toHaveCount(19);
+  expect(await dialog.locator('.discovery-journal__catalogue .discovery-journal__silhouette')
+    .evaluateAll((elements) => new Set(elements.map((element) => element.innerHTML)).size)).toBe(4);
+  if (mobile) {
+    const fontSizes = await dialog.locator('.discovery-journal__catalogue th, .discovery-journal__species-name, .discovery-journal__entry strong, .discovery-journal__status')
+      .evaluateAll((elements) => elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)));
+    expect(Math.min(...fontSizes)).toBeGreaterThanOrEqual(13);
+  }
+  await expect(dialog.getByText('Not found')).toHaveCount(14);
+  await expect(dialog.getByText('Harvest Glowing fruit from plot 0 or 2, then replant there.')).toHaveCount(0);
   const giantRecipe = dialog.getByRole('heading', { name: 'Giant ×2' }).locator('xpath=..');
   await expect(giantRecipe).toContainText(`${Number((MUTATIONS.giant.naturalChance * 100).toFixed(1))}% natural chance`);
   const goldenRecipe = dialog.getByRole('heading', { name: 'Golden ×4' }).locator('xpath=..');
   await expect(goldenRecipe).toContainText(`${Number((MUTATIONS.golden.naturalChance * 100).toFixed(1))}% natural chance`);
   await expect(goldenRecipe).toContainText(/Sunny Sprout/i);
+  await expect(dialog.getByRole('heading', { name: 'Crystal ×6' }).locator('xpath=..'))
+    .toContainText('30% when the rule holds · Guaranteed after 40 qualifying Matures without Crystal.');
+  await activate(page, dialog.getByRole('button', { name: 'Pairs' }), mobile);
+  await expect(dialog.locator('.discovery-journal__recipes')).toBeHidden();
+  await expect(dialog.locator('.discovery-journal__pairs')).toBeVisible();
+  await expect(dialog.getByText('Unknown pair')).toHaveCount(10);
+  await expect(dialog.locator('.discovery-journal__pairs .discovery-journal__silhouette')).toHaveCount(20);
+  await page.screenshot({ path: `/tmp/mutation-engagement-${mobile ? 'phone' : 'desktop'}-pairs.png`, scale: 'css' });
+  await activate(page, dialog.getByRole('button', { name: 'Catalogue' }), mobile);
   await expect(dialog.getByText('Sell 3 Sunny Sprouts', { exact: true })).toBeVisible();
   await page.screenshot({ path: `/tmp/mutation-engagement-${mobile ? 'phone' : 'desktop'}-journal.png`, scale: 'css' });
 
@@ -184,12 +206,12 @@ test('first mutation reward is not paid again after reload', async ({ page }, in
   });
   await openGarden(page, mobile);
   await expect(page.getByText('New mutation: Giant!')).toBeVisible({ timeout: 8_000 });
-  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('72');
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('212');
   await expect.poll(async () => (await readSavedState(page))?.rewardsPaid).toContain('twistroot:giant');
 
   await page.reload();
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
-  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('72');
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('212');
   const journal = page.getByRole('button', { name: /^Journal \d+\/\d+$/ });
   await activate(page, journal, mobile);
   const dialog = page.getByRole('dialog', { name: 'Discoveries' });

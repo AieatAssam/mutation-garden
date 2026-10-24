@@ -52,8 +52,8 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
   await page.waitForTimeout(3_000);
   if (mobile) await page.touchscreen.tap(point.x, point.y); else await page.mouse.click(point.x, point.y);
   await expect(page.getByText('New mutation: Giant!')).toBeVisible({ timeout: 12_000 });
-  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('36');
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('120');
   if (mobile) await page.touchscreen.tap(10, 10); else await page.mouse.click(10, 10);
   await expect(page.getByText('New mutation: Giant!')).toHaveCount(0);
-  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('36');
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('120');
 });

@@ -94,7 +94,7 @@ These sharpen the brief's plant, grow and harvest loop into something with textu
 - **Swipe combo:** harvesting N plants in one swipe pays a bonus of +20% per extra plant, with at least +1 coin per plant beyond two (×1.2 for 2, up to ×1.8 for 5+), shown as a large "Combo xN" stamp with a rising musical scale. Coins are integers; round each payout down and pay the remainder at the end of the combo.
 - Harvested produce goes into the crate; coins are added only when sold. The counter animation catches up when the stall pays.
 - Mutated harvest coins and XP multiply by every trait value: Giant ×2, Glowing ×3, Golden ×4; stacked traits multiply together. The harvest label names the payout, for example "+12 Giant x2".
-- The first discovery of each species + trait pays 3 times its mutated harvest value in coins and half the remaining XP to the next level, once per save. The reveal names the coin bonus.
+- The first discovery of each species + trait pays 10 times its mutated base value in both coins and XP, once per save. The reveal names both bonuses.
 
 ### 4.4 Garden XP and levels (Amendment: pulled into M1 from M3)
 Without a visible level bar the first minute has no "step" clock. Each harvest gives XP equal to its base coin value, multiplied by mutation traits. Total XP thresholds for levels 2–9: **500, 900, 2,500, 3,500, 4,900, 6,500, 8,300, 10,300**, then +200 each. Levels unlock named items (table in section 7.1). M1 ships levels 1–3 (seeds); M3–M5 fill in the rest.
@@ -143,7 +143,7 @@ Rules:
 - Adjacency is orthogonal on the garden's plot layout, including purchased west plots.
 - **Stacking:** trait value multipliers combine. Each species + trait discovery is a separate journal entry and first-find reward.
 - **Journal:** a printed seed catalogue. Rows are species, columns are traits. Undiscovered entries show a silhouette with a hint line once the player has met a prerequisite. Entries never hint at something unobtainable.
-- **First discovery reward:** coins equal to 3× the mutated value and half the remaining XP to the next level, paid once per journal entry. A shareable card is M5.
+- **First discovery reward:** coins and XP equal to 10× the mutated base value, paid once per journal entry. A shareable card is M5.
 
 ## 7. Progression (M2–M4)
 
@@ -193,7 +193,7 @@ The Journal shows the exact reward and current count. The objective line shows t
 
 ### Discovery catalogue (research engagement pass)
 
-The Journal records four current species across the three implemented traits: Giant, Golden and Glowing. Found entries persist and carry an honest "First on this device" stamp. Recipes remain readable after discovery so players can reproduce them. Natural odds come from the real mutation table, start at Level 2, and include an owned Lucky charm. Live pre-maturity plot counts make watering and neighbour conditions visible. Crystal and Rainbow enter the catalogue when their outcomes are implemented; no recipe promises an unavailable result.
+The Journal records four current species across the five M2 traits: Giant, Golden, Glowing, Crystal and Rainbow. Found entries persist and carry an honest "First on this device" stamp. Recipes remain readable after their prerequisite is met so players can reproduce them. Natural odds come from the real mutation table, start at Level 2, and include an owned Lucky charm. Live pre-maturity plot counts make watering and neighbour conditions visible. Its pairs page shows silhouettes until both traits have been found.
 
 ### 7.4 Offline
 Plants and owned automations run from saved timestamps in the deterministic sim. Offline work is capped at 2 h; crate capacity and sell queues apply as during play. Return summary lists plants grown, plots watered, fruit harvested, and coins sold. Reprocessing the same interval cannot pay twice.

@@ -6,8 +6,8 @@ const TRAITS: Record<TraitId, { name: string; tier: number; line: string }> = {
   giant: { name: 'Giant', tier: 1, line: 'Water a plant twice to grow a Giant.' },
   golden: { name: 'Golden', tier: 2, line: 'Plant beside two Sunny Sprouts for Golden.' },
   glowing: { name: 'Glowing', tier: 2, line: 'Plant beside a Puffcap for Glowing.' },
-  crystal: { name: 'Crystal', tier: 3, line: 'A Crystal grows beside the pond.' },
-  rainbow: { name: 'Rainbow', tier: 4, line: 'Pair mutations to discover Rainbow.' },
+  crystal: { name: 'Crystal', tier: 3, line: 'Replant a pond-side plot after harvesting Glowing fruit.' },
+  rainbow: { name: 'Rainbow', tier: 4, line: 'Harvest Golden, Glowing and Crystal together, then replant one of those plots.' },
 };
 
 export interface MutationReveal {
@@ -68,7 +68,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     details.append(stars, line);
     if (event.bonusCoins > 0) {
       const bonus = document.createElement('span'); bonus.className = 'mutation-reveal__line';
-      bonus.textContent = `+${event.bonusCoins} coins first-find bonus`;
+      bonus.textContent = `+${event.bonusCoins} coins · +${event.bonusXp} XP first-find bonus`;
       details.append(bonus);
     }
     labelTimer = window.setTimeout(() => {
@@ -87,7 +87,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
   const show = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
     const mutations = [...event.mutations].sort((a, b) => (a === 'giant' ? -1 : 0) - (b === 'giant' ? -1 : 0));
     for (const [index, mutation] of mutations.entries()) {
-      const single = { ...event, mutations: [mutation], bonusCoins: index === 0 ? event.bonusCoins : 0 };
+      const single = { ...event, mutations: [mutation], bonusCoins: index === 0 ? event.bonusCoins : 0, bonusXp: index === 0 ? event.bonusXp : 0 };
       const trait = TRAITS[mutation];
       if (!trait) continue;
       if (!event.firstDiscovery) {

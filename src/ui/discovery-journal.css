@@ -63,6 +63,19 @@
   font-weight: 700;
 }
 
+.discovery-journal__pages { display: flex; gap: 8px; margin-bottom: 8px; }
+.discovery-journal__pages button { min-height: 48px; padding: 0 14px; border: 2px solid var(--mg-ui-border); border-radius: 12px; background: var(--mg-ui-panel-sunk); color: var(--mg-ui-text); font: 700 15px 'Atkinson Hyperlegible', system-ui, sans-serif; }
+.discovery-journal__pages button[aria-pressed="true"] { background: var(--mg-ui-coin-face); }
+.discovery-journal__pairs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.discovery-journal__pairs[hidden],
+.discovery-journal__recipes[hidden] { display: none; }
+.discovery-journal__pair { display: grid; gap: 4px; min-height: 64px; align-content: center; padding: 9px 11px; border: 2px solid var(--mg-ui-border); border-radius: 14px; background: var(--mg-ui-panel); text-align: center; }
+.discovery-journal__pair strong { font: 750 17px/1.2 'Fraunces', Georgia, serif; }
+.discovery-journal__pair span { color: var(--mg-ui-text-muted); font-size: 13px; }
+.discovery-journal__pair-label { display: flex; align-items: center; justify-content: center; gap: 3px; }
+.discovery-journal__silhouette { display: inline-block; width: 22px; height: 22px; color: var(--mg-ui-text); vertical-align: middle; }
+.discovery-journal__pair-label .discovery-journal__silhouette { width: 20px; height: 20px; }
+
 .discovery-journal__recipes {
   display: grid;
   gap: 8px;
@@ -110,7 +123,7 @@
 .discovery-journal__catalogue {
   overflow: auto;
   overscroll-behavior-inline: contain;
-  touch-action: pan-y;
+  touch-action: pan-x pan-y;
 }
 
 .discovery-journal table {
@@ -147,7 +160,8 @@
 
 .discovery-journal__entry {
   display: table-cell;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: normal;
 }
 
 .discovery-journal__entry strong,
@@ -181,6 +195,19 @@
 .discovery-journal tr.is-locked td {
   background: var(--mg-ui-panel-sunk);
   color: var(--mg-ui-text-muted);
+}
+
+@media (max-width: 600px) {
+  .discovery-journal__catalogue table { width: max-content; min-width: 760px; border-spacing: 3px; }
+  .discovery-journal__catalogue th:not(:first-child),
+  .discovery-journal__catalogue td { min-width: 116px; box-sizing: border-box; }
+  .discovery-journal th,
+  .discovery-journal td { padding: 4px; border-width: 1px; border-radius: 9px; }
+  .discovery-journal th:first-child { width: 90px; }
+  .discovery-journal thead th { font-size: 13px; line-height: 1.2; }
+  .discovery-journal__species-name { font-size: 13px; }
+  .discovery-journal__entry strong { min-height: 0; font-size: 13px; }
+  .discovery-journal__status { font-size: 13px; line-height: 1.2; }
 }
 
 .discovery-journal :focus-visible,

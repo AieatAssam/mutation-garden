@@ -10,14 +10,15 @@ test('first Giant reveal swallows the skip tap and harvest pays the mutation val
   const beforeRevealTap = await coins.textContent();
   const reveal = page.getByText('New mutation: Giant!');
   await expect(reveal).toBeVisible({ timeout: 8_000 });
-  await expect(coins).toHaveText(String(Number(beforeRevealTap) + 60));
+  await expect(coins).toHaveText(String(Number(beforeRevealTap) + 200));
+  await expect(page.getByText('+200 coins · +200 XP first-find bonus')).toBeVisible();
   await page.mouse.click(10, 10);
   await expect(reveal).toHaveCount(0);
-  await expect(coins).toHaveText(String(Number(beforeRevealTap) + 60));
+  await expect(coins).toHaveText(String(Number(beforeRevealTap) + 200));
 
   await expect.poll(() => page.evaluate(() => Date.now()), { timeout: 8_000 }).toBeGreaterThanOrEqual(plantedAt + 25_000);
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
-  await expect.poll(() => coins.textContent(), { timeout: 3_000 }).toBe(String(Number(beforeRevealTap) + 60));
+  await expect.poll(() => coins.textContent(), { timeout: 3_000 }).toBe(String(Number(beforeRevealTap) + 200));
   const harvestAll = page.getByRole('button', { name: 'Harvest all 2' });
   await expect(harvestAll).toBeVisible();
   const harvest = await expectHarvestPaid(page, () => harvestAll.click());

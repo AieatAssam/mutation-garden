@@ -1,5 +1,6 @@
 import type { PlotId, SimEvent, TraitId } from '../sim';
 import './mutation-reveal.css';
+import { readingTimeMs } from './notice-queue';
 
 const TRAITS: Record<TraitId, { name: string; tier: number; line: string }> = {
   giant: { name: 'Giant', tier: 1, line: 'Water a plant twice to grow a Giant.' },
@@ -81,7 +82,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     layer.onpointerdown = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
     layer.onpointerup = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
     layer.onclick = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); next(); };
-    timer = window.setTimeout(next, 3200);
+    timer = window.setTimeout(next, 1_600 + readingTimeMs(`${title.textContent ?? ''} ${trait.line}`));
   };
   const show = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
     const mutations = [...event.mutations].sort((a, b) => (a === 'giant' ? -1 : 0) - (b === 'giant' ? -1 : 0));
@@ -95,7 +96,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
         const label = document.createElement('span');
         label.className = 'mutation-reveal__repeat'; label.textContent = trait.name;
         label.style.left = `${point.x}px`; label.style.top = `${point.y}px`;
-        layer.append(label); setTimeout(() => label.remove(), 900);
+        layer.append(label); setTimeout(() => label.remove(), readingTimeMs(trait.name));
       } else queue.push({ event: single, reducedMotion });
     }
     const pending = !active ? queue.shift() : undefined;

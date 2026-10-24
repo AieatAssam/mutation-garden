@@ -25,7 +25,7 @@ describe('save codec', () => {
   });
 
   it('continues a saved mature mutation without rerolling it', () => {
-    let state = step(createInitialState(44, 0, { xp: 25 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], 0).state;
+    let state = step(createInitialState(44, 0, { xp: 900 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], 0).state;
     state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 5_000).state;
     state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 6_000).state;
     const matured = step(state, [], 22_000).state;

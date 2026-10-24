@@ -1,6 +1,6 @@
-import type { SpeciesId } from '../sim';
-import type { ShopItemId } from '../sim';
+import { SHOP_PRICES, type ShopItemId, type SpeciesId } from '../sim';
 import './garden-ui.css';
+import { readingTimeMs } from './notice-queue';
 
 export interface SeedDescriptor {
   readonly id: SpeciesId;
@@ -22,6 +22,7 @@ export interface GardenUIOptions {
   readonly onSell?: () => void;
   readonly onBuy?: (item: ShopItemId) => void;
   readonly onWaterAll?: () => void;
+  readonly onDismissHint?: () => void;
 }
 
 export interface GardenUIUpdate {
@@ -149,11 +150,11 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const close = document.createElement('button'); close.type = 'button'; close.className = 'garden-ui__shop-close'; close.textContent = 'Close';
   shopHead.append(close); sheet.append(shopHead);
   const shopItems: readonly { id: ShopItemId; title: string; desc: string; price: number; level: number }[] = [
-    { id: 'plot-6', title: 'Plot 7', desc: 'Grow the island west.', price: 40, level: 2 },
-    { id: 'plot-7', title: 'Plot 8', desc: 'Add another garden bed.', price: 120, level: 4 },
-    { id: 'big-can', title: 'Big can', desc: 'Tap once to water every growing plant.', price: 60, level: 3 },
-    { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: 25, level: 1 },
-    { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: 150, level: 5 },
+    { id: 'plot-6', title: 'Plot 7', desc: 'Grow the island west.', price: SHOP_PRICES['plot-6'], level: 3 },
+    { id: 'plot-7', title: 'Plot 8', desc: 'Add another garden bed.', price: SHOP_PRICES['plot-7'], level: 4 },
+    { id: 'big-can', title: 'Big can', desc: 'Tap once to water every growing plant.', price: SHOP_PRICES['big-can'], level: 3 },
+    { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: SHOP_PRICES.fertiliser, level: 1 },
+    { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: SHOP_PRICES['lucky-charm'], level: 5 },
   ];
   const shopRows = shopItems.map((item) => {
     const row = document.createElement('article'); row.className = 'garden-ui__shop-row';
@@ -174,6 +175,8 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   hint.className = 'garden-ui__hint';
   hint.setAttribute('role', 'status');
   hint.setAttribute('aria-live', 'polite');
+  hint.addEventListener('click', () => options.onDismissHint?.());
+  hint.style.pointerEvents = 'auto';
 
   const harvestAll = document.createElement('button');
   harvestAll.type = 'button';
@@ -223,6 +226,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   stamp.className = 'garden-ui__stamp';
   stamp.setAttribute('role', 'status');
   stamp.hidden = true;
+  stamp.addEventListener('click', () => { clearTimeout(stampTimer); stamp.hidden = true; });
 
   const away = document.createElement('div');
   away.className = 'garden-ui__away';
@@ -233,6 +237,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   awayButton.className = 'garden-ui__away-button';
   awayButton.textContent = 'Harvest all';
   away.append(awayText, awayButton);
+  away.addEventListener('click', (event) => { if (event.target === away) away.hidden = true; });
   let onAwayHarvest: (() => void) | null = null;
   awayButton.addEventListener('click', () => {
     onAwayHarvest?.();
@@ -351,7 +356,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
         }
       }
       clearTimeout(stampTimer);
-      stampTimer = window.setTimeout(() => { stamp.hidden = true; }, 2200);
+      stampTimer = window.setTimeout(() => { stamp.hidden = true; }, readingTimeMs(stamp.textContent ?? ''));
     },
     showAway(ripeCount, onHarvestAll) {
       awayText.textContent = `${ripeCount} ${ripeCount === 1 ? 'plant' : 'plants'} ripened while you were away.`;

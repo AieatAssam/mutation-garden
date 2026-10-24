@@ -1,5 +1,6 @@
 import type { SimEvent, PlotId } from '../sim';
 import './rewards.css';
+import { readingTimeMs } from './notice-queue';
 
 export interface RewardLayer {
   /** Shows harvest, combo and watering feedback for one batch of sim events (motion.md 4.4–4.6). */
@@ -28,6 +29,8 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
     const label = document.createElement('span');
     label.className = `rewards__label rewards__label--${kind}`;
     label.textContent = text;
+    label.style.pointerEvents = 'auto';
+    label.addEventListener('click', () => { animation.cancel(); label.remove(); });
     label.style.left = `${x}px`;
     label.style.top = `${y}px`;
     layer.append(label);
@@ -38,7 +41,7 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
         { opacity: 1, transform: 'translate(-50%, -60%) scale(1.15)', offset: 0.18 },
         { opacity: 1, transform: 'translate(-50%, -110%) scale(1)', offset: 0.7 },
         { opacity: 0, transform: 'translate(-50%, -150%) scale(0.95)' },
-      ], { duration: reducedMotion ? 900 : 800, easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
+      ], { duration: readingTimeMs(text), easing: 'cubic-bezier(0.2, 0.8, 0.3, 1)' });
     animation.onfinish = () => label.remove();
   }
 
@@ -118,6 +121,8 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
           const banner = document.createElement('div');
           banner.className = 'rewards__combo';
           banner.textContent = `Combo x${event.count}`;
+          banner.style.pointerEvents = 'auto';
+          banner.addEventListener('click', () => { animation.cancel(); banner.remove(); });
           if (event.comboBonus > 0) {
             const bonus = document.createElement('span');
             bonus.textContent = ` +${event.comboBonus}`;
@@ -131,7 +136,7 @@ export function createRewardLayer(container: HTMLElement, options: RewardLayerOp
               { opacity: 1, transform: 'translate(-50%, 0) rotate(-3deg) scale(1)', offset: 0.15 },
               { opacity: 1, transform: 'translate(-50%, 0) rotate(-3deg) scale(1)', offset: 0.8 },
               { opacity: 0, transform: 'translate(-50%, -12px) rotate(-3deg) scale(0.95)' },
-            ], { duration: 1100, easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.2)' });
+            ], { duration: readingTimeMs(banner.textContent ?? ''), easing: 'cubic-bezier(0.2, 0.9, 0.3, 1.2)' });
           animation.onfinish = () => banner.remove();
         } else if (event.type === 'Watered') {
           const point = options.projectPlot(event.plotId);

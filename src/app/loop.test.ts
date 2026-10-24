@@ -18,7 +18,7 @@ function createHarness(nowMs: () => number = () => 1_000) {
   const eventBatches: (readonly SimEvent[])[] = [];
   const eventTimes: number[] = [];
   const loop = createFixedStepLoop({
-    initialState: createInitialState(1, 0, { xp: 100 }),
+    initialState: createInitialState(1, 0, { xp: 500 }),
     nowMs,
     requestFrame,
     cancelFrame,

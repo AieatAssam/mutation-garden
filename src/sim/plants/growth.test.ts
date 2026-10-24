@@ -11,7 +11,7 @@ import {
 const seed = 0x1234_5678;
 
 function plantOne(speciesId: (typeof SPECIES)[number]['id'], plotId = 'plot-0') {
-  const initial = { ...createInitialState(seed, 0, { xp: 100 }), plantCount: 2 };
+  const initial = { ...createInitialState(seed, 0, { xp: 2_500 }), plantCount: 2 };
   const command: Command = { type: 'Plant', plotId, seedId: speciesId };
   const planted = step(initial, [command], 0);
   return { state: planted.state, plantedAt: 0 };
@@ -66,7 +66,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('emits every crossed stage in plot order and then species table order on a long jump', () => {
-    const initial = createInitialState(seed, 0, { xp: 100 });
+    const initial = createInitialState(seed, 0, { xp: 2_500 });
     const commands: Command[] = [
       { type: 'Plant', plotId: 'plot-2', seedId: 'twistroot' },
       { type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' },
@@ -92,7 +92,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('emits existing-plant growth events before successful and rejected plant command events', () => {
-    const planted = step(createInitialState(seed, 0, { xp: 100 }), [
+    const planted = step(createInitialState(seed, 0, { xp: 500 }), [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
     ], 0).state;
     const result = step(planted, [
@@ -116,13 +116,13 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('keeps six stable initial plots in snapshots and exposes only derived growth there', () => {
-    const initial = createInitialState(seed, 100, { xp: 100 });
+    const initial = createInitialState(seed, 100, { xp: 500 });
     expect(getSnapshot(initial)).toEqual({
       coins: initial.coins,
-      xp: 100,
-      level: 6,
-      levelStartXp: 100,
-      nextLevelXp: 160,
+      xp: 500,
+      level: 2,
+      levelStartXp: 500,
+      nextLevelXp: 900,
       nowMs: 100,
       plantCount: 0,
       owned: [],
@@ -153,7 +153,7 @@ describe('timestamp-derived plant growth', () => {
 
     const half = step(planted.state, [], 4_100);
     expect(getSnapshot(half.state).plots[0]?.plant).toMatchObject({ stage: 'Growing', progress: 0.5 });
-    const beyondRipe = step(half.state, [], 20_100);
+    const beyondRipe = step(half.state, [], 8_100);
     expect(getSnapshot(beyondRipe.state).plots[0]?.plant).toMatchObject({
       stage: 'Harvestable',
       progress: 1,
@@ -161,7 +161,7 @@ describe('timestamp-derived plant growth', () => {
   });
 
   it('copies snapshot arrays, plot records, and plant records from a frozen source state', () => {
-    const planted = step(createInitialState(seed, 100, { xp: 100 }), [
+    const planted = step(createInitialState(seed, 100, { xp: 450 }), [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
     ], 500).state;
     const frozenState = freezeDeep(planted) as GardenState;

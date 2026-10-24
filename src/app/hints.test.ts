@@ -17,24 +17,25 @@ describe('first-minute hints', () => {
   });
 
   it('keeps a standing goal once every seed is unlocked', () => {
-    const level3 = { ...createInitialState(1, 0, { xp: 25 }), plantCount: 100, scriptedGiantUsed: true, scriptedGoldenUsed: true };
-    expect(hintFor(getSnapshot(level3), 'sunny-sprout')).toBe('Save 40 coins for Plot 7 (12/40).');
+    const level3 = { ...createInitialState(1, 0, { xp: 900 }), plantCount: 100, scriptedGiantUsed: true, scriptedGoldenUsed: true };
+    expect(hintFor(getSnapshot(level3), 'sunny-sprout')).toBe('Save 80 coins for Plot 7 (12/80).');
     const full = step(level3, ['plot-0', 'plot-1', 'plot-2', 'plot-3', 'plot-4', 'plot-5']
       .map((plotId) => ({ type: 'Plant' as const, plotId, seedId: 'sunny-sprout' as const })), 0).state;
-    expect(hintFor(getSnapshot(full), 'sunny-sprout')).toBe('Save 40 coins for Plot 7 (6/40).');
-    expect(hintFor(getSnapshot(step(full, [], 8_000).state), 'sunny-sprout')).toBe('Buy Plot 7 (40/40).');
+    expect(hintFor(getSnapshot(full), 'sunny-sprout')).toBe('Save 80 coins for Plot 7 (6/80).');
+    const rich = { ...full, coins: 80 };
+    expect(hintFor(getSnapshot(rich), 'sunny-sprout')).toBe('Buy Plot 7 (80/80).');
   });
 
   it('points to a cheaper seed when the selected one is unaffordable', () => {
-    const poor = { ...createInitialState(1, 0, { xp: 30 }), coins: 2, plantCount: 100, scriptedGiantUsed: true, scriptedGoldenUsed: true };
-    expect(hintFor(getSnapshot(poor), 'twistroot')).toBe('Save 40 coins for Plot 7 (2/40).');
+    const poor = { ...createInitialState(1, 0, { xp: 900 }), coins: 2, plantCount: 100, scriptedGiantUsed: true, scriptedGoldenUsed: true };
+    expect(hintFor(getSnapshot(poor), 'twistroot')).toBe('Save 80 coins for Plot 7 (2/80).');
   });
 
   it('keeps the Golden near-miss after the scripted Golden is used', () => {
     const state = { ...createInitialState(1, 0), scriptedGoldenUsed: true };
     const first = step(state, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
     const planted = step(first, [{ type: 'Plant', plotId: 'plot-2', seedId: 'sunny-sprout' }], 4_000).state;
-    expect(getSnapshot(step(planted, [], 8_000).state).nearMiss)
+    expect(getSnapshot(step(planted, [], 4_000).state).nearMiss)
       .toBe('Plant one more Sunny Sprout beside it for Golden.');
   });
 });

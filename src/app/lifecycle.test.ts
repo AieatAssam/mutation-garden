@@ -122,7 +122,7 @@ describe('page lifecycle', () => {
     h.runFrame(0);
     h.loop.enqueue(harvest);
     h.setHidden(true);
-    h.nowMs.mockReturnValue(10_000);
+    h.nowMs.mockReturnValue(30_000);
 
     h.setHidden(false);
     h.setHidden(false);
@@ -141,7 +141,7 @@ describe('page lifecycle', () => {
     ]]);
     const resumed = h.renderFrames.at(-1)!;
     expect(resumed.previous).toEqual(resumed.current);
-    expect(resumed.current.nowMs).toBe(10_000);
+    expect(resumed.current.nowMs).toBe(30_000);
     expect(resumed.current.coins).toBe(11);
     expect(resumed.current.plots[0]?.plant).toBeNull();
 

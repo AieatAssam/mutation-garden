@@ -1,5 +1,6 @@
 import { getGrowthView } from '../plants/growth';
 import { levelForXp, xpForLevel } from '../content/species';
+import { CRATE_CAPACITY, SELL_INTERVAL_MS } from '../content/species';
 import { growthStart, type GardenSnapshot, type GardenState } from './types';
 import { areAdjacent, hasGiantTell } from '../plants/mutate';
 
@@ -26,9 +27,9 @@ export function getSnapshot(state: GardenState): GardenSnapshot {
     fertiliser: state.fertiliser,
     crate: state.crate,
     crateCount: state.crate.length,
-    crateCapacity: 12,
+    crateCapacity: CRATE_CAPACITY,
     selling: state.sellingSince !== null,
-    nextSaleTime: state.sellingSince === null ? null : state.sellingSince + 1_200,
+    nextSaleTime: state.sellingSince === null ? null : state.sellingSince + SELL_INTERVAL_MS,
     plots,
     nearMiss: plots.some(({ id, plant }) => plant && plant.stage !== 'Mature' && plant.stage !== 'Harvestable' && goldenNeighbours(state, id) === 1)
       ? 'Plant one more Sunny Sprout beside it for Golden.'

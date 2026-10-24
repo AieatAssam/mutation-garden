@@ -9,7 +9,7 @@ function stateWithPlants(
   plants: Readonly<Record<string, PlantState | null>>,
   nowMs = startTime,
 ): GardenState {
-  const initial = createInitialState(seed, nowMs, { xp: 100 });
+  const initial = createInitialState(seed, nowMs, { xp: 5_000 });
   return {
     ...initial,
     rngState: 2,

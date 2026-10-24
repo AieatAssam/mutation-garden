@@ -1,7 +1,7 @@
 import { MUTATIONS, mutationRoll } from '../content/mutations';
 import { getGrowthView } from './growth';
 import { growthStart, type GardenState, type SimEvent, type TraitId } from '../state/types';
-import { levelForXp, SPECIES } from '../content/species';
+import { levelForXp, SPECIES, xpForLevel } from '../content/species';
 
 /** Freeze each plant's mutation result once it reaches Mature. */
 export function evaluateMature(state: GardenState, nowMs: number): { state: GardenState; events: readonly SimEvent[] } {
@@ -29,14 +29,20 @@ export function evaluateMature(state: GardenState, nowMs: number): { state: Gard
     if (mutations.length) {
       let firstDiscovery = false;
       let bonusCoins = 0;
+      let bonusXp = 0;
       for (const trait of mutations) {
         const id = `${plant.speciesId}:${trait}`;
         const value = SPECIES.find((entry) => entry.id === plant.speciesId)!.baseValue * MUTATIONS[trait].value;
         if (!discoveries.includes(id)) { discoveries.push(id); firstDiscovery = true; }
-        if (!rewardsPaid.includes(id)) { rewardsPaid.push(id); bonusCoins += value * 10; }
+        if (!rewardsPaid.includes(id)) {
+          rewardsPaid.push(id);
+          bonusCoins += value * 3;
+          const currentXp = xp + bonusXp;
+          bonusXp += Math.ceil((xpForLevel(levelForXp(currentXp) + 1) - currentXp) / 2);
+        }
       }
       coins += bonusCoins;
-      xp += bonusCoins;
+      xp += bonusXp;
       events.push({ type: 'Mutated', plotId: plot.id, speciesId: plant.speciesId, mutations, firstDiscovery, bonusCoins });
     }
     changed = true;

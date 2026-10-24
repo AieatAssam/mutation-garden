@@ -9,6 +9,7 @@ import { createPointerInput } from '../input/pointer';
 import { createGardenUI } from '../ui/garden-ui';
 import { createRewardLayer } from '../ui/rewards';
 import { createMutationReveal } from '../ui/mutation-reveal';
+import { createNoticeQueue, readingTimeMs } from '../ui/notice-queue';
 import { createSfx } from '../audio/sfx';
 import { createPageLifecycle } from './lifecycle';
 import { createFixedStepLoop } from './loop';
@@ -65,17 +66,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     onSell: () => uiCommand({ type: 'StartSelling' }),
     onBuy: (item) => uiCommand({ type: 'Buy', item }),
     onWaterAll: () => uiCommand({ type: 'WaterAll' }),
+    onDismissHint: () => { if (!notices.current?.persistent) notices.close(); },
   });
   let harvestAll = () => {};
   let settings: Settings = DEFAULT_SETTINGS;
   let notice = '';
   let noticeTimer = 0;
-  /** Shows a notice in the HUD; it clears after `ms` (0 keeps it). */
-  const showNotice = (text: string, ms = 6_000) => {
-    notice = text;
-    clearTimeout(noticeTimer);
-    if (ms > 0) noticeTimer = setTimeout(() => { notice = ''; }, ms) as unknown as number;
-  };
   // Input waits for the save to load, so a tap made while IndexedDB opens is not replaced by restore().
   let loadSettled = false;
   let reducedMotion = false;
@@ -99,6 +95,16 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       crateCapacity: snapshot.crateCapacity ?? 12,
       selling: snapshot.selling ?? false,
     });
+  };
+  const notices = createNoticeQueue((current) => {
+    clearTimeout(noticeTimer);
+    notice = current?.text ?? '';
+    refreshUI();
+    if (current && !current.persistent) noticeTimer = setTimeout(() => notices.close(), readingTimeMs(current.text)) as unknown as number;
+  });
+  const showNotice = (text: string, ms?: number) => {
+    if (!text) { notices.resolve(notice); return; }
+    notices.push({ text, persistent: ms === 0 || text.startsWith('Crate full.') });
   };
   let changeSettings: (next: Settings) => void = (next) => { settings = next; };
 
@@ -146,6 +152,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       onRender: (frame) => {
         latestSnapshot = frame.current;
+        if ((frame.current.crateCount ?? 0) < (frame.current.crateCapacity ?? 12)) notices.resolve('Crate full. Sell fruit at the stall to make room.');
         coins = frame.current.coins;
         reducedMotion = motion.matches;
         refreshUI();
@@ -162,7 +169,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
           if (event.type === 'CommandRejected' && event.reason === 'crate-full') {
             gardenUI.crateFull(motion.matches);
-            showNotice('Crate full. Sell fruit at the stall to make room.', 3_000);
+            showNotice('Crate full. Sell fruit at the stall to make room.', 0);
           }
         }
         r.onEvents(events, motion.matches);

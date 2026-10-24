@@ -1,10 +1,10 @@
-import { levelForXp } from '../content/species';
+import { levelForXp, SHOP_PRICES } from '../content/species';
 import type { Command, GardenState, ShopItemId, SimEvent, StepResult } from '../state/types';
 import { water } from './water';
 
 const ITEMS: Readonly<Record<ShopItemId, { price: number; level: number }>> = {
-  'plot-6': { price: 40, level: 2 }, 'plot-7': { price: 120, level: 4 },
-  'big-can': { price: 60, level: 3 }, fertiliser: { price: 25, level: 1 }, 'lucky-charm': { price: 150, level: 5 },
+  'plot-6': { price: SHOP_PRICES['plot-6'], level: 3 }, 'plot-7': { price: SHOP_PRICES['plot-7'], level: 4 },
+  'big-can': { price: SHOP_PRICES['big-can'], level: 3 }, fertiliser: { price: SHOP_PRICES.fertiliser, level: 1 }, 'lucky-charm': { price: SHOP_PRICES['lucky-charm'], level: 5 },
 };
 
 export function buy(state: GardenState, command: Extract<Command, { type: 'Buy' }>): StepResult {

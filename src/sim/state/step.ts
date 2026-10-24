@@ -5,7 +5,7 @@ import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
 import { evaluateMature } from '../plants/mutate';
 import { buy, waterAll } from '../plants/shop';
-import { levelForXp, SPECIES } from '../content/species';
+import { levelForXp, SELL_INTERVAL_MS, SPECIES } from '../content/species';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -26,14 +26,14 @@ export function step(
     ? state
     : { ...state, lastNowMs: effectiveNowMs };
   if (nextState.sellingSince !== null && nextState.crate.length) {
-    const sales = Math.min(nextState.crate.length, Math.floor((effectiveNowMs - nextState.sellingSince) / 1_200));
+    const sales = Math.min(nextState.crate.length, Math.floor((effectiveNowMs - nextState.sellingSince) / SELL_INTERVAL_MS));
     if (sales) {
       const crate = nextState.crate.slice(sales);
       const sold = nextState.crate.slice(0, sales);
       const coins = nextState.coins + sold.reduce((sum, fruit) => sum + fruit.value, 0);
       const xp = nextState.xp + sold.reduce((sum, fruit) => sum + fruit.xp, 0);
       for (const fruit of sold) events.push({ type: 'FruitSold', value: fruit.value, speciesId: fruit.speciesId, mutations: fruit.mutations });
-      nextState = { ...nextState, crate, coins, xp, sellingSince: crate.length ? nextState.sellingSince + sales * 1_200 : null };
+      nextState = { ...nextState, crate, coins, xp, sellingSince: crate.length ? nextState.sellingSince + sales * SELL_INTERVAL_MS : null };
       for (let level = levelForXp(state.xp) + 1; level <= levelForXp(nextState.xp); level += 1) {
         events.push({ type: 'LevelUp', level, unlocked: SPECIES.filter((entry) => entry.unlockLevel === level).map(({ id }) => id) });
       }

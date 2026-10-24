@@ -24,7 +24,7 @@ describe('commandForPlotActivation', () => {
     expect(commandForPlotActivation(getSnapshot(planted), 'plot-0', 'sunny-sprout')).toEqual({
       type: 'Water', plotId: 'plot-0',
     });
-    const ripe = step(planted, [], 9_000).state;
+    const ripe = step(planted, [], 25_000).state;
     expect(commandForPlotActivation(getSnapshot(ripe), 'plot-0', 'sunny-sprout')).toEqual({
       type: 'Harvest', plotIds: ['plot-0'],
     });

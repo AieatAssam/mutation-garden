@@ -10,13 +10,13 @@ describe('M2 mutation rules', () => {
 
   it('always gives Giant after two waters from level one', () => {
     let state = step(createInitialState(8, 0), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
-    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 2_000).state;
-    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 3_000).state;
-    expect(step(state, [], 6_000).state.plots[0]?.plant?.mutations).toContain('giant');
+    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 4_000).state;
+    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 5_000).state;
+    expect(step(state, [], 18_000).state.plots[0]?.plant?.mutations).toContain('giant');
   });
 
   it('always gives Golden beside two Sunny Sprouts', () => {
-    let state = createInitialState(9, 0, { xp: 16 });
+    let state = createInitialState(9, 0, { xp: 900 });
     state = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },
@@ -26,13 +26,27 @@ describe('M2 mutation rules', () => {
     expect(state.plots[1]?.plant?.mutations).toContain('golden');
   });
 
+  it('pays half a level of XP and three mutated harvest values for an early Golden', () => {
+    let state = createInitialState(91, 0);
+    state = step(state, [
+      { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-3', seedId: 'sunny-sprout' },
+    ], 0).state;
+
+    const result = step(state, [], 8_000);
+    expect(result.state.xp).toBe(250);
+    expect(result.state.coins).toBe(33);
+    expect(result.state.plots[1]?.plant?.mutations).toEqual(['golden']);
+  });
+
   it('does not count a Sunny Sprout as its own Golden neighbour', () => {
     const planted = step(createInitialState(90, 0), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
-    expect(step(planted, [], 8_000).state.plots[0]?.plant?.mutations).not.toContain('golden');
+    expect(step(planted, [], 24_000).state.plots[0]?.plant?.mutations ?? []).not.toContain('golden');
   });
 
   it('always gives Glowing beside a Puffcap', () => {
-    let state = createInitialState(10, 0, { xp: 60 });
+    let state = createInitialState(10, 0, { xp: 2_500 });
     state = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'puffcap' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' },
@@ -42,14 +56,15 @@ describe('M2 mutation rules', () => {
   });
 
   it('pays each species-trait first-find reward once', () => {
-    let state = createInitialState(11, 0, { xp: 16 });
+    let state = createInitialState(11, 0, { xp: 900 });
     state = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },
       { type: 'Plant', plotId: 'plot-3', seedId: 'sunny-sprout' },
     ], 0).state;
     const first = step(state, [], 25_001);
-    expect(first.events).toContainEqual(expect.objectContaining({ type: 'Mutated', speciesId: 'twistroot', bonusCoins: 400 }));
+    expect(first.events).toContainEqual(expect.objectContaining({ type: 'Mutated', speciesId: 'twistroot', bonusCoins: 120 }));
+    expect(first.state.xp).toBe(2_100);
     expect(first.state.rewardsPaid).toContain('twistroot:golden');
     const second = step({ ...first.state, plots: first.state.plots.map((plot) => {
       if (plot.id !== 'plot-1' || !plot.plant) return plot;

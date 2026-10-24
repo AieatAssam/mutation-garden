@@ -22,7 +22,7 @@ export const SPECIES = [
     name: 'Sunny Sprout',
     seedCost: 1,
     baseValue: 2,
-    growthDurationMs: 8000,
+    growthDurationMs: 8_000,
     unlockLevel: 1,
     stages: [
       { stage: 'Seed', startsAtMs: 0 },
@@ -71,7 +71,11 @@ export const SPECIES = [
 export const INITIAL_COINS = 12;
 
 /** Total XP needed to reach level 2, 3, ... (design.md 4.4); after the table each level costs 200 more. */
-export const LEVEL_XP = [6, 16, 32, 60, 100, 160, 240, 360] as const;
+export const LEVEL_XP = [500, 900, 2_500, 3_500, 4_900, 6_500, 8_300, 10_300] as const;
+
+export const SHOP_PRICES = { 'plot-6': 80, 'plot-7': 220, 'big-can': 90, fertiliser: 30, 'lucky-charm': 300 } as const;
+export const CRATE_CAPACITY = 12;
+export const SELL_INTERVAL_MS = 1_200;
 
 /** XP needed to reach a level (level 1 needs 0). */
 export function xpForLevel(level: number): number {

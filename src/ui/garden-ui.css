@@ -196,7 +196,7 @@
 /* A tab on the tray's top-right edge, mirroring the Seeds label on the left. */
 .garden-ui__tray-tools { position:absolute; right:14px; bottom:calc(100% - 12px); display:flex; gap:8px; }
 .garden-ui__tray-label { max-width:calc(100% - 230px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.garden-ui__shop-backdrop { position:absolute; inset:0; display:grid; align-items:end; background:color-mix(in srgb, var(--mg-ui-border) 55%, transparent); pointer-events:auto; }
+.garden-ui__shop-backdrop { position:absolute; inset:0; z-index:5; display:grid; align-items:end; background:color-mix(in srgb, var(--mg-ui-border) 55%, transparent); pointer-events:auto; }
 .garden-ui__shop-backdrop[hidden] { display:none; }
 .garden-ui__shop-sheet { width:min(100%,560px); max-height:70dvh; overflow:auto; box-sizing:border-box; justify-self:center; padding:16px; border:3px solid var(--mg-ui-border); border-bottom:0; border-radius:20px 20px 0 0; background:var(--mg-ui-panel); box-shadow:0 -5px 0 var(--mg-ui-misprint); }
 .garden-ui__shop-sheet header,.garden-ui__shop-row { display:flex; align-items:center; justify-content:space-between; gap:12px; }
@@ -347,7 +347,8 @@
 }
 
 .garden-ui__seed-name {
-  font: 700 13px/1.1 'Fraunces', Georgia, serif;
+  /* Four cards share a phone-width tray: shrink with the viewport so "Twistroot" fits on any font. */
+  font: 700 min(13px, 3vw)/1.1 'Fraunces', Georgia, serif;
   font-variation-settings: 'SOFT' 100, 'WONK' 1;
   text-align: center;
 }
@@ -534,4 +535,15 @@
 @keyframes garden-ui-short-still {
   0%, 100% { background: var(--mg-ui-panel); }
   30% { background: var(--mg-ui-panel-sunk); }
+}
+
+@media (max-width: 420px) {
+  .garden-ui__tray { gap: 6px; padding-inline: 8px; }
+}
+
+/* Start over sits apart at the bottom of the shop so it is never hit by accident. */
+.garden-ui__reset {
+  display: block; min-height: 48px; margin: 18px auto 4px; padding: 0 16px; border: 2px solid var(--mg-ui-text-muted);
+  border-radius: 14px; background: transparent; color: var(--mg-ui-text-muted); cursor: pointer;
+  font: 700 14px 'Atkinson Hyperlegible', system-ui, sans-serif; pointer-events: auto; touch-action: manipulation;
 }

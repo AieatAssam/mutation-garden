@@ -23,6 +23,8 @@ export interface GardenUIOptions {
   readonly onHarvestAll?: () => void;
   readonly onSell?: () => void;
   readonly onBuy?: (item: ShopItemId) => void;
+  /** Wipes the save after the player confirms; the app reloads into a new garden. */
+  readonly onReset?: () => void;
   readonly onWaterAll?: () => void;
   readonly onDismissHint?: () => void;
 }
@@ -174,6 +176,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   close.addEventListener('click', () => { shop.hidden = true; });
   shopButton.addEventListener('click', () => { journal.close(); shop.hidden = false; });
   shop.addEventListener('click', (event) => { if (event.target === shop) shop.hidden = true; });
+  const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'garden-ui__reset';
+  reset.textContent = 'Start over';
+  reset.addEventListener('click', () => options.onReset?.());
+  sheet.append(reset);
   shop.append(sheet); overlay.append(shop, bigCan);
 
   // The objective line shows only while there is something to say, so it rarely covers the garden.

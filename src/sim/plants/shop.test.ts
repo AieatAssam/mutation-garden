@@ -19,7 +19,7 @@ describe('shop purchases', () => {
     expect(state.fertiliser).toBe(1);
     state = step(state, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
     expect(state.fertiliser).toBe(0);
-    expect(state.plots[0]?.plant).toMatchObject({ fertilised: true, boostMs: 3_200 });
+    expect(state.plots[0]?.plant).toMatchObject({ fertilised: true, boostMs: 3_200, waterCount: 0 });
   });
 
   it('requires the first plot before buying the second and waters all plants with Big can', () => {

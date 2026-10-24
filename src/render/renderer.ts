@@ -412,13 +412,16 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         const last = lastTell.get(plot.id) ?? -Infinity;
         if ((reducedMotion && lastTell.has(plot.id)) || last + 4000 > clock()) continue;
         const top = new Vector3();
-        if (plants.getTop(plot.id, top)) particles.burst({ origin: top, count: 1,
+        if (plants.getTop(plot.id, top)) particles.burst({ key: `tell:${plot.id}`, origin: top, count: 1,
           colors: plant.tell === 'giant' ? [palette.ui.coin.emboss] : [palette.environment.water[0]],
           speed: 0, up: reducedMotion ? 0 : 0.18, gravity: reducedMotion ? 0 : 0.1,
           lifeMs: reducedMotion ? 1_000_000_000 : 600, size: 0.055 }, clock(), reducedMotion);
         lastTell.set(plot.id, clock());
       }
-      for (const plotId of lastTell.keys()) if (!activeTells.has(plotId)) lastTell.delete(plotId);
+      for (const plotId of lastTell.keys()) if (!activeTells.has(plotId)) {
+        lastTell.delete(plotId);
+        particles.remove(`tell:${plotId}`);
+      }
       draw();
     },
     whenLoaded() {

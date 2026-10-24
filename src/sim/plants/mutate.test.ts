@@ -15,6 +15,14 @@ describe('M2 mutation rules', () => {
     expect(step(state, [], 18_000).state.plots[0]?.plant?.mutations).toContain('giant');
   });
 
+  it('grants Giant for two accepted pre-maturity waters without rerolling natural traits', () => {
+    let state = step(createInitialState(8, 0), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
+    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 2_000).state;
+    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 5_000).state;
+    expect(state.plots[0]?.plant?.waterCount).toBe(2);
+    expect(state.plots[0]?.plant?.mutations).toContain('giant');
+  });
+
   it('always gives Golden beside two Sunny Sprouts', () => {
     let state = createInitialState(9, 0, { xp: 900 });
     state = step(state, [

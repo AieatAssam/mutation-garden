@@ -36,6 +36,13 @@ describe('Water commands', () => {
     ]);
   });
 
+  it('counts only the new boost when emitting crossed stages', () => {
+    let state = step(createInitialState(7, 0), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
+    state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 2_000).state;
+    const second = step(state, [{ type: 'Water', plotId: 'plot-0' }], 3_000);
+    expect(second.events.filter((event) => event.type === 'StageReached' && event.stage === 'Mature')).toEqual([]);
+  });
+
   it('rejects empty, unknown and ripe plots without changing state', () => {
     const state = planted();
     const ripe = step(state, [], start + 25_000).state;
@@ -46,6 +53,10 @@ describe('Water commands', () => {
       expect(result.events).toEqual([{ type: 'CommandRejected', command: 'Water', plotId: target, reason }]);
       expect(result.state.plots).toBe(from.plots);
     }
+    const sunny = step(createInitialState(7, start, { xp: 100 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], start).state;
+    const onceWatered = step(sunny, [{ type: 'Water', plotId: 'plot-0' }], start + 2_000).state;
+    const wateredMature = step(onceWatered, [{ type: 'Water', plotId: 'plot-0' }], start + 5_500);
+    expect(wateredMature.events).toContainEqual({ type: 'CommandRejected', command: 'Water', plotId: 'plot-0', reason: 'not-growing' });
   });
 });
 

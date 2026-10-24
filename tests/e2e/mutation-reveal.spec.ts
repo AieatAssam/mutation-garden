@@ -3,21 +3,24 @@ import { expectHarvestPaid } from './payout';
 import { startWithSave } from './garden-save';
 
 test('first Giant reveal swallows the skip tap and harvest pays the mutation value', async ({ page }) => {
-  const plantedAt = Date.now() - 21_000;
-  await startWithSave(page, 50, { scriptedGiantUsed: false, plantCount: 2, twistrootPlantedAt: plantedAt, twistrootWaterCount: 2, extraRipeSunny: true, savedAt: Date.now() });
+  const plantedAt = 1_700_000_000_000;
+  await page.clock.install({ time: plantedAt + 25_000 });
+  await startWithSave(page, 50, { scriptedGiantUsed: false, plantCount: 2, twistrootPlantedAt: plantedAt, twistrootWaterCount: 2, extraRipeSunny: true, savedAt: plantedAt + 25_000 });
   await page.goto('./');
   const coins = page.getByRole('status', { name: 'Coins' });
-  const beforeRevealTap = await coins.textContent();
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  await expect(coins).toHaveText('212');
   const reveal = page.getByText('New mutation: Giant!');
-  await expect(reveal).toBeVisible({ timeout: 8_000 });
-  await expect(coins).toHaveText(String(Number(beforeRevealTap) + 200));
+  await page.clock.runFor(2_000);
+  await expect(reveal).toBeVisible();
+  await expect(coins).toHaveText('212');
   await page.mouse.click(10, 10);
   await expect(reveal).toHaveCount(0);
-  await expect(coins).toHaveText(String(Number(beforeRevealTap) + 200));
+  await expect(coins).toHaveText('212');
 
-  await expect.poll(() => page.evaluate(() => Date.now()), { timeout: 8_000 }).toBeGreaterThanOrEqual(plantedAt + 25_000);
+  await page.clock.runFor(4_000);
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
-  await expect.poll(() => coins.textContent(), { timeout: 3_000 }).toBe(String(Number(beforeRevealTap) + 200));
+  await expect(coins).toHaveText('212');
   const harvestAll = page.getByRole('button', { name: 'Harvest all 2' });
   await expect(harvestAll).toBeVisible();
   const harvest = await expectHarvestPaid(page, () => harvestAll.click());

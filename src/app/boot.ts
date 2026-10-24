@@ -129,6 +129,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       coinTarget: () => uiRoot.querySelector<HTMLElement>('.garden-ui__coins'),
     });
     const mutationReveal = createMutationReveal(uiRoot, r.projectPlot);
+    let cancelActiveGesture = () => {};
     // Audio may only start from a user gesture (autoplay rules).
     const unlockAudio = () => sfx.unlock();
     window.addEventListener('pointerdown', unlockAudio, { capture: true });
@@ -162,6 +163,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         sfx.onEvents(events);
         for (const event of events.filter((item) => item.type === 'Mutated')
           .sort((a, b) => Number(b.mutations.includes('giant')) - Number(a.mutations.includes('giant')))) {
+          if (event.firstDiscovery) cancelActiveGesture();
           mutationReveal.show(event, motion.matches);
           sfx.mutation(event.firstDiscovery);
           if (event.firstDiscovery && !motion.matches && 'vibrate' in navigator) navigator.vibrate([20, 40, 20]);
@@ -196,6 +198,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         }
       }
     });
+    cancelActiveGesture = input.cancelGesture;
     harvestAll = () => {
       const ripe = latestSnapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').map(({ id }) => id);
       const command = commandForSwipeHarvest(latestSnapshot, ripe);

@@ -1,4 +1,4 @@
-import { BoxGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshStandardMaterial, Vector3 } from 'three';
+import { BoxGeometry, Color, Float32BufferAttribute, Group, Mesh, MeshPhysicalMaterial, MeshStandardMaterial, MeshToonMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import type { PlantSnapshot, SpeciesId } from '../../sim';
 import { createMaterialLibrary } from '../materials';
@@ -35,6 +35,8 @@ function scene(): Group {
       { attach: `${species}_stem`, ripe: true, fly: true });
     fruit.position.set(0, 1, 0);
     group.add(stem(`${species}_stem`, `plants.${species}.stem.1`), fruit);
+    if (species === 'puffcap') group.add(part(`${species}_fruit_two`, `plants.${species}.fruit.1`, undefined,
+      { attach: `${species}_stem`, ripe: true, fly: true }));
     root.add(group);
   }
   return root;
@@ -107,5 +109,56 @@ describe('authored plants', () => {
     rig.dispose();
     models.dispose();
     library.dispose();
+  });
+
+  it('renders all ten trait pairs distinctly and caps Crystal transmission at three on-screen plants', () => {
+    const library = createMaterialLibrary(); const models = readPlantModels(scene());
+    const rig = createAuthoredRig('sunny-sprout', models, library);
+    const fruit = rig.root.getObjectByName('sunny-sprout_fruit') as Mesh;
+    const traits = ['crystal', 'giant', 'glowing', 'golden', 'rainbow'] as const;
+    const materials = new Map<string, MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial>();
+    for (let first = 0; first < traits.length; first += 1) for (let second = first + 1; second < traits.length; second += 1) {
+      rig.update({ ...plant(1, 'Harvestable'), mutations: [traits[first]!, traits[second]!] }, 0, true);
+      materials.set(`${traits[first]}+${traits[second]}`, fruit.material as MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial);
+    }
+    expect(materials.size).toBe(10);
+    expect(new Set([...materials.values()].map((material) => material.uuid)).size).toBe(10);
+    expect(materials.get('crystal+giant')).toBeInstanceOf(MeshPhysicalMaterial);
+    expect((materials.get('crystal+giant') as MeshPhysicalMaterial).transmission).toBe(0.92);
+    expect(materials.get('crystal+rainbow')).toBeInstanceOf(MeshPhysicalMaterial);
+    expect((materials.get('crystal+rainbow') as MeshPhysicalMaterial).iridescence).toBe(0.5);
+    expect((materials.get('giant+glowing') as MeshStandardMaterial).emissive.getHex()).toBe(new Color(palette.mutations.glowing.emissive).getHex());
+    expect((materials.get('glowing+golden') as MeshStandardMaterial).metalness).toBe(0.82);
+    expect((materials.get('glowing+golden') as MeshStandardMaterial).color.getHex()).toBe(new Color(palette.ui.coin.face).getHex());
+
+    rig.update({ ...plant(1, 'Harvestable'), mutations: ['crystal'] }, 0, true, 1);
+    expect(fruit.material).toBeInstanceOf(MeshPhysicalMaterial);
+    expect((fruit.material as MeshPhysicalMaterial).transmission).toBeLessThanOrEqual(0.92);
+    expect((fruit.material as MeshPhysicalMaterial).thickness).toBeLessThanOrEqual(0.6);
+    rig.update({ ...plant(1, 'Harvestable'), mutations: ['crystal'] }, 0, true, 0);
+    expect((fruit.material as MeshStandardMaterial).opacity).toBe(0.72);
+    rig.update({ ...plant(1, 'Harvestable'), mutations: ['rainbow'] }, 0, true);
+    expect((fruit.material as MeshPhysicalMaterial).customProgramCacheKey()).toBe('rainbow-bands-v1');
+    const rainbowShader = { uniforms: {}, vertexShader: '#include <beginnormal_vertex>', fragmentShader: '#include <color_fragment>' };
+    (fruit.material as MeshPhysicalMaterial).onBeforeCompile(rainbowShader as never, {} as never);
+    expect(rainbowShader.vertexShader).toContain('normalize(objectNormal).y');
+    expect(rainbowShader.fragmentShader).toContain('rainbowTime * 6.0');
+    expect(rainbowShader.fragmentShader).toContain('rainbowBands[int(band)], 0.9');
+    const pairShader = { uniforms: {}, vertexShader: '#include <begin_vertex>', fragmentShader: '#include <color_fragment>' };
+    (materials.get('crystal+rainbow')!).onBeforeCompile(pairShader as never, {} as never);
+    expect(pairShader.fragmentShader).toContain('rainbowTime');
+    expect(pairShader.fragmentShader).toContain('pairAccent');
+
+    const puffcap = createAuthoredRig('puffcap', models, library);
+    const used = puffcap.update({ ...plant(1, 'Harvestable'), speciesId: 'puffcap', mutations: ['crystal'] }, 0, true, 1);
+    expect(used).toBe(1);
+    const puffcapFruit = puffcap.root.getObjectByName('plant-body')!.children.filter((child) => child.userData.part === 'puffcap_fruit' || child.userData.part === 'puffcap_fruit_two') as Mesh[];
+    expect(puffcapFruit.filter((mesh) => mesh.material instanceof MeshPhysicalMaterial)).toHaveLength(1);
+    expect(puffcapFruit.filter((mesh) => mesh.material instanceof MeshStandardMaterial && !(mesh.material instanceof MeshPhysicalMaterial))).toHaveLength(1);
+    puffcap.update({ ...plant(1, 'Harvestable'), speciesId: 'puffcap', mutations: ['crystal', 'giant'] }, 0, true, 0);
+    expect(puffcapFruit.every((mesh) => mesh.material instanceof MeshStandardMaterial && !(mesh.material instanceof MeshPhysicalMaterial))).toBe(true);
+    expect((puffcapFruit[0]!.material as MeshStandardMaterial).customProgramCacheKey()).toContain('-fresnel');
+    puffcap.dispose();
+    rig.dispose(); models.dispose(); library.dispose();
   });
 });

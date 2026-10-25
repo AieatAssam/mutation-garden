@@ -1,12 +1,13 @@
 import type { PlotId, SimEvent, TraitId } from '../sim';
 import './mutation-reveal.css';
+import { readingTimeMs } from './notice-queue';
 
 const TRAITS: Record<TraitId, { name: string; tier: number; line: string }> = {
   giant: { name: 'Giant', tier: 1, line: 'Water a plant twice to grow a Giant.' },
   golden: { name: 'Golden', tier: 2, line: 'Plant beside two Sunny Sprouts for Golden.' },
   glowing: { name: 'Glowing', tier: 2, line: 'Plant beside a Puffcap for Glowing.' },
-  crystal: { name: 'Crystal', tier: 3, line: 'A Crystal grows beside the pond.' },
-  rainbow: { name: 'Rainbow', tier: 4, line: 'Pair mutations to discover Rainbow.' },
+  crystal: { name: 'Crystal', tier: 3, line: 'Replant a pond-side plot after harvesting Glowing fruit.' },
+  rainbow: { name: 'Rainbow', tier: 4, line: 'Harvest Golden, Glowing and Crystal together, then replant one of those plots.' },
 };
 
 export interface MutationReveal {
@@ -18,14 +19,14 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
   const layer = document.createElement('div');
   layer.className = 'mutation-reveal';
   container.append(layer);
-
+  let timer = 0;
   let labelTimer = 0;
   let detailTimer = 0;
   let active = false;
   let disposed = false;
   const queue: { event: Extract<SimEvent, { type: 'Mutated' }>; reducedMotion: boolean }[] = [];
   const clear = () => {
-
+    clearTimeout(timer);
     clearTimeout(labelTimer);
     clearTimeout(detailTimer);
     layer.replaceChildren();
@@ -67,7 +68,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     details.append(stars, line);
     if (event.bonusCoins > 0) {
       const bonus = document.createElement('span'); bonus.className = 'mutation-reveal__line';
-      bonus.textContent = `+${event.bonusCoins} coins first-find bonus`;
+      bonus.textContent = `+${event.bonusCoins} coins · +${event.bonusXp} XP first-find bonus`;
       details.append(bonus);
     }
     labelTimer = window.setTimeout(() => {
@@ -81,16 +82,12 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     layer.onpointerdown = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
     layer.onpointerup = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); };
     layer.onclick = (pointer) => { pointer.preventDefault(); pointer.stopPropagation(); next(); };
-    // A first discovery is the game's big moment: it stays until the player taps, so it is always read.
-    const hint = document.createElement('span');
-    hint.className = 'mutation-reveal__line mutation-reveal__hint';
-    hint.textContent = 'Tap to continue';
-    details.append(hint);
+    timer = window.setTimeout(next, 1_600 + readingTimeMs(`${title.textContent ?? ''} ${trait.line}`));
   };
   const show = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
     const mutations = [...event.mutations].sort((a, b) => (a === 'giant' ? -1 : 0) - (b === 'giant' ? -1 : 0));
     for (const [index, mutation] of mutations.entries()) {
-      const single = { ...event, mutations: [mutation], bonusCoins: index === 0 ? event.bonusCoins : 0 };
+      const single = { ...event, mutations: [mutation], bonusCoins: index === 0 ? event.bonusCoins : 0, bonusXp: index === 0 ? event.bonusXp : 0 };
       const trait = TRAITS[mutation];
       if (!trait) continue;
       if (!event.firstDiscovery) {
@@ -99,7 +96,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
         const label = document.createElement('span');
         label.className = 'mutation-reveal__repeat'; label.textContent = trait.name;
         label.style.left = `${point.x}px`; label.style.top = `${point.y}px`;
-        layer.append(label); setTimeout(() => label.remove(), 2500);
+        layer.append(label); setTimeout(() => label.remove(), readingTimeMs(trait.name));
       } else queue.push({ event: single, reducedMotion });
     }
     const pending = !active ? queue.shift() : undefined;

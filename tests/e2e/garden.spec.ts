@@ -2,7 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 type Probe = {
   inspect(): { canvasRect: { left: number; top: number; width: number; height: number }; plots: { plotId: string; x: number; y: number }[]; ground: { x: number; y: number }; sky: { x: number; y: number } };
-  pick(x: number, y: number): { kind: 'plot'; plotId: string } | { kind: 'ground' } | null;
+    pick(x: number, y: number): { kind: 'plot'; plotId: string } | { kind: 'stall' } | { kind: 'ground' } | null;
   resize(): void;
   setInset(enabled: boolean): void;
   dispose(): void;

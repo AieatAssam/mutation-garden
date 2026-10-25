@@ -7,13 +7,15 @@ import { getPlotStatusDialFacing } from '../../src/render/plot-status';
 import { captureVisibleBodyMasks } from './production-body-mask';
 import { palette } from '../../src/render/palette';
 import { expectHarvestPaid } from './payout';
-import { SPECIES } from '../../src/sim';
+import { SPECIES, xpForLevel } from '../../src/sim';
 import { startWithSave } from './garden-save';
 
 // These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
-test.beforeEach(async ({ page }, info) => startWithSave(page, 25, {
+test.beforeEach(async ({ page }, info) => startWithSave(page, xpForLevel(3), {
   ...(info.title === 'six ripe plants stay under the production renderer draw-call budget'
-    ? { coins: 40, mutationRngState: 2, scriptedGiantUsed: true, scriptedGoldenUsed: true } : {}),
+    ? { coins: 40, mutationRngState: 2, scriptedGiantUsed: true, scriptedGoldenUsed: true,
+      discoveries: ['sunny-sprout:golden', 'twistroot:golden', 'bubble-berry:golden'],
+      rewardsPaid: ['sunny-sprout:golden', 'twistroot:golden', 'bubble-berry:golden'] } : {}),
 }));
 
 type Point = { x: number; y: number };
@@ -77,14 +79,20 @@ async function findEmptyGroundPair(
   // These world points lie on the production ground ellipse; screen-space canvas
   // ownership alone also includes sky and cannot establish an eligible pinch.
   const worldPoints = [-3, -2.5, -2, -1, 0, 1, 2, 2.5, 3].flatMap((x) =>
-    [-2.5, -2, -1, 0, 1, 2, 2.5].filter((z) => (x * x + z * z) < 3.3 ** 2).map((z) => ({ x, z })));
+    [-2.5, -2, -1, 0, 1, 2, 2.5].filter((z) => (x * x + z * z) < 3.3 ** 2
+      && (x + 2.55) ** 2 + (z + 1.3) ** 2 > 1.15 ** 2).map((z) => ({ x, z })));
   const candidates = worldPoints.map(({ x, z }) => projectGround(stage, z, camera, x));
+  const stallCenter = projectGround(stage, -1.3, camera, -2.55);
+  const bedClearances = worldPoints.map(({ x, z }) => Math.min(...[-1.05, 1.05].flatMap((plotX) =>
+    [-2, 0, 2].map((plotZ) => Math.hypot(x - plotX, z - plotZ)))));
   const canvasOwned = await page.evaluate((points) => {
     const canvas = document.querySelector('#stage');
     return points.map(({ x, y }) => document.elementFromPoint(x, y) === canvas);
   }, candidates);
   const clearances = candidates.map((point) => Math.min(...plots.map((plot) => distance(point, plot))));
   const emptyGround = candidates.filter((point, index) => canvasOwned[index] && clearances[index]! > 48
+    && bedClearances[index]! > 1.25
+    && distance(point, stallCenter) > 110
     && point.x - 32 > stage.x && point.x + 32 < stage.x + stage.width
     && point.y - 32 > stage.y && point.y + 32 < stage.y + stage.height);
   const pairs: [Point, Point][] = [];
@@ -117,6 +125,7 @@ async function setViewport(page: Page, project: string): Promise<void> {
 
 async function installGameClock(page: Page): Promise<void> {
   await page.addInitScript(() => {
+    (window as Window & { __gardenTestCameraProbe?: boolean }).__gardenTestCameraProbe = true;
     let nowMs = Date.now();
     const browserDateNow = Date.now.bind(Date);
     nowMs = browserDateNow();
@@ -215,19 +224,29 @@ async function probeGroundByReversiblePan(
   session: CDPSession,
   point: Point,
   pointerId: number,
+  camera: ReturnType<typeof createGardenCamera>,
 ): Promise<void> {
   const bounds = await page.locator('#stage').boundingBox();
   expect(bounds).not.toBeNull();
-  const dx = point.x - 50 >= bounds!.x ? -50 : 50;
-  // Compare whole-stage captures: a pan shifts most of the image; restoring leaves only ambient motion.
-  const before = await stageCapture(page);
+  const plotXs = plotCenters(bounds!, 0.65, camera).map(({ x }) => x - bounds!.x);
+  const minimumPan = Math.max(...plotXs.map((x) => 32 - x));
+  const maximumPan = Math.min(...plotXs.map((x) => bounds!.width - 32 - x));
+  const neutral = createGardenCamera(); resizeGardenCamera(neutral, bounds!.width, bounds!.height);
+  const panOffset = camera.position.clone().sub(neutral.position);
+  const cameraRight = new Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+  const inwardDirection = Math.abs(panOffset.dot(cameraRight)) < 0.01 ? 1 : Math.sign(panOffset.dot(cameraRight));
+  const dx = inwardDirection > 0 && maximumPan >= 45 ? 55 : inwardDirection < 0 && minimumPan <= -45 ? -55 : 0;
+  if (dx === 0) throw new Error('Camera has no unsaturated direction for the reversible ground probe');
+  const readPose = () => page.locator('#stage').getAttribute('data-camera-pose');
+  const before = await readPose();
+  expect(before).not.toBeNull();
   await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: pointerId, ...point }] });
   await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: pointerId, x: point.x + dx, y: point.y }] });
-  expect(await changedFraction(page, before, await stageCapture(page)),
-    'a candidate ground contact pans the rendered camera synchronously').toBeGreaterThan(0.1);
+  await expect.poll(readPose, { intervals: [10, 20, 40], timeout: 1_000 })
+    .not.toBe(before);
+  await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: pointerId, x: point.x + dx / 2, y: point.y }] });
   await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: pointerId, x: point.x, y: point.y }] });
-  expect(await changedFraction(page, before, await stageCapture(page)),
-    'the reversible ground probe restores the camera before pinch').toBeLessThan(0.02);
+  await expect.poll(readPose, { intervals: [10, 20, 40], timeout: 1_000 }).toBe(before);
   await session.send('Input.dispatchTouchEvent', { type: 'touchCancel', touchPoints: [] });
 }
 
@@ -568,36 +587,6 @@ async function waitForSimulationOpportunity(page: Page): Promise<void> {
     .toBeGreaterThan(frameBaseline);
 }
 
-async function stageCapture(page: Page): Promise<string> {
-  const bounds = await page.locator('#stage').boundingBox();
-  expect(bounds).not.toBeNull();
-  return (await page.screenshot({ clip: bounds!, scale: 'css' })).toString('base64');
-}
-
-/** Fraction of pixels whose colour moved by more than 24 in any channel between two stage captures. */
-async function changedFraction(page: Page, a: string, b: string): Promise<number> {
-  return page.evaluate(async ([first, second]) => {
-    const read = async (encoded: string) => {
-      const image = new Image();
-      image.src = `data:image/png;base64,${encoded}`;
-      await image.decode();
-      const canvas = document.createElement('canvas');
-      canvas.width = image.naturalWidth;
-      canvas.height = image.naturalHeight;
-      const context = canvas.getContext('2d', { willReadFrequently: true })!;
-      context.drawImage(image, 0, 0);
-      return context.getImageData(0, 0, canvas.width, canvas.height).data;
-    };
-    const [x, y] = await Promise.all([read(first), read(second)]);
-    let changed = 0;
-    for (let index = 0; index < x.length; index += 4) {
-      if (Math.max(Math.abs(x[index]! - y[index]!), Math.abs(x[index + 1]! - y[index + 1]!),
-        Math.abs(x[index + 2]! - y[index + 2]!)) > 24) changed += 1;
-    }
-    return changed / (x.length / 4);
-  }, [a, b] as const);
-}
-
 async function stageSignature(page: Page): Promise<string> {
   const bounds = await page.locator('#stage').boundingBox();
   expect(bounds).not.toBeNull();
@@ -776,8 +765,8 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   }
   const stampForZoom = await readStamp(page, 'bubble-berry', camera);
   if (mobile) {
-    await probeGroundByReversiblePan(page, session!, groundPair[0], 7);
-    await probeGroundByReversiblePan(page, session!, groundPair[1], 8);
+    await probeGroundByReversiblePan(page, session!, groundPair[0], 7, camera);
+    await probeGroundByReversiblePan(page, session!, groundPair[1], 8, camera);
   }
   const cameraBeforeZoom = await stageSignature(page);
   if (mobile) {
@@ -853,10 +842,10 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
   });
   const { mobile, plots } = await openGame(page, info.project.name);
   await attachGardenCapture(page, info, `${info.project.name}-before-planting.png`);
-  const speciesAtPlot = ['sunny-sprout', 'bubble-berry', 'twistroot', 'bubble-berry', 'bubble-berry', 'twistroot'] as const;
+  const speciesAtPlot = ['sunny-sprout', 'sunny-sprout', 'twistroot', 'sunny-sprout', 'sunny-sprout', 'bubble-berry'] as const;
   for (const [index, plot] of plots.entries()) await plant(page, speciesAtPlot[index]!, plot, mobile);
-  await waitForCoins(page, 20);
-  await advanceGameClock(page, 25_100);
+  await waitForCoins(page, 28);
+  await advanceGameClock(page, 30_100);
   const stamps = [];
   for (const [plotId, speciesId] of speciesAtPlot.entries()) {
     await expect.poll(async () => {
@@ -873,6 +862,20 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
     const speciesId = speciesAtPlot[plotId]!;
     expect(stamp.box.width, `ripe ${speciesId} stamp at plot ${plotId}`).toBeGreaterThanOrEqual(26);
   }
+  const twistrootMutations = () => page.evaluate(() => new Promise<string[]>((resolve, reject) => {
+    const request = indexedDB.open('mutation-garden', 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const read = database.transaction('saves', 'readonly').objectStore('saves').get('slot-0');
+      read.onerror = () => { database.close(); reject(read.error); };
+      read.onsuccess = () => {
+        database.close();
+        resolve(read.result?.state?.plots?.find((plot: { id: string }) => plot.id === 'plot-2')?.plant?.mutations ?? []);
+      };
+    };
+  }));
+  await expect.poll(twistrootMutations).toContain('golden');
   if (info.project.name === 'mobile-portrait') {
     await attachGardenCapture(page, info, 'mobile-six-ripe-grayscale.png', true);
   }

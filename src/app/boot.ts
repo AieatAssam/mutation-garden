@@ -1,14 +1,15 @@
 // Boot: wires the sim loop to rendering, input, UI rewards and sound.
 import { createRenderer } from '../render/renderer';
 import { palette } from '../render/palette';
-import { createInitialState, getSnapshot, SPECIES, step } from '../sim';
+import { createInitialState, getSnapshot, MUTATIONS, SPECIES, step } from '../sim';
 import type { Command, GardenSnapshot, GardenState, SimEvent, SpeciesId } from '../sim';
 import { chooseBackend, createSaveStore, DEFAULT_SETTINGS, StaleSaveError, type Settings } from '../save/store';
-import { hintFor } from './hints';
+import { hintFor, mutationOpportunitiesFor } from './hints';
 import { createPointerInput } from '../input/pointer';
 import { createGardenUI } from '../ui/garden-ui';
 import { createRewardLayer } from '../ui/rewards';
 import { createMutationReveal } from '../ui/mutation-reveal';
+import { createNoticeQueue, readingTimeMs } from '../ui/notice-queue';
 import { createSfx } from '../audio/sfx';
 import { createPageLifecycle } from './lifecycle';
 import { createFixedStepLoop } from './loop';
@@ -55,6 +56,21 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   const gardenUI = createGardenUI(uiRoot, {
     species: SPECIES
       .map(({ id, name, seedCost, unlockLevel }) => ({ id, name, cost: seedCost, unlockLevel, color: palette.plants[id].fruit[1] })),
+    journalTraits: [
+      { id: 'giant', name: 'Giant', multiplier: MUTATIONS.giant.value, naturalChance: MUTATIONS.giant.naturalChance,
+        rule: 'Water twice while the plant sprouts and grows.' },
+      { id: 'golden', name: 'Golden', multiplier: MUTATIONS.golden.value, naturalChance: MUTATIONS.golden.naturalChance,
+        rule: 'Keep two Sunny Sprout neighbours beside a growing plant.' },
+      { id: 'glowing', name: 'Glowing', multiplier: MUTATIONS.glowing.value, naturalChance: MUTATIONS.glowing.naturalChance,
+        rule: 'Keep a Puffcap beside a growing plant.', hintLevel: 4, prerequisite: 'Unlock Puffcap at Level 4 for the guaranteed recipe.' },
+      { id: 'crystal', name: 'Crystal', multiplier: MUTATIONS.crystal.value, naturalChance: MUTATIONS.crystal.naturalChance,
+        ruleOdds: '30% when the rule holds · Guaranteed after 40 qualifying Matures without Crystal.',
+        rule: 'Harvest Glowing fruit from plot 0 or 2, then replant there.', prerequisites: ['glowing'],
+        prerequisite: 'Find Glowing first to reveal the pond-side recipe.' },
+      { id: 'rainbow', name: 'Rainbow', multiplier: MUTATIONS.rainbow.value, naturalChance: MUTATIONS.rainbow.naturalChance,
+        rule: 'Harvest Golden, Glowing and Crystal together, then replant one of those plots.',
+        prerequisites: ['golden', 'glowing', 'crystal'], prerequisite: 'Find Golden, Glowing and Crystal first.' },
+    ],
     selectedId: selectedSpeciesId,
     coins,
     onSelect: (speciesId) => {
@@ -64,23 +80,19 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     onToggleSound: () => changeSettings({ ...settings, sound: !settings.sound }),
     onToggleMusic: () => changeSettings({ ...settings, music: !settings.music }),
     onHarvestAll: () => harvestAll(),
+    onSell: () => uiCommand({ type: 'StartSelling' }),
     onBuy: (item) => uiCommand({ type: 'Buy', item }),
     onReset: () => {
       if (!window.confirm('Start over? Your garden, coins and discoveries will be lost.')) return;
       void resetGarden();
     },
     onWaterAll: () => uiCommand({ type: 'WaterAll' }),
+    onDismissHint: () => { if (!notices.current?.persistent) notices.close(); },
   });
   let harvestAll = () => {};
   let settings: Settings = DEFAULT_SETTINGS;
   let notice = '';
   let noticeTimer = 0;
-  /** Shows a notice in the HUD; it clears after `ms` (0 keeps it). */
-  const showNotice = (text: string, ms = 6_000) => {
-    notice = text;
-    clearTimeout(noticeTimer);
-    if (ms > 0) noticeTimer = setTimeout(() => { notice = ''; }, ms) as unknown as number;
-  };
   // Input waits for the save to load, so a tap made while IndexedDB opens is not replaced by restore().
   let loadSettled = false;
   let reducedMotion = false;
@@ -100,7 +112,24 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       ripeCount: snapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').length,
       owned: snapshot.owned ?? [],
       fertiliser: snapshot.fertiliser ?? 0,
+      crateCount: snapshot.crateCount ?? 0,
+      crateCapacity: snapshot.crateCapacity ?? 12,
+      selling: snapshot.selling ?? false,
+      discoveries: snapshot.discoveries ?? [],
+      naturalChanceBonus: snapshot.owned?.includes('lucky-charm') ? 0.03 : 0,
+      opportunities: mutationOpportunitiesFor(snapshot),
+      ...(snapshot.order ? { order: snapshot.order } : {}),
     });
+  };
+  const notices = createNoticeQueue((current) => {
+    clearTimeout(noticeTimer);
+    notice = current?.text ?? '';
+    refreshUI();
+    if (current && !current.persistent) noticeTimer = setTimeout(() => notices.close(), readingTimeMs(current.text)) as unknown as number;
+  });
+  const showNotice = (text: string, ms?: number) => {
+    if (!text) { notices.resolve(notice); return; }
+    notices.push({ text, persistent: ms === 0 || text.startsWith('Crate full.') });
   };
   let changeSettings: (next: Settings) => void = (next) => { settings = next; };
 
@@ -132,6 +161,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     reducedMotion = motion.matches;
     const rewards = createRewardLayer(uiRoot, {
       projectPlot: r.projectPlot,
+      projectStall: r.projectStall,
       coinTarget: () => uiRoot.querySelector<HTMLElement>('.garden-ui__coins'),
     });
     const mutationReveal = createMutationReveal(uiRoot, r.projectPlot);
@@ -148,6 +178,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       onRender: (frame) => {
         latestSnapshot = frame.current;
+        if ((frame.current.crateCount ?? 0) < (frame.current.crateCapacity ?? 12)) notices.resolve('Crate full. Sell fruit at the stall to make room.');
         coins = frame.current.coins;
         reducedMotion = motion.matches;
         refreshUI();
@@ -161,7 +192,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
             gardenUI.levelUp(event.level, names, motion.matches);
           }
           if (event.type === 'Harvested') gardenUI.hideAway();
+          if (event.type === 'OrderCompleted') showNotice(`Order complete. +${event.coins} coins, +${event.xp} XP.`);
           if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
+          if (event.type === 'CommandRejected' && event.reason === 'crate-full') {
+            gardenUI.crateFull(motion.matches);
+            showNotice('Crate full. Sell fruit at the stall to make room.', 0);
+          }
         }
         r.onEvents(events, motion.matches);
         if (!motion.matches && events.some((event) => event.type === 'HarvestCompleted' && event.count >= 3)) r.nudge?.();
@@ -171,7 +207,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           .sort((a, b) => Number(b.mutations.includes('giant')) - Number(a.mutations.includes('giant')))) {
           if (event.firstDiscovery) cancelActiveGesture();
           mutationReveal.show(event, motion.matches);
-          sfx.mutation(event.firstDiscovery);
+          if (event.firstDiscovery && !motion.matches) {
+            uiRoot.querySelector('.garden-ui__journal')?.animate([
+              { transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' },
+            ], { duration: 420 });
+          }
+          sfx.mutation(event.mutations, event.firstDiscovery);
           if (event.firstDiscovery && !motion.matches && 'vibrate' in navigator) navigator.vibrate([20, 40, 20]);
         }
         if (!motion.matches && 'vibrate' in navigator) {
@@ -187,6 +228,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           return;
         case 'PanCamera':
           r.pan(intent.deltaXCss, intent.deltaYCss);
+          return;
+        case 'Sell':
+          act({ type: 'StartSelling' });
           return;
         case 'ActivatePlot': {
           const command = commandForPlotActivation(latestSnapshot, intent.plotId, selectedSpeciesId);
@@ -286,7 +330,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         });
       };
       scheduleSave = (events) => {
-        if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered')) return;
+        if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered' || type === 'FruitSold'
+          || type === 'Mutated' || type === 'Bought' || type === 'OrderCompleted')) return;
         clearTimeout(pending);
         pending = setTimeout(saveNow, 800) as unknown as number;
       };

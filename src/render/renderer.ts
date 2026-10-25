@@ -5,10 +5,13 @@ import {
   ColorManagement,
   DirectionalLight,
   Group,
+  Mesh,
+  MeshBasicMaterial,
   HemisphereLight,
   NoToneMapping,
   Quaternion,
   Scene,
+  RingGeometry,
   SRGBColorSpace,
   Vector2,
   Vector3,
@@ -50,6 +53,7 @@ export interface Renderer {
   onEvents(events: readonly SimEvent[], reducedMotion: boolean): void;
   /** Screen point (CSS px, viewport) just above a plot's plant, for UI rewards. */
   projectPlot(plotId: PlotId): { x: number; y: number } | null;
+  projectStall(): { x: number; y: number } | null;
   shiver(plotId: PlotId, durationMs: number): void;
   nudge?(): void;
   pick(clientX: number, clientY: number): PickResult;
@@ -127,7 +131,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     console.error('Garden model failed to load', error);
   });
   scene.add(garden);
-  const plants = createPlantReconciler(garden.plots, materials, { waitForModels: true });
+  const plants = createPlantReconciler(garden.plots, materials, { waitForModels: true, camera });
   let plantModels: PlantModels | null = null;
   const plantsLoaded = loadPlantModels(PLANT_MODEL_URL).then((models) => {
     if (disposed) {
@@ -203,7 +207,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     },
     getPlantTop: plants.getTop,
   });
-  const picker = createGardenPicker(canvas, camera, garden, status.getStampPickDescriptors);
+  const picker = createGardenPicker(canvas, camera, garden, status.getStampPickDescriptors,
+    () => garden.getObjectByName('stall') ?? null);
   let previousSnapshot: GardenSnapshot | null = null;
   let currentSnapshot: GardenSnapshot | null = null;
   let snapshotAlpha = 1;
@@ -222,11 +227,31 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const pulse = createPlotPulse();
   const flights = createHarvestFlights(() => plantModels, materials);
   scene.add(flights.root);
+  const stallRingMaterial = new MeshBasicMaterial({ color: palette.ui.coin.face, transparent: true, depthWrite: false });
+  const saleProgress = { value: 0 };
+  stallRingMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.saleProgress = saleProgress;
+    shader.vertexShader = shader.vertexShader.replace('#include <common>', '#include <common>\nvarying vec2 saleUv;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nsaleUv = uv - vec2(0.5);');
+    shader.fragmentShader = shader.fragmentShader.replace('#include <common>', '#include <common>\nuniform float saleProgress;\nvarying vec2 saleUv;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nfloat saleAngle = mod(atan(saleUv.x, saleUv.y) + 6.2831853, 6.2831853) / 6.2831853;\nif (saleAngle > saleProgress) discard;');
+  };
+  stallRingMaterial.customProgramCacheKey = () => 'stall-sale-progress-v1';
+  const stallRing = new Mesh(new RingGeometry(0.17, 0.23, 48), stallRingMaterial);
+  stallRing.name = 'stall-sale-progress';
+  stallRing.renderOrder = 4;
+  stallRing.visible = false;
+  scene.add(stallRing);
   const effectPoint = new Vector3();
 
   function playEvents(events: readonly SimEvent[], reducedMotion: boolean): void {
     const now = clock();
     for (const event of events) {
+      if (event.type === 'FruitSold') {
+        const stall = scenery?.stall;
+        if (stall) flights.sell(event.speciesId, new Vector3(2.75, 1.05, 0.75), stall.localToWorld(new Vector3(0, 0.69, 0.24)), now, reducedMotion);
+        continue;
+      }
       if (!('plotId' in event) || event.type === 'CommandRejected') continue;
       const anchor = plotsById.get(event.plotId);
       if (!anchor) continue;
@@ -272,7 +297,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
             const trait = event.mutations[0];
             const colors = trait === 'giant' ? [palette.ui.coin.emboss, palette.ink['paper-white']]
               : trait === 'golden' ? palette.plants[event.speciesId].fruit.slice(0, 2)
-                : [palette.environment.water[0], palette.environment.water[1]];
+                : trait === 'crystal' ? [palette.mutations.crystal.body, palette.mutations.crystal.edge]
+                  : trait === 'rainbow' ? palette.mutations.rainbow
+                    : [palette.environment.water[0], palette.environment.water[1]];
             particles.burst({ origin: top, count: event.firstDiscovery ? 16 : 7, colors,
               speed: 0.8, up: 1.1, gravity: 2, lifeMs: event.firstDiscovery ? 1000 : 500, size: 0.1 }, now, reducedMotion);
           }
@@ -285,7 +312,19 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   }
 
   function draw(): void {
+    // The production e2e probe opts in; normal play avoids per-frame DOM writes.
+    if ((window as Window & { __gardenTestCameraProbe?: boolean }).__gardenTestCameraProbe) {
+      canvas.dataset.cameraPose = [...camera.position.toArray(), camera.zoom].map((value) => value.toFixed(6)).join(',');
+    }
     const now = clock();
+    const snapshot = currentSnapshot;
+    const stall = scenery?.stall;
+    stallRing.visible = Boolean(stall && snapshot?.selling && snapshot.nextSaleTime !== null);
+    if (stall && snapshot && stallRing.visible) {
+      stallRing.position.copy(stall.localToWorld(new Vector3(0, 0.92, 0.24)));
+      stallRing.quaternion.copy(camera.quaternion);
+      saleProgress.value = Math.max(0, Math.min(1, 1 - ((snapshot.nextSaleTime ?? snapshot.nowMs) - snapshot.nowMs) / 1_200));
+    }
     // Until the drop starts the island waits far above the view (still compiled, just off screen).
     garden.position.y = islandLanded || currentReducedMotion ? 0
       : introStartMs === -Infinity ? ISLAND_WAIT_Y : islandDropY(now - introStartMs);
@@ -398,6 +437,15 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       camera.updateMatrixWorld(true);
       const point = anchor.getWorldPosition(new Vector3()).setY(anchor.position.y + 1.2).project(camera);
       return { x: rect.left + (point.x + 1) * rect.width / 2, y: rect.top + (1 - point.y) * rect.height / 2 };
+    },
+    projectStall() {
+      const stall = scenery?.stall;
+      if (!stall) return null;
+      const point = stall.localToWorld(new Vector3(0, 0.69, 0.24)).project(camera);
+      const rect = canvas.getBoundingClientRect();
+      return point.z >= -1 && point.z <= 1
+        ? { x: (point.x + 1) * rect.width / 2 + rect.left, y: (1 - point.y) * rect.height / 2 + rect.top }
+        : null;
     },
     shiver(plotId, durationMs) {
       if (!disposed && !currentReducedMotion) plants.shiver(plotId, currentSnapshot?.nowMs ?? 0, durationMs);

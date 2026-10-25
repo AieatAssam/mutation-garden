@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SPECIES } from '../content/species';
-import { createInitialState, step, type Command, type GardenState, type SpeciesId } from '../index';
+import { createInitialState, step, xpForLevel, type Command, type GardenState, type SpeciesId } from '../index';
 
 const startTime = 10_000;
 const seed = 0x12345678;
@@ -30,7 +30,7 @@ describe('Plant commands', () => {
   it.each(SPECIES)(
     'plants %s and debits its exact seed cost',
     (species) => {
-      const initial = createInitialState(seed, startTime, { xp: 100 });
+      const initial = createInitialState(seed, startTime, { xp: xpForLevel(species.unlockLevel) });
       const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: species.id }], startTime + 250);
 
       expect(result.state.coins).toBe(initial.coins - species.seedCost);
@@ -43,7 +43,7 @@ describe('Plant commands', () => {
   );
 
   it('allows spending exactly the available coins', () => {
-    const initial = withCoins(createInitialState(seed, startTime, { xp: 100 }), 3);
+    const initial = withCoins(createInitialState(seed, startTime, { xp: 500 }), 3);
     const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' }], startTime);
 
     expect(result.state.coins).toBe(0);
@@ -75,7 +75,7 @@ describe('Plant commands', () => {
   });
 
   it('rejects a seed that costs more than the available coins', () => {
-    const state = withCoins(createInitialState(seed, startTime, { xp: 100 }), 2);
+    const state = withCoins(createInitialState(seed, startTime, { xp: 500 }), 2);
     expectRejectedWithoutPlanting(state, {
       type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry',
     }, 'insufficient-coins');
@@ -97,7 +97,7 @@ describe('Plant commands', () => {
   });
 
   it('spends commands in order, allowing later cheaper seeds after an unaffordable command', () => {
-    const state = withCoins(createInitialState(seed, startTime, { xp: 100 }), 4);
+    const state = withCoins(createInitialState(seed, startTime, { xp: 900 }), 4);
     const result = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },

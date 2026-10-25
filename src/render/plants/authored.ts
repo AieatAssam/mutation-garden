@@ -1,4 +1,4 @@
-import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, Group, Matrix3, Matrix4, Mesh, MeshBasicMaterial, MeshStandardMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
+import { Box3, BufferAttribute, BufferGeometry, CircleGeometry, Color, DoubleSide, Group, Matrix3, Matrix4, Mesh, MeshBasicMaterial, MeshPhysicalMaterial, MeshStandardMaterial, MeshToonMaterial, Object3D, Vector3 } from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import type { SpeciesId } from '../../sim';
 import type { MaterialLibrary } from '../materials';
@@ -185,13 +185,65 @@ export function createAuthoredRig(
   const fruitMaterial = base.clone() as MeshToonMaterial;
   const goldenMaterial = new MeshStandardMaterial({ color: palette.ui.coin.face, metalness: 0.82, roughness: 0.22 });
   const glowingMaterial = new MeshStandardMaterial({ color: palette.mutations.glowing.core, emissive: palette.mutations.glowing.emissive, emissiveIntensity: 0.8, roughness: 0.8 });
+  const crystalMaterial = new MeshPhysicalMaterial({ color: palette.mutations.crystal.body, transmission: 0.92, thickness: 0.6,
+    ior: 1.45, roughness: 0.04, attenuationColor: new Color(palette.mutations.crystal.attenuation), attenuationDistance: 0.8, flatShading: true });
+  const crystalFresnel = new MeshStandardMaterial({ color: palette.mutations.crystal.deep, transparent: true, opacity: 0.72, metalness: 0.35, roughness: 0.22, side: DoubleSide });
+  crystalFresnel.onBeforeCompile = (shader) => {
+    shader.vertexShader = `varying vec3 vCrystalNormal;\n${shader.vertexShader}`.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvCrystalNormal = normalize(normalMatrix * objectNormal);');
+    shader.fragmentShader = `varying vec3 vCrystalNormal;\n${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\nfloat crystalEdge = pow(1.0 - abs(normalize(vCrystalNormal).z), 2.0); diffuseColor.a = mix(0.55, 0.95, crystalEdge);');
+  };
+  crystalFresnel.customProgramCacheKey = () => 'crystal-fresnel-fallback-v1';
+  const traitIds = ['crystal', 'giant', 'glowing', 'golden', 'rainbow'] as const;
+  const traitColor = (trait: typeof traitIds[number]) => trait === 'giant' ? palette.mutations.giant.tint
+    : trait === 'golden' ? palette.mutations.golden.base : trait === 'glowing' ? palette.mutations.glowing.core
+      : trait === 'crystal' ? palette.mutations.crystal.body : palette.mutations.rainbow[0];
+  const rainbowTimeUniforms: { value: number }[] = [];
+  const goldenGleamUniforms: { value: number }[] = [];
+  const glowingMaterials: MeshStandardMaterial[] = [glowingMaterial];
+  const rainbowMaterial = new MeshPhysicalMaterial({ color: palette.ink['paper-white'], metalness: 0.3, roughness: 0.18, iridescence: 0.5,
+    iridescenceIOR: 1.3, iridescenceThicknessRange: [120, 800] });
+  rainbowMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.rainbowBands = { value: palette.mutations.rainbow.map((color) => new Color(color)) };
+    shader.uniforms.rainbowTime = { value: 0 };
+    rainbowTimeUniforms.push(shader.uniforms.rainbowTime as { value: number });
+    shader.vertexShader = `varying float vRainbowHeight;\n${shader.vertexShader}`.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvRainbowHeight = normalize(objectNormal).y;');
+    shader.fragmentShader = `uniform vec3 rainbowBands[6];\nuniform float rainbowTime;\nvarying float vRainbowHeight;\n${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\nfloat band = mod(floor((1.0 - vRainbowHeight) * 3.0 + rainbowTime * 6.0), 6.0); diffuseColor.rgb = mix(diffuseColor.rgb, rainbowBands[int(band)], 0.9);');
+  };
+  rainbowMaterial.customProgramCacheKey = () => 'rainbow-bands-v1';
   goldenMaterial.onBeforeCompile = (shader) => {
     shader.uniforms.uGleam = { value: 0 };
-    goldenMaterial.userData.gleam = shader.uniforms.uGleam;
+    goldenGleamUniforms.push(shader.uniforms.uGleam as { value: number });
     shader.vertexShader = `varying vec3 vGoldenPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvGoldenPosition = transformed;');
     shader.fragmentShader = `uniform float uGleam;\nvarying vec3 vGoldenPosition;\n${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\nfloat gleam = 1.0 - smoothstep(0.0, 0.12, abs(vGoldenPosition.x - (uGleam * 2.0 - 1.0)));\ndiffuseColor.rgb += vec3(1.0) * gleam * 0.45;');
   };
   goldenMaterial.customProgramCacheKey = () => 'golden-fruit-gleam-v1';
+  const pairMaterials = new Map<string, MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial>();
+  const pairFallbackMaterials = new Map<string, MeshStandardMaterial>();
+  const pairBaseTraits = new Map<string, typeof traitIds[number]>();
+  const baseMaterials = { crystal: crystalMaterial, giant: fruitMaterial, glowing: glowingMaterial, golden: goldenMaterial, rainbow: rainbowMaterial };
+  const rank = { giant: 0, glowing: 1, golden: 2, crystal: 3, rainbow: 4 };
+  for (const [index, first] of traitIds.entries()) for (const second of traitIds.slice(index + 1)) {
+    const [baseTrait, accentTrait] = rank[first] > rank[second] ? [first, second] : [second, first];
+    const key = `${first}+${second}`;
+    const createPairMaterial = (baseMaterial: MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial, suffix = '') => {
+      const material = baseMaterial.clone();
+      const baseCompile = baseMaterial.onBeforeCompile;
+      const baseProgramKey = baseMaterial.customProgramCacheKey();
+      material.onBeforeCompile = (shader, renderer) => {
+        baseCompile.call(material, shader, renderer);
+        shader.uniforms.pairAccent = { value: new Color(traitColor(accentTrait)) };
+        shader.vertexShader = `varying vec3 vPairPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvPairPosition = transformed;');
+        shader.fragmentShader = `uniform vec3 pairAccent;\nvarying vec3 vPairPosition;\n${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\nfloat pairBand = step(0.5, fract((vPairPosition.x + vPairPosition.y * 0.37) * 5.0)); diffuseColor.rgb = mix(diffuseColor.rgb, pairAccent, pairBand * 0.42);');
+      };
+      material.customProgramCacheKey = () => `${baseProgramKey}-trait-pair-${key}${suffix}-v1`;
+      return material;
+    };
+    const material = createPairMaterial(baseMaterials[baseTrait]);
+    if (baseTrait === 'crystal') pairFallbackMaterials.set(key, createPairMaterial(crystalFresnel, '-fresnel') as MeshStandardMaterial);
+    if (baseTrait === 'glowing') glowingMaterials.push(material as MeshStandardMaterial);
+    pairMaterials.set(key, material);
+    pairBaseTraits.set(key, baseTrait);
+  }
   fruitMaterial.onBeforeCompile = base.onBeforeCompile;
   fruitMaterial.customProgramCacheKey = base.customProgramCacheKey;
   const unripe = new Color(fruitRamp[3]);
@@ -243,14 +295,21 @@ export function createAuthoredRig(
   let disposed = false;
   return {
     root,
-    update(plant, presentationNowMs, reducedMotion) {
+    update(plant, presentationNowMs, reducedMotion, crystalTransmissionSlots = Infinity) {
       const progress = clamp01(plant.progress);
       const hasGiant = plant.mutations?.includes('giant') ?? false;
       const golden = plant.mutations?.includes('golden') ?? false;
       const glowing = plant.mutations?.includes('glowing') ?? false;
-      glowingMaterial.emissiveIntensity = glowing ? (reducedMotion ? 0.8 : 0.55 + 0.3 * Math.sin(presentationNowMs / 350)) : 0;
-      const gleam = goldenMaterial.userData.gleam as { value: number } | undefined;
-      if (gleam) gleam.value = reducedMotion ? 0.5 : ((presentationNowMs % 3000) + 3000) % 3000 / 3000;
+      const crystal = plant.mutations?.includes('crystal') ?? false;
+      const rainbow = plant.mutations?.includes('rainbow') ?? false;
+      const mutations = plant.mutations ?? [];
+      const pairKey = mutations.length === 2 ? [...mutations].sort().join('+') : '';
+      const pair = pairMaterials.get(pairKey);
+      const pairBase = pairBaseTraits.get(pairKey);
+      for (const material of glowingMaterials) material.emissiveIntensity = glowing ? (reducedMotion ? 0.8 : 0.55 + 0.3 * Math.sin(presentationNowMs / 350)) : 0;
+      const gleam = reducedMotion ? 0.5 : ((presentationNowMs % 3000) + 3000) % 3000 / 3000;
+      for (const uniform of goldenGleamUniforms) uniform.value = gleam;
+      for (const uniform of rainbowTimeUniforms) uniform.value = reducedMotion ? 0 : (((presentationNowMs % 3000) + 3000) % 3000) / 3000;
       if (giant === null) giant = hasGiant;
       else if (giant !== hasGiant) {
         giantFrom = hasGiant ? 1 : 1.8;
@@ -269,8 +328,8 @@ export function createAuthoredRig(
         entry.growth = partGrowth(entry.part, progress);
         entry.scale = entry.part.fly ? yieldScale : 1;
       }
+      let crystalTransmissionUsed = 0;
       for (const { meshes, part, growth, scale: partScale } of animated) {
-        if (part.ripe) meshes[0]!.material = golden ? goldenMaterial : glowing ? glowingMaterial : fruitMaterial;
         // Attached parts ride their parent's tip: offset by how far that tip is from its grown place.
         ride.set(0, 0, 0);
         const parent = part.attach ? byName.get(part.attach) : undefined;
@@ -279,6 +338,16 @@ export function createAuthoredRig(
             .sub(parent.part.grownTop);
         }
         const size = (part.morph ? 1 : growth * (ripe && part.fly ? RIPE_SWELL : 1)) * partScale;
+        const fruitVisible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0);
+        const transmitsCrystal = crystal && !rainbow && (!pair || pairBase === 'crystal');
+        const transmitCrystal = transmitsCrystal && part.ripe && fruitVisible && crystalTransmissionUsed < crystalTransmissionSlots;
+        if (transmitCrystal) crystalTransmissionUsed += 1;
+        if (part.ripe) {
+          meshes[0]!.material = pair ? pairBase === 'crystal' && !transmitCrystal ? pairFallbackMaterials.get(pairKey)! : pair
+            : (rainbow ? rainbowMaterial : crystal ? transmitCrystal ? crystalMaterial : crystalFresnel : golden ? goldenMaterial : glowing ? glowingMaterial : fruitMaterial);
+          if (pairBase === 'giant') (meshes[0]!.material as MeshToonMaterial).color.copy(fruitMaterial.color);
+          if (pairBase === 'glowing') (meshes[0]!.material as MeshStandardMaterial).emissiveIntensity = glowingMaterial.emissiveIntensity;
+        }
         // Leaves flutter on their pivot, faster and smaller than the whole-plant lean (motion.md 2, Wind).
         const flutter = !reducedMotion && part.name.includes('_leaf')
           ? 0.05 * Math.sin(((presentationNowMs + phaseOffsetMs) / 400) * Math.PI * 2) * (0.5 + 0.5 * Math.abs(wind))
@@ -287,7 +356,7 @@ export function createAuthoredRig(
           mesh.rotation.z = flutter;
           if (part.morph) mesh.morphTargetInfluences![0] = growth;
           mesh.visible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0)
-            && !(golden && part.ripe && index === 1);
+            && !((golden || crystal || rainbow) && part.ripe && index === 1);
           mesh.scale.setScalar(Math.max(0.001, size));
           mesh.position.copy(part.origin).add(ride);
         }
@@ -337,6 +406,7 @@ export function createAuthoredRig(
       const size = 0.35 + 0.65 * smooth(progress);
       const lift = 1 - 0.25 * Math.min(1, hop.y / 0.05);
       blob.scale.set(0.95 * size * lift, 0.95 * size * lift, 1);
+      return crystalTransmissionUsed;
     },
     shiver(presentationNowMs, durationMs) {
       shiverStartMs = presentationNowMs;
@@ -367,6 +437,9 @@ export function createAuthoredRig(
       fruitMaterial.dispose();
       goldenMaterial.dispose();
       glowingMaterial.dispose();
+      crystalMaterial.dispose(); crystalFresnel.dispose(); rainbowMaterial.dispose();
+      for (const material of pairMaterials.values()) material.dispose();
+      for (const material of pairFallbackMaterials.values()) material.dispose();
       wetGeometry.dispose();
       wetMaterial.dispose();
       root.clear();

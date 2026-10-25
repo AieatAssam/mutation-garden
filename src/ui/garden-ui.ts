@@ -1,6 +1,7 @@
-import type { SpeciesId } from '../sim';
-import type { ShopItemId } from '../sim';
+import { SHOP_PRICES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
 import './garden-ui.css';
+import { readingTimeMs } from './notice-queue';
+import { createDiscoveryJournal, type JournalOrder, type JournalTraitDescriptor } from './discovery-journal';
 
 export interface SeedDescriptor {
   readonly id: SpeciesId;
@@ -13,16 +14,19 @@ export interface SeedDescriptor {
 
 export interface GardenUIOptions {
   readonly species: readonly SeedDescriptor[];
+  readonly journalTraits?: readonly JournalTraitDescriptor[];
   readonly selectedId: SpeciesId;
   readonly coins: number;
   readonly onSelect: (speciesId: SpeciesId) => void;
   readonly onToggleSound?: () => void;
   readonly onToggleMusic?: () => void;
   readonly onHarvestAll?: () => void;
+  readonly onSell?: () => void;
   readonly onBuy?: (item: ShopItemId) => void;
   /** Wipes the save after the player confirms; the app reloads into a new garden. */
   readonly onReset?: () => void;
   readonly onWaterAll?: () => void;
+  readonly onDismissHint?: () => void;
 }
 
 export interface GardenUIUpdate {
@@ -40,6 +44,13 @@ export interface GardenUIUpdate {
   readonly ripeCount?: number;
   readonly owned?: readonly ShopItemId[];
   readonly fertiliser?: number;
+  readonly crateCount?: number;
+  readonly crateCapacity?: number;
+  readonly selling?: boolean;
+  readonly discoveries?: readonly string[];
+  readonly naturalChanceBonus?: number;
+  readonly opportunities?: Partial<Record<TraitId, readonly string[]>>;
+  readonly order?: JournalOrder;
 }
 
 export interface GardenUI {
@@ -51,6 +62,7 @@ export interface GardenUI {
   hideAway(): void;
   /** Nudges the coin chip when a seed costs more than the player has. */
   noCoins(reducedMotion: boolean): void;
+  crateFull(reducedMotion: boolean): void;
   dispose(): void;
 }
 
@@ -101,6 +113,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   coinToken.append(coinMark);
   const coinAmount = document.createElement('span');
   coinAmount.className = 'garden-ui__coin-amount';
+  const crateAmount = document.createElement('span');
+  crateAmount.className = 'garden-ui__crate-amount';
+  crateAmount.setAttribute('role', 'status');
+  crateAmount.setAttribute('aria-label', 'Crate');
   coinStatus.append(coinToken, coinAmount);
 
   // Top card: level, progress and the current objective (brief section 8; prototype title card).
@@ -142,11 +158,11 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const close = document.createElement('button'); close.type = 'button'; close.className = 'garden-ui__shop-close'; close.textContent = 'Close';
   shopHead.append(close); sheet.append(shopHead);
   const shopItems: readonly { id: ShopItemId; title: string; desc: string; price: number; level: number }[] = [
-    { id: 'plot-6', title: 'Plot 7', desc: 'Grow the island west.', price: 40, level: 2 },
-    { id: 'plot-7', title: 'Plot 8', desc: 'Add another garden bed.', price: 120, level: 4 },
-    { id: 'big-can', title: 'Big can', desc: 'Tap once to water every growing plant.', price: 60, level: 3 },
-    { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: 25, level: 1 },
-    { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: 150, level: 5 },
+    { id: 'plot-6', title: 'Plot 7', desc: 'Grow the island west.', price: SHOP_PRICES['plot-6'], level: 3 },
+    { id: 'plot-7', title: 'Plot 8', desc: 'Add another garden bed.', price: SHOP_PRICES['plot-7'], level: 4 },
+    { id: 'big-can', title: 'Big can', desc: 'Tap once to water every growing plant.', price: SHOP_PRICES['big-can'], level: 3 },
+    { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: SHOP_PRICES.fertiliser, level: 1 },
+    { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: SHOP_PRICES['lucky-charm'], level: 5 },
   ];
   const shopRows = shopItems.map((item) => {
     const row = document.createElement('article'); row.className = 'garden-ui__shop-row';
@@ -158,7 +174,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const bigCan = document.createElement('button'); bigCan.type = 'button'; bigCan.className = 'garden-ui__water-all'; bigCan.textContent = 'Water all'; bigCan.hidden = true;
   bigCan.addEventListener('click', () => options.onWaterAll?.());
   close.addEventListener('click', () => { shop.hidden = true; });
-  shopButton.addEventListener('click', () => { shop.hidden = false; });
+  shopButton.addEventListener('click', () => { journal.close(); shop.hidden = false; });
   shop.addEventListener('click', (event) => { if (event.target === shop) shop.hidden = true; });
   const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'garden-ui__reset';
   reset.textContent = 'Start over';
@@ -171,12 +187,18 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   hint.className = 'garden-ui__hint';
   hint.setAttribute('role', 'status');
   hint.setAttribute('aria-live', 'polite');
+  hint.addEventListener('click', () => options.onDismissHint?.());
+  hint.style.pointerEvents = 'auto';
 
   const harvestAll = document.createElement('button');
   harvestAll.type = 'button';
   harvestAll.className = 'garden-ui__harvest-all';
   harvestAll.hidden = true;
   harvestAll.addEventListener('click', () => options.onHarvestAll?.());
+  const sell = document.createElement('button');
+  sell.type = 'button';
+  sell.className = 'garden-ui__sell';
+  sell.addEventListener('click', () => options.onSell?.());
 
   const seedTray = document.createElement('nav');
   seedTray.className = 'garden-ui__tray';
@@ -211,11 +233,17 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     return { species, button, detail: detailText, locked: null as boolean | null };
   });
   seedTray.prepend(trayLabel);
+  const journal = createDiscoveryJournal(overlay, {
+    species: options.species,
+    traits: options.journalTraits ?? [],
+    onOpen: () => { shop.hidden = true; },
+  });
 
   const stamp = document.createElement('div');
   stamp.className = 'garden-ui__stamp';
   stamp.setAttribute('role', 'status');
   stamp.hidden = true;
+  stamp.addEventListener('click', () => { clearTimeout(stampTimer); stamp.hidden = true; });
 
   const away = document.createElement('div');
   away.className = 'garden-ui__away';
@@ -226,16 +254,20 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   awayButton.className = 'garden-ui__away-button';
   awayButton.textContent = 'Harvest all';
   away.append(awayText, awayButton);
+  away.addEventListener('click', (event) => { if (event.target === away) away.hidden = true; });
   let onAwayHarvest: (() => void) | null = null;
   awayButton.addEventListener('click', () => {
     onAwayHarvest?.();
     away.hidden = true;
   });
 
-  overlay.append(coinStatus, levelBadge, toggles, hint, stamp, away, seedTray);
-  seedTray.append(harvestAll);
+  overlay.append(coinStatus, crateAmount, levelBadge, toggles, hint, stamp, away, seedTray);
+  seedTray.append(harvestAll, sell);
   // Main actions live in the bottom third (AGENTS.md): Shop is a tab on the seed tray.
-  seedTray.append(shopButton);
+  const trayTools = document.createElement('div');
+  trayTools.className = 'garden-ui__tray-tools';
+  trayTools.append(journal.button, shopButton);
+  seedTray.append(trayTools);
   container.append(overlay);
 
   // The counter rolls toward the authoritative value with an overshoot ease (motion.md 7).
@@ -277,6 +309,12 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     // Objectives fit one line; rare long notices (saves) wrap so nothing is cut off.
     hint.classList.toggle('is-long', (state.hint ?? '').length > 40);
     const ripe = state.ripeCount ?? 0;
+    const crateCount = state.crateCount ?? 0;
+    const crateCapacity = state.crateCapacity ?? 12;
+    crateAmount.textContent = `${crateCount >= crateCapacity ? '▣ ' : ''}${crateCount}/${crateCapacity}`;
+    sell.hidden = crateCount === 0 || !options.onSell;
+    sell.disabled = crateCount === 0;
+    sell.textContent = state.selling ? 'Selling' : 'Sell';
     harvestAll.hidden = ripe < 2 || !options.onHarvestAll;
     harvestAll.textContent = `Harvest all ${ripe}`;
     soundButton.setAttribute('aria-pressed', String(state.sound ?? true));
@@ -293,6 +331,13 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       action.disabled = (has && item.id !== 'fertiliser') || locked || !affordable;
       action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? `Level ${item.level}` : `Buy · ${item.price}`;
     }
+    journal.update({
+      discoveries: state.discoveries ?? [],
+      level,
+      ...(state.naturalChanceBonus === undefined ? {} : { naturalChanceBonus: state.naturalChanceBonus }),
+      ...(state.opportunities === undefined ? {} : { opportunities: state.opportunities }),
+      ...(state.order === undefined ? {} : { order: state.order }),
+    });
     for (const seed of seedButtons) {
       const selected = seed.species.id === state.selectedId;
       const locked = seed.species.unlockLevel > level;
@@ -338,7 +383,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
         }
       }
       clearTimeout(stampTimer);
-      stampTimer = window.setTimeout(() => { stamp.hidden = true; }, 2200);
+      stampTimer = window.setTimeout(() => { stamp.hidden = true; }, readingTimeMs(stamp.textContent ?? ''));
     },
     showAway(ripeCount, onHarvestAll) {
       awayText.textContent = `${ripeCount} ${ripeCount === 1 ? 'plant' : 'plants'} ripened while you were away.`;
@@ -350,6 +395,17 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       void coinStatus.offsetWidth;
       coinStatus.classList.add(reducedMotion ? 'is-short-still' : 'is-short');
     },
+    crateFull(reducedMotion) {
+      crateAmount.classList.remove('is-shaking');
+      if (reducedMotion) return;
+      void crateAmount.offsetWidth;
+      crateAmount.classList.add('is-shaking');
+      crateAmount.animate([
+        { transform: 'translateX(0)' }, { transform: 'translateX(-5px)', offset: 0.15 },
+        { transform: 'translateX(5px)', offset: 0.3 }, { transform: 'translateX(-4px)', offset: 0.5 },
+        { transform: 'translateX(2px)', offset: 0.75 }, { transform: 'translateX(0)' },
+      ], { duration: 300, easing: 'ease-out' }).onfinish = () => crateAmount.classList.remove('is-shaking');
+    },
     hideAway() {
       away.hidden = true;
     },
@@ -358,6 +414,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       disposed = true;
       if (rollFrame) cancelAnimationFrame(rollFrame);
       clearTimeout(stampTimer);
+      journal.dispose();
       overlay.remove();
     },
   };

@@ -3,7 +3,7 @@ import { createInitialState, getSnapshot, step, type GardenState } from '../inde
 
 const start = 10_000;
 const planted = (): GardenState =>
-  step(createInitialState(7, start, { xp: 100 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], start).state;
+  step(createInitialState(7, start, { xp: 900 }), [{ type: 'Plant', plotId: 'plot-0', seedId: 'twistroot' }], start).state;
 
 describe('Water commands', () => {
   it('cuts the remaining growth time by 30% once', () => {

@@ -36,10 +36,11 @@ export function plant(
 
   const roll = nextRandom(state.rngState);
   const mutationRoll = nextRandom(state.mutationRngState);
+  const rainbow = state.rainbowPlots.includes(plot.id);
   const plots = state.plots.slice();
   plots[plotIndex] = {
     ...plot,
-    plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value), mutationSeed: mutationRoll.value === 0 ? 0 : Math.floor(mutationRoll.value * 0x1_0000_0000), waterCount: 0, ...(state.fertiliser > 0 ? { fertilised: true, boostMs: Math.round(species.growthDurationMs * 0.4) } : {}) },
+    plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value), mutationSeed: mutationRoll.value === 0 ? 0 : Math.floor(mutationRoll.value * 0x1_0000_0000), waterCount: 0, ...(rainbow ? { rainbow: true } : {}), ...(state.fertiliser > 0 ? { fertilised: true, boostMs: Math.round(species.growthDurationMs * 0.4) } : {}) },
   };
 
   const nextState: GardenState = {
@@ -49,6 +50,7 @@ export function plant(
     mutationRngState: mutationRoll.nextState,
     plantCount: state.plantCount + 1,
     fertiliser: Math.max(0, state.fertiliser - 1),
+    rainbowPlots: rainbow ? state.rainbowPlots.filter((id) => id !== plot.id) : state.rainbowPlots,
     plots,
   };
   const event: SimEvent = {

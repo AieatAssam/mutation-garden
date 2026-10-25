@@ -118,10 +118,12 @@ def in_plot_zone(x, y, pad=0.12):
 
 
 hull_parts = {0.06: [], 0.035: []}
+stall_hull_parts = {0.06: [], 0.035: []}
+stall_root = None
 
 
 def outline(obj, thickness=0.035):
-    hull_parts[thickness].append(obj)
+    (stall_hull_parts if obj.get('stall_part') else hull_parts)[thickness].append(obj)
     return obj
 
 # ---------------------------------------------------------------- reset
@@ -287,6 +289,34 @@ for i, (fx, fy, path) in enumerate(((-0.1, 0.08, 'plants.sunny-sprout.fruit.1'),
                                     (0.02, -0.14, 'plants.sunny-sprout.fruit.2'))):
     outline(prim('uv_sphere', path, loc=(CX + fx, CY + fy, GROUND + 0.55), scale=(0.13, 0.13, 0.12),
                  segments=16, ring_count=10))
+
+# ---------------------------------------------------------------- market stall (kept separate for picking and fruit sales)
+
+stall_root = link(bpy.data.objects.new('stall', None))
+stall_root.location = (-2.55, 1.3, GROUND)
+stall_root.rotation_euler.z = math.atan2(0.89, -0.46)
+stall_root['keep'] = True
+
+def stall_box(material, size, loc, radius=0.025):
+    obj = rounded_box(material, size, loc, radius)
+    obj.parent = stall_root
+    obj['keep'] = True
+    obj['stall_part'] = True
+    outline(obj)
+    return obj
+
+
+# Counter, four slim awning stripes, and a sign facing the plots.
+stall_box('environment.stall.wood.1', (1.0, 0.42, 0.62), (0, 0, 0.36), 0.04)
+stall_box('environment.stall.wood.0', (1.08, 0.48, 0.08), (0, 0, 0.69), 0.03)
+for x in (-0.38, -0.13, 0.13, 0.38):
+    stall_box('environment.stall.wood.1', (0.055, 0.055, 1.25), (x, 0.08, 0.98), 0.02)
+    stall_box('environment.stall.awning.0' if x in (-0.38, 0.13) else 'environment.stall.awning.1',
+              (0.25, 0.62, 0.08), (x, 0, 1.64), 0.02)
+    stall_box('environment.stall.awning.0' if x in (-0.38, 0.13) else 'environment.stall.awning.1',
+              (0.25, 0.08, 0.18), (x, -0.27, 1.52), 0.02)
+stall_box('environment.stall.sign', (0.42, 0.07, 0.26), (0, -0.28, 1.28), 0.025)
+stall_box('environment.stall.wood.1', (0.48, 0.035, 0.035), (0, -0.33, 1.28), 0.01)
 
 # ---------------------------------------------------------------- pond
 
@@ -739,6 +769,32 @@ for thickness, objs in hull_parts.items():
     hull.data.materials.append(mat('ink.press-ink'))
     # Flat normals would crack the hull: force smooth normals through the exporter.
     hull.data.shade_smooth()
+
+# Stall hulls stay under the stall node so its complete picking/render subtree is separate.
+for thickness, objs in stall_hull_parts.items():
+    dupes = []
+    for o in objs:
+        d = o.copy(); d.data = o.data.copy(); link(d); d.parent = stall_root
+        d.data.materials.clear()
+        bm = bmesh.new(); bm.from_mesh(d.data)
+        bmesh.ops.remove_doubles(bm, verts=bm.verts, dist=0.002)
+        bm.to_mesh(d.data); bm.free()
+        for p in d.data.polygons:
+            p.use_smooth = True
+        dupes.append(d)
+    if not dupes:
+        continue
+    bpy.ops.object.select_all(action='DESELECT')
+    for d in dupes:
+        d.select_set(True)
+    bpy.context.view_layer.objects.active = dupes[0]
+    bpy.ops.object.join()
+    hull = bpy.context.active_object
+    hull.name = f'stall-outline-{round(thickness * 1000)}'
+    hull.data.name = hull.name
+    hull.data.materials.append(mat('ink.press-ink'))
+    hull.data.shade_smooth()
+    hull['keep'] = True
 
 # Wind weights (m1-liveliness.md 4.1): grass tufts and flowers bend in the vertex shader, more towards
 # the tip. Every mesh gets the attribute so joins keep it; exported as "_wind" (custom glTF attribute).

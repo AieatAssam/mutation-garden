@@ -1,7 +1,6 @@
 import { expect, test, type Page } from '@playwright/test';
 import { Vector3 } from 'three';
 import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
-import { expectHarvestPaid } from './payout';
 import { startWithSave } from './garden-save';
 
 // Player flows from the M1 critique (#178): the first minute, a successful water, and Harvest all.
@@ -33,7 +32,7 @@ async function openGarden(page: Page, mobile: boolean): Promise<(index: number) 
 const waitUntil = (page: Page, timestampMs: number) => expect.poll(() => page.evaluate(() => Date.now()),
   { intervals: [50, 100], timeout: 25_000 }).toBeGreaterThanOrEqual(timestampMs);
 
-test('a new player is guided from the first plant to the first harvest within 30 s', async ({ page }, info) => {
+test('a new player is guided from planting through the first sale within 30 s', async ({ page }, info) => {
   const mobile = info.project.name === 'mobile-portrait';
   const tapPlot = await openGarden(page, mobile);
   const startedAt = await page.evaluate(() => Date.now());
@@ -45,7 +44,14 @@ test('a new player is guided from the first plant to the first harvest within 30
   await expect(coins).toHaveText('11');
   await expect(hint).toHaveText('Tap a growing plant to water it.');
   await expect(hint).toHaveText('Tap the ripe plant to harvest.', { timeout: 12_000 });
-  await expectHarvestPaid(page, () => tapPlot(0));
+  await tapPlot(0);
+  await expect(page.getByRole('status', { name: 'Crate' })).toHaveText('1/12');
+  await expect(coins).toHaveText('11');
+  await expect(hint).toHaveText('Tap Sell to sell 1 fruit.');
+  await page.screenshot({ path: `/tmp/mutation-${mobile ? 'phone' : 'desktop'}-first-sale.png`, scale: 'css' });
+  await page.getByRole('button', { name: 'Sell', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Crate' })).toHaveText('0/12');
+  await expect.poll(async () => Number(await coins.textContent())).toBeGreaterThan(11);
   expect(await page.evaluate(() => Date.now()) - startedAt).toBeLessThan(30_000);
 });
 
@@ -68,8 +74,9 @@ test.describe('watering', () => {
     // Watering cuts 30% of the time left (about 6 s), so it ripens near 19 s instead of 25 s.
     await waitUntil(page, beforePlant + 20_000);
     await tapPlot(2);
-    await expect.poll(() => coins.textContent(), { intervals: [50], timeout: 4_000 }).not.toBe('7');
-    expect(await page.evaluate(() => Date.now()), 'paid before it could have ripened unwatered')
+    await expect(page.getByRole('status', { name: 'Crate' })).toHaveText('1/12');
+    await expect(coins).toHaveText('7');
+    expect(await page.evaluate(() => Date.now()), 'watered plant should be harvestable before its unwatered deadline')
       .toBeLessThan(beforePlant + 25_000);
   });
 });
@@ -77,7 +84,7 @@ test.describe('watering', () => {
 test.describe('with every seed unlocked', () => {
   test.beforeEach(async ({ page }) => startWithSave(page));
 
-  test('Harvest all appears with two ripe plants and pays each once', async ({ page }, info) => {
+  test('Harvest all crates both ripe plants without paying until sale', async ({ page }, info) => {
     const mobile = info.project.name === 'mobile-portrait';
     const tapPlot = await openGarden(page, mobile);
     const harvestAll = page.getByRole('button', { name: /^Harvest all/ }).last();
@@ -88,8 +95,10 @@ test.describe('with every seed unlocked', () => {
     await expect(harvestAll).toHaveText('Harvest all 2');
     const box = (await harvestAll.boundingBox())!;
     expect(box.height).toBeGreaterThanOrEqual(48);
-    const { paid } = await expectHarvestPaid(page, () => mobile ? harvestAll.tap() : harvestAll.click());
-    expect(paid).toBeGreaterThanOrEqual(2 * 2);
+    if (mobile) await harvestAll.tap();
+    else await harvestAll.click();
+    await expect(page.getByRole('status', { name: 'Crate' })).toHaveText('2/12');
+    await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('10');
     await expect(harvestAll).toBeHidden();
   });
 });

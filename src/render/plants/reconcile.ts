@@ -1,5 +1,5 @@
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
-import { Box3, InstancedMesh, Matrix4, Vector3, type Group, type Mesh, type Object3D } from 'three';
+import { Box3, InstancedMesh, Matrix4, Vector3, type Camera, type Group, type Mesh, type Object3D } from 'three';
 import type { MaterialLibrary } from '../materials';
 import { createBubbleBerry } from './bubble-berry';
 import { createTwistroot } from './twistroot';
@@ -74,11 +74,12 @@ export function createPlantReconciler(
   plots: readonly (Group & { readonly plotId?: PlotId })[],
   materials: MaterialLibrary,
   /** Production waits for the authored models instead of showing procedural rigs and swapping later. */
-  options: { readonly waitForModels?: boolean } = {},
+  options: { readonly waitForModels?: boolean; readonly camera?: Camera } = {},
 ): PlantReconciler {
   const anchors = new Map(plots.filter((plot): plot is Group & { readonly plotId: PlotId } => Boolean(plot.plotId)).map((plot) => [plot.plotId, plot]));
   const hopPhaseOffsets = new Map(plots.flatMap((plot, index) => plot.plotId ? [[plot.plotId, index * 500] as const] : []));
   const entries = new Map<PlotId, Entry>();
+  const crystalAnchor = new Vector3();
   let disposed = false;
   let currentPlants = new Set<PlotId>();
   // ponytail: procedural rigs stay as the fallback until plants.glb loads; delete them once S2 is accepted.
@@ -97,6 +98,7 @@ export function createPlantReconciler(
       const now = previous.nowMs + (current.nowMs - previous.nowMs) * blend;
       const oldPlots = new Map(previous.plots.map((plot) => [plot.id, plot.plant]));
       const seen = new Set<PlotId>();
+      let crystalTransmissionCount = 0;
       for (const plot of current.plots) {
         seen.add(plot.id);
         const plant = plot.plant;
@@ -120,7 +122,17 @@ export function createPlantReconciler(
         const before = oldPlots.get(plot.id);
         const progress = before?.speciesId === plant.speciesId && before.plantedAt === plant.plantedAt
           ? before.progress + (plant.progress - before.progress) * blend : plant.progress;
-        entry.rig.update({ ...plant, progress }, now, reducedMotion);
+        let crystalTransmissionSlots = 0;
+        if (plant.mutations?.includes('crystal')) {
+          let visible = true;
+          if (options.camera) {
+            anchors.get(plot.id)!.getWorldPosition(crystalAnchor);
+            crystalAnchor.project(options.camera);
+            visible = Math.abs(crystalAnchor.x) <= 1 && Math.abs(crystalAnchor.y) <= 1 && crystalAnchor.z >= -1 && crystalAnchor.z <= 1;
+          }
+          crystalTransmissionSlots = visible ? Math.max(0, 3 - crystalTransmissionCount) : 0;
+        }
+        crystalTransmissionCount += entry.rig.update({ ...plant, progress }, now, reducedMotion, crystalTransmissionSlots) ?? 0;
       }
       for (const plotId of entries.keys()) if (!seen.has(plotId)) remove(plotId);
       currentPlants = new Set([...entries.keys()]);

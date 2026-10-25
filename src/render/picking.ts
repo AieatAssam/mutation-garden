@@ -16,7 +16,7 @@ import { BED_SIZE, GROUND_SURFACE, type Garden } from './garden';
 import { palette } from './palette';
 import type { StampPickDescriptor } from './plot-status-lifecycle';
 
-export type PickResult = { readonly kind: 'plot'; readonly plotId: PlotId } | { readonly kind: 'ground' } | null;
+export type PickResult = { readonly kind: 'plot'; readonly plotId: PlotId } | { readonly kind: 'stall' } | { readonly kind: 'ground' } | null;
 
 function isVisibleUnder(object: Object3D, ancestor: Object3D): boolean {
   for (let current: Object3D | null = object; current; current = current.parent) {
@@ -40,6 +40,7 @@ export function createGardenPicker(
   camera: OrthographicCamera,
   garden: Garden,
   getStamps?: () => readonly StampPickDescriptor[],
+  getStall?: () => Object3D | null,
 ): { pick(clientX: number, clientY: number): PickResult; dispose(): void } {
   const plotGeometry = new PlaneGeometry(1, 1);
   const groundGeometry = new CircleGeometry(1, 48);
@@ -110,6 +111,9 @@ export function createGardenPicker(
         1 - ((clientY - rect.top) / rect.height) * 2,
       );
       raycaster.setFromCamera(pointer, camera);
+
+      const stall = getStall?.();
+      if (stall?.visible && raycaster.intersectObject(stall, true).length > 0) return { kind: 'stall' };
 
       const stamps = getStamps?.() ?? [];
       const projectedStamps = stamps.flatMap((stamp) => {

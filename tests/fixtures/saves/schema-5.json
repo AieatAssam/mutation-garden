@@ -1,0 +1,80 @@
+{
+  "schema": 5,
+  "savedAt": 10000,
+  "appVersion": "fixture",
+  "checksum": "06f202b0",
+  "state": {
+    "schema": 5,
+    "coins": 8,
+    "lastNowMs": 10000,
+    "rngState": 123,
+    "xp": 0,
+    "plots": [
+      {
+        "id": "plot-0",
+        "plant": {
+          "speciesId": "twistroot",
+          "plantedAt": 10000,
+          "size": "regular",
+          "boostMs": 3000,
+          "mutationSeed": 4294967295,
+          "waterCount": 1,
+          "mutations": [
+            "golden"
+          ]
+        }
+      },
+      {
+        "id": "plot-1",
+        "plant": null
+      },
+      {
+        "id": "plot-2",
+        "plant": null
+      },
+      {
+        "id": "plot-3",
+        "plant": null
+      },
+      {
+        "id": "plot-4",
+        "plant": null
+      },
+      {
+        "id": "plot-5",
+        "plant": null
+      }
+    ],
+    "mutationRngState": 0,
+    "scriptedGiantUsed": false,
+    "badLuck": {
+      "giant": 0,
+      "golden": 0,
+      "glowing": 0,
+      "crystal": 0,
+      "rainbow": 0
+    },
+    "discoveries": [],
+    "rewardsPaid": [],
+    "owned": [],
+    "fertiliser": 0,
+    "plantCount": 1,
+    "scriptedGoldenUsed": false,
+    "crate": [
+      {
+        "speciesId": "sunny-sprout",
+        "size": "regular",
+        "mutations": [
+          "golden"
+        ],
+        "value": 8,
+        "xp": 4
+      }
+    ],
+    "sellingSince": 8800,
+    "order": {
+      "index": 0,
+      "progress": 0
+    }
+  }
+}

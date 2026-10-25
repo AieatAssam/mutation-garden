@@ -139,8 +139,9 @@ describe('renderer composition', () => {
     expect(plot.worldToLocal(dialCenter.clone()).x).toBeCloseTo(-0.3);
     expect(rimFoot().toArray().slice(1).map((value) => Number(value.toFixed(8)))).toEqual([0.05, 0.8]);
     const pickerArgs = mocks.pickerArgs as unknown[];
-    expect(pickerArgs).toHaveLength(4);
+    expect(pickerArgs).toHaveLength(5);
     const getStamps = pickerArgs[3] as () => readonly unknown[];
+    expect((pickerArgs[4] as () => unknown)()).toBeNull();
     const liveDescriptors = [{ plotId: 'plot-0' }];
     mocks.stampDescriptors = liveDescriptors;
     expect(getStamps()).toBe(liveDescriptors);

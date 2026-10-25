@@ -64,7 +64,18 @@ export const palette = {
       "#E0B57A",
       "#B9844E",
       "#7E5333"
-    ]
+    ],
+    "stall": {
+      "awning": [
+        "#F7EEDB",
+        "#E5482F"
+      ],
+      "wood": [
+        "#E0B57A",
+        "#7E5333"
+      ],
+      "sign": "#FFF9EC"
+    }
   },
   "plants": {
     "sunny-sprout": {

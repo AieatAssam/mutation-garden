@@ -1,10 +1,11 @@
 import type { SimEvent } from '../sim';
+import type { TraitId } from '../sim';
 
 export interface Sfx {
   /** Creates or resumes the audio context; call from a user gesture (autoplay rules). */
   unlock(): void;
   onEvents(events: readonly SimEvent[]): void;
-  mutation(firstDiscovery: boolean): void;
+  mutation(mutations: readonly TraitId[], firstDiscovery: boolean): void;
   setMuted(muted: boolean): void;
   /** A quiet generative loop; it starts once audio is unlocked. */
   setMusic(on: boolean): void;
@@ -138,6 +139,7 @@ export function createSfx(): Sfx {
           case 'StageReached': play('pop', event.stage === 'Sprout' ? 1 : event.stage === 'Growing' ? 1.12 : 1.25); break;
           case 'Harvestable': play('ripe'); break;
           case 'Watered': play('water'); break;
+          case 'OrderCompleted': play('chime'); break;
           case 'Harvested': {
             if (!context) break;
             // The coin ladder climbs while harvests keep coming and resets after 1.2 s of quiet.
@@ -153,8 +155,12 @@ export function createSfx(): Sfx {
         }
       }
     },
-    mutation(firstDiscovery) {
-      play(firstDiscovery ? 'reveal' : 'chime');
+    mutation(mutations, firstDiscovery) {
+      if (mutations.includes('rainbow')) {
+        [1, 1.25, 1.5, 1.75].forEach((pitch, index) => play('chime', pitch, index * 0.1));
+      } else if (mutations.includes('crystal')) {
+        play('chime', 1.5); play('chime', 1.25, 0.09);
+      } else play(firstDiscovery ? 'reveal' : 'chime');
     },
     setMuted(next) {
       muted = next;

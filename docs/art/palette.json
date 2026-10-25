@@ -18,7 +18,12 @@
     "soil-wet": ["#7A3E25", "#5A2C1B", "#3F1F15"],
     "island-rock": ["#E2BE8F", "#C0895D", "#8E5E4E", "#5E4256", "#3A2A3E"],
     "water": ["#E6F5EC", "#6FCAC6", "#3FA6B2", "#26748A"],
-    "wood-crate": ["#E0B57A", "#B9844E", "#7E5333"]
+    "wood-crate": ["#E0B57A", "#B9844E", "#7E5333"],
+    "stall": {
+      "awning": ["#F7EEDB", "#E5482F"],
+      "wood": ["#E0B57A", "#7E5333"],
+      "sign": "#FFF9EC"
+    }
   },
   "plants": {
     "sunny-sprout": {

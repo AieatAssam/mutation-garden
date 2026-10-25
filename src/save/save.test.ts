@@ -114,8 +114,8 @@ describe('save codec', () => {
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
       expect(decoded.state).toMatchObject({ schema: 10, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser, crystalReadyPlots: [], rainbowPlots: [] });
-      const { crystalReadyPlots: _crystal, rainbowPlots: _rainbow, bonusSeeds: _bonusSeeds, ...migrated } = decoded.state;
-      void _crystal; void _rainbow; void _bonusSeeds;
+      const { crystalReadyPlots: _crystal, rainbowPlots: _rainbow, bonusSeeds: _bonusSeeds, labSpecimens: _lab, nextLabSpecimenId: _nextLab, ...migrated } = decoded.state;
+      void _crystal; void _rainbow; void _bonusSeeds; void _lab; void _nextLab;
       expect(migrated.plots[0]?.lastSeedId).toBe('twistroot');
       expect({ ...migrated, schema: 4, order: undefined, plots: original.plots }).toEqual({ ...original, order: undefined });
     }

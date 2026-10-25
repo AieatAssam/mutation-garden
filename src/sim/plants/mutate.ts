@@ -41,21 +41,36 @@ export function evaluateMature(state: GardenState, nowMs: number): { state: Gard
     mutations.sort((a, b) => MUTATIONS[b].value - MUTATIONS[a].value);
     if (mutations.length) {
       let firstDiscovery = false;
+      const firstTraitDiscoveries: TraitId[] = [];
+      const firstPairDiscoveries: [TraitId, TraitId][] = [];
+      const bonusCoinsByTrait: Partial<Record<TraitId, number>> = {};
       let bonusCoins = 0;
       let bonusXp = 0;
       for (const trait of mutations) {
         const id = `${plant.speciesId}:${trait}`;
+        const traitId = `trait:${trait}`;
         const value = SPECIES.find((entry) => entry.id === plant.speciesId)!.baseValue * MUTATIONS[trait].value;
+        if (!discoveries.includes(traitId) && !discoveries.some((discovery) => discovery.endsWith(`:${trait}`))) {
+          firstTraitDiscoveries.push(trait);
+        }
+        if (!discoveries.includes(traitId)) discoveries.push(traitId);
         if (!discoveries.includes(id)) { discoveries.push(id); firstDiscovery = true; }
         if (!rewardsPaid.includes(id)) {
           rewardsPaid.push(id);
           bonusCoins += value * 10;
           bonusXp += value * 10;
+          bonusCoinsByTrait[trait] = value * 10;
         }
+      }
+      for (let i = 0; i < mutations.length; i += 1) for (let j = i + 1; j < mutations.length; j += 1) {
+        const pair = [mutations[i]!, mutations[j]!].sort() as [TraitId, TraitId];
+        const pairId = `pair:${pair.join('+')}`;
+        if (!discoveries.includes(pairId)) { discoveries.push(pairId); firstPairDiscoveries.push(pair); }
       }
       coins += bonusCoins;
       xp += bonusXp;
-      events.push({ type: 'Mutated', plotId: plot.id, speciesId: plant.speciesId, mutations, firstDiscovery, bonusCoins, bonusXp });
+      events.push({ type: 'Mutated', plotId: plot.id, speciesId: plant.speciesId, mutations, firstDiscovery,
+        firstTraitDiscoveries, firstPairDiscoveries, bonusCoinsByTrait, bonusCoins, bonusXp });
     }
     changed = true;
     return { ...plot, plant: { ...plant, mutations } };

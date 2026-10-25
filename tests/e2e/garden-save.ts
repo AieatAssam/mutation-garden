@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { createInitialState, xpForLevel, type ShopItemId, type TraitId } from '../../src/sim';
+import { createInitialState, xpForLevel, type ShopItemId, type SpeciesId, type TraitId } from '../../src/sim';
 import { encodeSave } from '../../src/save/codec';
 
 /**
@@ -8,13 +8,16 @@ import { encodeSave } from '../../src/save/codec';
  * keep whatever the spec did.
  */
 export async function startWithSave(page: Page, xp = xpForLevel(3), options: {
-  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; twistrootMutations?: readonly TraitId[]; owned?: readonly ShopItemId[]; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; crateCount?: number; crateMutations?: readonly (readonly TraitId[])[]; sellingSince?: number | null; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number; schema?: number; discoveries?: readonly string[]; rewardsPaid?: readonly string[]; order?: { index: number; progress: number };
+  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; twistrootMutations?: readonly TraitId[]; plot0SpeciesId?: SpeciesId; owned?: readonly ShopItemId[]; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; extraSunnyPlots?: readonly { plotId: string; plantedAt: number; speciesId?: SpeciesId }[]; crateCount?: number; crateMutations?: readonly (readonly TraitId[])[]; sellingSince?: number | null; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number; schema?: number; discoveries?: readonly string[]; rewardsPaid?: readonly string[]; order?: { index: number; progress: number };
 } = {}): Promise<void> {
   const savedAt = options.savedAt ?? Date.now();
   const initial = createInitialState(options.seed ?? 20261022, savedAt, { xp });
   const plots = initial.plots.map((plot) => {
+    const extra = options.extraSunnyPlots?.find(({ plotId }) => plot.id === plotId);
+    if (extra) return { ...plot, plant: { speciesId: extra.speciesId ?? 'sunny-sprout', plantedAt: extra.plantedAt,
+      size: 'regular' as const, mutationSeed: 11, mutations: [] as readonly TraitId[] } };
     if (options.twistrootPlantedAt !== undefined && plot.id === 'plot-0') return { ...plot,
-      plant: { speciesId: 'twistroot' as const, plantedAt: options.twistrootPlantedAt, size: 'regular' as const,
+      plant: { speciesId: options.plot0SpeciesId ?? 'twistroot', plantedAt: options.twistrootPlantedAt, size: 'regular' as const,
         mutationSeed: 7, waterCount: options.twistrootWaterCount ?? 0, scriptedGiant: true, ...(options.twistrootMutations ? { mutations: options.twistrootMutations } : {}) } };
     if (options.extraRipeSunny && plot.id === 'plot-1') return { ...plot,
       plant: { speciesId: 'sunny-sprout' as const, plantedAt: options.extraRipeSunnyAt ?? options.twistrootPlantedAt! - 20_000,

@@ -260,15 +260,16 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         sfx.onEvents(events);
         for (const event of events.filter((item) => item.type === 'Mutated')
           .sort((a, b) => Number(b.mutations.includes('giant')) - Number(a.mutations.includes('giant')))) {
-          if (event.firstDiscovery) cancelActiveGesture();
+          const revealDiscovery = event.firstTraitDiscoveries.length > 0 || event.firstPairDiscoveries.length > 0;
+          if (revealDiscovery) cancelActiveGesture();
           mutationReveal.show(event, motion.matches);
-          if (event.firstDiscovery && !motion.matches) {
+          if (revealDiscovery && !motion.matches) {
             uiRoot.querySelector('.garden-ui__journal')?.animate([
               { transform: 'scale(1)' }, { transform: 'scale(1.12)' }, { transform: 'scale(1)' },
             ], { duration: 420 });
           }
-          sfx.mutation(event.mutations, event.firstDiscovery);
-          if (event.firstDiscovery && settings.haptics && !motion.matches) navigator.vibrate?.([20, 40, 20]);
+          sfx.mutation(event.mutations, revealDiscovery);
+          if (revealDiscovery && settings.haptics && !motion.matches) navigator.vibrate?.([20, 40, 20]);
         }
         if (settings.haptics && !motion.matches && 'vibrate' in navigator) {
           if (events.some(({ type }) => type === 'Harvested')) navigator.vibrate?.(15);

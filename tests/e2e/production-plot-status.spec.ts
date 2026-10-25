@@ -14,7 +14,7 @@ import { startWithSave } from './garden-save';
 test.beforeEach(async ({ page }, info) => startWithSave(page, xpForLevel(3), {
   ...(info.title === 'six ripe plants stay under the production renderer draw-call budget'
     ? { coins: 40, mutationRngState: 2, scriptedGiantUsed: true, scriptedGoldenUsed: true,
-      discoveries: ['sunny-sprout:golden', 'twistroot:golden', 'bubble-berry:golden'],
+      discoveries: ['sunny-sprout:golden', 'twistroot:golden', 'bubble-berry:golden', 'trait:giant', 'pair:giant+golden'],
       rewardsPaid: ['sunny-sprout:golden', 'twistroot:golden', 'bubble-berry:golden'] } : {}),
 }));
 
@@ -847,6 +847,9 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
   for (const [index, plot] of plots.entries()) await plant(page, speciesAtPlot[index]!, plot, mobile);
   await waitForCoins(page, 26);
   await advanceGameClock(page, 30_100);
+  const mutationLabels = page.locator('.mutation-reveal__repeat');
+  await expect.poll(() => mutationLabels.count()).toBeGreaterThan(0);
+  await expect(mutationLabels).toHaveCount(0);
   const stamps = [];
   for (const [plotId, speciesId] of speciesAtPlot.entries()) {
     await expect.poll(async () => {

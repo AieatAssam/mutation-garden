@@ -330,9 +330,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
           break;
         }
         case 'Mutated': {
+          const revealDiscovery = event.firstTraitDiscoveries.length > 0 || event.firstPairDiscoveries.length > 0;
           const top = new Vector3();
           if (plants.getTop(event.plotId, top)) {
-            if (event.firstDiscovery && !reducedMotion) plants.shiver(event.plotId, currentSnapshot?.nowMs ?? 0, 300);
+            if (revealDiscovery && !reducedMotion) plants.shiver(event.plotId, currentSnapshot?.nowMs ?? 0, 300);
             const trait = event.mutations[0];
             if (trait === 'frozen') {
               particles.burst({ origin: top, count: 4, colors: [palette.mutations.crystal.body, palette.mutations.crystal.edge],
@@ -346,9 +347,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
                       : trait === 'twin' ? palette.plants.twistroot.fruit.slice(0, 2)
                   : trait === 'rainbow' ? palette.mutations.rainbow
                     : [palette.environment.water[0], palette.environment.water[1]];
-            particles.burst({ origin: top, count: trait === 'electric' ? 2 : event.firstDiscovery ? 16 : 7, colors,
+            particles.burst({ origin: top, count: trait === 'electric' ? 2 : revealDiscovery ? 16 : 7, colors,
               speed: trait === 'electric' ? 1.5 : 0.8, up: trait === 'electric' ? 0.2 : 1.1,
-              gravity: trait === 'electric' ? 0 : 2, lifeMs: trait === 'electric' ? 350 : event.firstDiscovery ? 1000 : 500,
+              gravity: trait === 'electric' ? 0 : 2, lifeMs: trait === 'electric' ? 350 : revealDiscovery ? 1000 : 500,
               size: trait === 'electric' ? 0.06 : 0.1 }, now, reducedMotion);
           }
           break;

@@ -12,7 +12,9 @@ describe('M2 mutation rules', () => {
     let state = step(createInitialState(8, 0), [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
     state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 4_000).state;
     state = step(state, [{ type: 'Water', plotId: 'plot-0' }], 5_000).state;
-    expect(step(state, [], 18_000).state.plots[0]?.plant?.mutations).toContain('giant');
+    const result = step(state, [], 18_000);
+    expect(result.state.plots[0]?.plant?.mutations).toContain('giant');
+    expect(result.events).toContainEqual(expect.objectContaining({ type: 'Mutated', firstTraitDiscoveries: ['giant'] }));
   });
 
   it('grants Giant for two accepted pre-maturity waters without rerolling natural traits', () => {
@@ -190,6 +192,8 @@ describe('M2 mutation rules', () => {
     ], 0).state;
     const first = step(state, [], 25_001);
     expect(first.events).toContainEqual(expect.objectContaining({ type: 'Mutated', speciesId: 'twistroot', bonusCoins: 400, bonusXp: 400 }));
+    const twistrootMutation = first.events.find((event) => event.type === 'Mutated' && event.speciesId === 'twistroot');
+    expect(twistrootMutation).toMatchObject({ firstTraitDiscoveries: expect.arrayContaining(['golden']), bonusCoinsByTrait: { golden: 400 } });
     const firstBonusXp = first.events.filter((event) => event.type === 'Mutated').reduce((total, event) => total + event.bonusXp, 0);
     expect(first.state.xp).toBe(state.xp + firstBonusXp);
     expect(first.state.rewardsPaid).toContain('twistroot:golden');
@@ -201,5 +205,34 @@ describe('M2 mutation rules', () => {
     }) }, [], 25_002);
     expect(second.state.rewardsPaid.filter((id) => id === 'twistroot:golden')).toHaveLength(1);
     expect(second.events).toContainEqual(expect.objectContaining({ type: 'Mutated', bonusCoins: 0, bonusXp: 0 }));
+    const repeatedGolden = second.events.find((event) => event.type === 'Mutated' && event.speciesId === 'twistroot');
+    expect(repeatedGolden?.type === 'Mutated' && repeatedGolden.firstTraitDiscoveries).not.toContain('golden');
+  });
+
+  it('reveals each global trait and trait pair only once, while retaining species rewards', () => {
+    let state = createInitialState(11, 0, { xp: 900 });
+    state = { ...state, discoveries: ['sunny-sprout:golden'] };
+    state = step(state, [
+      { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
+      { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },
+      { type: 'Plant', plotId: 'plot-3', seedId: 'sunny-sprout' },
+    ], 0).state;
+    state = { ...state, plots: state.plots.map((plot) => plot.id === 'plot-1' && plot.plant
+      ? { ...plot, plant: { ...plot.plant, waterCount: 2 } } : plot) };
+    const first = step(state, [], 25_001);
+    const mutation = first.events.find((event) => event.type === 'Mutated' && event.speciesId === 'twistroot');
+    expect(mutation).toMatchObject({ firstDiscovery: true, bonusCoinsByTrait: { golden: 400 } });
+    expect(mutation?.type === 'Mutated' && mutation.firstTraitDiscoveries).not.toContain('golden');
+    expect(mutation?.type === 'Mutated' && mutation.firstPairDiscoveries).toContainEqual(['giant', 'golden']);
+
+    const retry = step({ ...first.state, plots: first.state.plots.map((plot) => {
+      if (plot.id !== 'plot-1' || !plot.plant) return plot;
+      const { mutations: _mutations, ...plant } = plot.plant;
+      void _mutations;
+      return { ...plot, plant };
+    }) }, [], 25_002);
+    const repeated = retry.events.find((event) => event.type === 'Mutated' && event.speciesId === 'twistroot');
+    expect(repeated?.type === 'Mutated' && repeated.firstTraitDiscoveries).not.toContain('golden');
+    expect(repeated?.type === 'Mutated' && repeated.firstPairDiscoveries).not.toContainEqual(['giant', 'golden']);
   });
 });

@@ -28,7 +28,7 @@ export function evaluateMature(state: GardenState, nowMs: number): { state: Gard
     if (glowingEligible || levelForXp(state.xp) >= 2 && mutationRoll(plant.mutationSeed ?? 0xffff_ffff, 'glowing') < MUTATIONS.glowing.naturalChance + charm) mutations.push('glowing');
     const crystalEligible = (plot.id === 'plot-0' || plot.id === 'plot-2') && state.crystalReadyPlots.includes(plot.id);
     const crystalRoll = mutationRoll(plant.mutationSeed ?? 0xffff_ffff, 'crystal');
-    const crystal = (crystalEligible && (crystalRoll < MUTATIONS.crystal.ruleChance || badLuck.crystal >= (MUTATIONS.crystal.guarantee ?? Infinity) - 1))
+    const crystal = (crystalEligible && (crystalRoll < MUTATIONS.crystal.ruleChance + (plant.beeVisited ? 0.1 : 0) || badLuck.crystal >= (MUTATIONS.crystal.guarantee ?? Infinity) - 1))
       || (levelForXp(state.xp) >= 2 && crystalRoll < MUTATIONS.crystal.naturalChance + charm);
     if (crystal) mutations.push('crystal');
     if (plant.rainbow) mutations.push('rainbow');

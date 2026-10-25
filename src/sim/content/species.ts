@@ -89,7 +89,7 @@ export const INITIAL_COINS = 12;
 /** Total XP needed to reach level 2, 3, ... (design.md 4.4); after the table each level costs 200 more. */
 export const LEVEL_XP = [500, 900, 2_500, 3_500, 4_900, 6_500, 8_300, 10_300] as const;
 
-export const SHOP_PRICES = { 'plot-6': 80, 'plot-7': 220, 'big-can': 90, fertiliser: 30, 'lucky-charm': 300, 'quick-counter-1': 45, 'quick-counter-2': 180, 'quick-counter-3': 600, 'crate-1': 70, 'crate-2': 300, 'second-counter': 350, 'fresh-produce': 160 } as const;
+export const SHOP_PRICES = { 'plot-6': 80, 'plot-7': 220, 'big-can': 90, fertiliser: 30, 'lucky-charm': 300, 'quick-counter-1': 45, 'quick-counter-2': 180, 'quick-counter-3': 600, 'crate-1': 70, 'crate-2': 300, 'second-counter': 350, 'fresh-produce': 160, sprinkler: 80, 'sprinkler-2': 160, 'sprinkler-3': 360, 'bee-hive': 140, 'bee-hive-2': 260, 'bee-hive-3': 520, 'seed-hopper': 220, 'seed-hopper-2': 400, 'seed-hopper-3': 800, 'harvest-helper': 420, 'harvest-helper-2': 700, 'harvest-helper-3': 1_100, 'delivery-cart': 1_200, 'delivery-cart-2': 1_000, 'delivery-cart-3': 1_800 } as const;
 export const CRATE_CAPACITY = 12;
 export const SELL_INTERVAL_MS = 1_200;
 export const SELLING_UPGRADES = [
@@ -100,6 +100,24 @@ export const SELLING_UPGRADES = [
   { id: 'crate-2', title: 'Crate II', desc: 'Hold 24 fruit.', price: SHOP_PRICES['crate-2'], level: 9, requires: 'crate-1' },
   { id: 'second-counter', title: 'Second Counter', desc: 'Sell twice as fast.', price: SHOP_PRICES['second-counter'], level: 8 },
   { id: 'fresh-produce', title: 'Fresh Produce sign', desc: 'Add 10% to sale value.', price: SHOP_PRICES['fresh-produce'], level: 6 },
+] as const;
+
+export const AUTOMATION_UPGRADES = [
+  { id: 'sprinkler', title: 'Sprinkler', desc: 'Water the centre plot once.', price: SHOP_PRICES.sprinkler, level: 5 },
+  { id: 'sprinkler-2', title: 'Sprinkler II', desc: 'Water growing plants twice for Giant.', price: SHOP_PRICES['sprinkler-2'], level: 7, requires: 'sprinkler' },
+  { id: 'sprinkler-3', title: 'Sprinkler III', desc: 'Reach plots beside the centre.', price: SHOP_PRICES['sprinkler-3'], level: 9, requires: 'sprinkler-2' },
+  { id: 'bee-hive', title: 'Bee hive', desc: 'Visit growing plants beside plot 2.', price: SHOP_PRICES['bee-hive'], level: 7 },
+  { id: 'bee-hive-2', title: 'Bee hive II', desc: 'Add 10 points to non-guaranteed rule chances.', price: SHOP_PRICES['bee-hive-2'], level: 9, requires: 'bee-hive' },
+  { id: 'bee-hive-3', title: 'Bee hive III', desc: 'Visit plants beside two flower plots.', price: SHOP_PRICES['bee-hive-3'], level: 11, requires: 'bee-hive-2' },
+  { id: 'seed-hopper', title: 'Seed hopper', desc: 'Replant harvested plots with their last seed.', price: SHOP_PRICES['seed-hopper'], level: 8 },
+  { id: 'seed-hopper-2', title: 'Seed hopper II', desc: 'Plant empty plots first.', price: SHOP_PRICES['seed-hopper-2'], level: 10, requires: 'seed-hopper' },
+  { id: 'seed-hopper-3', title: 'Seed hopper III', desc: 'Plant every eligible plot.', price: SHOP_PRICES['seed-hopper-3'], level: 12, requires: 'seed-hopper-2' },
+  { id: 'harvest-helper', title: 'Harvest helper', desc: 'Harvest ripe plants into the crate.', price: SHOP_PRICES['harvest-helper'], level: 10 },
+  { id: 'harvest-helper-2', title: 'Harvest helper II', desc: 'Walk to ripe plants faster.', price: SHOP_PRICES['harvest-helper-2'], level: 12, requires: 'harvest-helper' },
+  { id: 'harvest-helper-3', title: 'Harvest helper III', desc: 'Carry two fruit at a time.', price: SHOP_PRICES['harvest-helper-3'], level: 14, requires: 'harvest-helper-2' },
+  { id: 'delivery-cart', title: 'Delivery cart', desc: 'Send crate fruit to the stall.', price: SHOP_PRICES['delivery-cart'], level: 12 },
+  { id: 'delivery-cart-2', title: 'Delivery cart II', desc: 'Double cart speed.', price: SHOP_PRICES['delivery-cart-2'], level: 14, requires: 'delivery-cart' },
+  { id: 'delivery-cart-3', title: 'Delivery cart III', desc: 'Add a second trip each cycle.', price: SHOP_PRICES['delivery-cart-3'], level: 16, requires: 'delivery-cart-2' },
 ] as const;
 
 export function saleIntervalMs(owned: readonly import('../state/types').ShopItemId[]): number {

@@ -1,7 +1,7 @@
 import type { GardenState, PlotState, TraitId } from './types';
 import { INITIAL_COINS } from '../content/species';
 
-export const SIM_SCHEMA_VERSION = 7;
+export const SIM_SCHEMA_VERSION = 8;
 export { INITIAL_COINS };
 
 function assertTimestamp(nowMs: number): void {

@@ -1,6 +1,6 @@
 export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap' | 'lantern-pod' | 'clockvine' | 'dewbell' | 'comet-pear';
 export type PlotId = string;
-export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm' | 'quick-counter-1' | 'quick-counter-2' | 'quick-counter-3' | 'crate-1' | 'crate-2' | 'second-counter' | 'fresh-produce';
+export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm' | 'quick-counter-1' | 'quick-counter-2' | 'quick-counter-3' | 'crate-1' | 'crate-2' | 'second-counter' | 'fresh-produce' | 'sprinkler' | 'sprinkler-2' | 'sprinkler-3' | 'bee-hive' | 'bee-hive-2' | 'bee-hive-3' | 'seed-hopper' | 'seed-hopper-2' | 'seed-hopper-3' | 'harvest-helper' | 'harvest-helper-2' | 'harvest-helper-3' | 'delivery-cart' | 'delivery-cart-2' | 'delivery-cart-3';
 export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestable';
 
 /** Fruit size rolled at planting (design.md 4.3). Absent means regular. */
@@ -23,6 +23,8 @@ export interface PlantState {
   readonly clockBoostMs?: number;
   readonly clockBoostedBy?: readonly PlotId[];
   readonly dewUsed?: boolean;
+  readonly sprinklerWaterCount?: number;
+  readonly beeVisited?: boolean;
 }
 
 /** The timestamp growth is measured from. */
@@ -40,6 +42,7 @@ export interface PlantSnapshot extends Omit<PlantState, 'mutationSeed' | 'script
 export interface PlotState {
   readonly id: PlotId;
   readonly plant: PlantState | null;
+  readonly lastSeedId?: SpeciesId;
 }
 
 export interface PlotSnapshot {
@@ -85,7 +88,7 @@ export interface OrderProgress { readonly index: number; readonly progress: numb
 export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number }
 
 export interface GardenState {
-  readonly schema: 7;
+  readonly schema: 8;
   readonly coins: number;
   readonly lastNowMs: number;
   readonly rngState: number;

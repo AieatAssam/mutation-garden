@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState } from '../sim';
+import { createInitialState, step } from '../sim';
 import { advanceOffline, capClockOffset, OFFLINE_CAP_MS } from './offline';
 
 describe('offline catch-up', () => {
@@ -75,5 +75,18 @@ describe('offline catch-up', () => {
     const result = advanceOffline({ ...initial, crate: [fruit, fruit] }, 0, 31_000);
     expect(result.coinsSold).toBe(0);
     expect(result.crateContents).toEqual([{ speciesId: 'sunny-sprout', count: 2 }]);
+  });
+
+  it('produces the same automation state for split and continuous absence intervals', () => {
+    const initial = createInitialState(51, 0, { xp: 15_000 });
+    const bought = step({ ...initial, coins: 5_000 }, [
+      { type: 'Buy', item: 'seed-hopper' }, { type: 'Buy', item: 'harvest-helper' },
+      { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
+    ], 0).state;
+    const whole = advanceOffline(bought, 0, 30_000);
+    const firstHalf = advanceOffline(bought, 0, 13_000);
+    const secondHalf = advanceOffline(firstHalf.state, 13_000, 30_000);
+    expect(secondHalf.state).toEqual(whole.state);
+    expect([...firstHalf.events, ...secondHalf.events]).toEqual(whole.events);
   });
 });

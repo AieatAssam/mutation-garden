@@ -1,4 +1,4 @@
-import { SHOP_PRICES, SELLING_UPGRADES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
+import { SHOP_PRICES, SELLING_UPGRADES, AUTOMATION_UPGRADES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
 import './garden-ui.css';
 import { readingTimeMs } from './notice-queue';
 import { createDiscoveryJournal, type JournalOrder, type JournalTraitDescriptor } from './discovery-journal';
@@ -173,6 +173,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: SHOP_PRICES.fertiliser, level: 1 },
     { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: SHOP_PRICES['lucky-charm'], level: 5 },
     ...SELLING_UPGRADES,
+    ...AUTOMATION_UPGRADES,
   ];
   const shopRows = shopItems.map((item) => {
     const row = document.createElement('article'); row.className = 'garden-ui__shop-row';

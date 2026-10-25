@@ -40,6 +40,7 @@ export function plant(
   const plots = state.plots.slice();
   plots[plotIndex] = {
     ...plot,
+    lastSeedId: species.id,
     plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value), mutationSeed: mutationRoll.value === 0 ? 0 : Math.floor(mutationRoll.value * 0x1_0000_0000), waterCount: 0, ...(rainbow ? { rainbow: true } : {}), ...(state.fertiliser > 0 ? { fertilised: true, boostMs: Math.round(species.growthDurationMs * 0.4) } : {}) },
   };
 

@@ -49,11 +49,17 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
   4: (state) => ({ ...state, schema: 5, order: { index: 0, progress: 0 } }),
   5: (state) => ({ ...state, schema: 6, crystalReadyPlots: [], rainbowPlots: [] }),
   6: (state) => ({ ...state, schema: 7 }),
+  7: (state) => ({ ...state, schema: 8, plots: Array.isArray(state.plots) ? state.plots.map((plot) => {
+    if (!plot || typeof plot !== 'object') return plot;
+    const item = plot as Record<string, unknown>;
+    const plant = item.plant as Record<string, unknown> | null;
+    return { ...item, ...(typeof plant?.speciesId === 'string' ? { lastSeedId: plant.speciesId } : {}) };
+  }) : state.plots }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
 const SIZES = new Set(['small', 'regular', 'big']);
-const SHOP_ITEM_IDS = new Set(['plot-6', 'plot-7', 'big-can', 'lucky-charm', 'quick-counter-1', 'quick-counter-2', 'quick-counter-3', 'crate-1', 'crate-2', 'second-counter', 'fresh-produce']);
+const SHOP_ITEM_IDS = new Set(['plot-6', 'plot-7', 'big-can', 'lucky-charm', 'quick-counter-1', 'quick-counter-2', 'quick-counter-3', 'crate-1', 'crate-2', 'second-counter', 'fresh-produce', 'sprinkler', 'sprinkler-2', 'sprinkler-3', 'bee-hive', 'bee-hive-2', 'bee-hive-3', 'seed-hopper', 'seed-hopper-2', 'seed-hopper-3', 'harvest-helper', 'harvest-helper-2', 'harvest-helper-3', 'delivery-cart', 'delivery-cart-2', 'delivery-cart-3']);
 const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
 /** Structural check of a migrated state; anything unexpected is rejected rather than half-loaded. */
@@ -89,7 +95,7 @@ export function validateState(value: unknown): value is GardenState {
   return state.plots.every((plot: unknown) => {
     if (!plot || typeof plot !== 'object') return false;
     const { id, plant } = plot as Record<string, unknown>;
-    if (typeof id !== 'string') return false;
+    if (typeof id !== 'string' || (plot as Record<string, unknown>).lastSeedId !== undefined && !SPECIES_IDS.has((plot as Record<string, unknown>).lastSeedId as string)) return false;
     if (plant === null) return true;
     if (!plant || typeof plant !== 'object') return false;
     const { speciesId, plantedAt, size, boostMs, clockBoostMs, mutationSeed, waterCount, mutations, scriptedGiant, rainbow } = plant as Record<string, unknown>;
@@ -101,6 +107,8 @@ export function validateState(value: unknown): value is GardenState {
       && (scriptedGiant === undefined || typeof scriptedGiant === 'boolean')
       && (rainbow === undefined || typeof rainbow === 'boolean')
       && ((plant as Record<string, unknown>).dewUsed === undefined || typeof (plant as Record<string, unknown>).dewUsed === 'boolean')
+      && ((plant as Record<string, unknown>).sprinklerWaterCount === undefined || (isCount((plant as Record<string, unknown>).sprinklerWaterCount) && ((plant as Record<string, unknown>).sprinklerWaterCount as number) <= 2))
+      && ((plant as Record<string, unknown>).beeVisited === undefined || typeof (plant as Record<string, unknown>).beeVisited === 'boolean')
       && ((plant as Record<string, unknown>).clockBoostedBy === undefined || (Array.isArray((plant as Record<string, unknown>).clockBoostedBy)
         && new Set((plant as Record<string, unknown>).clockBoostedBy as unknown[]).size === ((plant as Record<string, unknown>).clockBoostedBy as unknown[]).length
         && ((plant as Record<string, unknown>).clockBoostedBy as unknown[]).every((id) => typeof id === 'string')))

@@ -17,13 +17,14 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
-import { GARDEN_MODEL_URL, loadScenery, type Scenery } from './scenery';
+import { GARDEN_MODEL_URL, loadScenery, paletteColor, type Scenery } from './scenery';
 import { createGardenCamera, nudgeGardenCamera, panGardenCamera, resizeGardenCamera, setGardenCameraExpanded, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
-import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
+import type { GardenSnapshot, PlotId, SimEvent, SpeciesId, ShopItemId } from '../sim';
 import { createParticles } from './motion/particles';
 import { createAmbient, type Ambient } from './ambient';
 import { createPlotPulse } from './plot-pulse';
@@ -144,10 +145,35 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     console.error('Plant models failed to load', error);
     plants.setModels(null);
   });
+  const automationObjects = new Map<string, Group>();
+  const automationLoaded = new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/automation.glb`).then(({ scene: source }) => {
+    source.updateMatrixWorld(true);
+    const positions: Record<string, [number, number, number]> = {
+      sprinkler: [0, 0.65, 3.0], 'bee-hive': [2.5, 0.65, -2.4], 'seed-hopper': [-2.5, 0.65, 2.6],
+      'harvest-helper': [0, 0.65, -3.0], 'delivery-cart': [3.3, 0.65, 0.4],
+    };
+    for (const name of Object.keys(positions)) {
+      const authored = source.getObjectByName(name);
+      if (!authored) continue;
+      const prop = new Group(); prop.name = `automation-${name}`;
+      const mesh = authored.clone(true);
+      mesh.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        const sourceMaterial = Array.isArray(object.material) ? object.material[0] : object.material;
+        const color = paletteColor(sourceMaterial?.name ?? 'environment.grass.2');
+        object.material = materials.toon(color);
+      });
+      prop.add(mesh);
+      prop.position.set(...positions[name]!);
+      prop.visible = false;
+      automationObjects.set(name, prop);
+      garden.add(prop);
+    }
+  }).catch(() => { /* Old builds do not include automation.glb. */ });
   // Compile every shader, plant morph variants included, before reporting ready, so the first
   // frames with the island and first plants do not stall the main thread while the player taps
   // (slow GPUs and CI software rendering).
-  const ready = Promise.all([sceneryLoaded, plantsLoaded]).then(async () => {
+  const ready = Promise.all([sceneryLoaded, plantsLoaded, automationLoaded]).then(async () => {
     if (disposed) return;
     const warm = new Group();
     const rigs = plantModels ? options.species.map(({ id }) => createAuthoredRig(id, plantModels!, materials)) : [];
@@ -317,6 +343,29 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     }
     const now = clock();
     const snapshot = currentSnapshot;
+    for (const [id, object] of automationObjects) {
+      const owned = snapshot?.owned ?? [];
+      object.visible = owned.includes(id as ShopItemId)
+        || id === 'sprinkler' && owned.includes('sprinkler-2')
+        || id === 'sprinkler' && owned.includes('sprinkler-3')
+        || id === 'bee-hive' && owned.includes('bee-hive-2')
+        || id === 'bee-hive' && owned.includes('bee-hive-3')
+        || id === 'seed-hopper' && owned.includes('seed-hopper-2')
+        || id === 'seed-hopper' && owned.includes('seed-hopper-3')
+        || id === 'harvest-helper' && owned.includes('harvest-helper-2')
+        || id === 'harvest-helper' && owned.includes('harvest-helper-3')
+        || id === 'delivery-cart' && owned.includes('delivery-cart-2')
+        || id === 'delivery-cart' && owned.includes('delivery-cart-3');
+      if (!currentReducedMotion) {
+        const cartTier = owned.includes('delivery-cart-3') ? 3 : owned.includes('delivery-cart-2') ? 2 : 1;
+        object.rotation.y = Math.sin(now / 1_000 + id.length) * 0.035;
+        if (id === 'delivery-cart') object.position.x = 3.3 + Math.sin(now / (2_400 / cartTier)) * 0.35;
+        if (id === 'harvest-helper') {
+          const helperTier = owned.includes('harvest-helper-3') ? 3 : owned.includes('harvest-helper-2') ? 2 : 1;
+          object.position.x = Math.sin(now / (3_000 / helperTier)) * 0.45;
+        }
+      }
+    }
     const stall = scenery?.stall;
     stallRing.visible = Boolean(stall && snapshot?.selling && snapshot.nextSaleTime !== null);
     if (stall && snapshot && stallRing.visible) {
@@ -462,6 +511,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       disposed = true;
       picker.dispose();
       plants.dispose();
+      for (const object of automationObjects.values()) object.removeFromParent();
+      automationObjects.clear();
       plantModels?.dispose();
       statusResources.dispose();
       particles.dispose();

@@ -4,7 +4,7 @@ import { harvest } from '../plants/harvest';
 import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
 import { evaluateMature } from '../plants/mutate';
-import { applySpeciesHooks } from '../plants/species-hooks';
+import { applyHarvestAutomation, applySpeciesHooks, applyWateringAutomation } from '../plants/species-hooks';
 import { buy, waterAll } from '../plants/shop';
 import { levelForXp, saleIntervalMs, SPECIES } from '../content/species';
 import { nextOrder, orderEventCount, ORDER_DECK } from '../content/orders';
@@ -30,6 +30,9 @@ export function step(
   const cropHooks = applySpeciesHooks(nextState, effectiveNowMs);
   nextState = cropHooks.state;
   events.push(...cropHooks.events);
+  const wateringAutomation = applyWateringAutomation(nextState, effectiveNowMs);
+  nextState = wateringAutomation.state;
+  events.push(...wateringAutomation.events);
   if (nextState.sellingSince !== null && nextState.crate.length) {
     const sales = Math.min(nextState.crate.length, Math.floor((effectiveNowMs - nextState.sellingSince) / saleIntervalMs(nextState.owned)));
     if (sales) {
@@ -66,6 +69,14 @@ export function step(
             : waterAll(nextState, effectiveNowMs);
     nextState = result.state;
     events.push(...result.events);
+  }
+
+  const recentlyHarvested = events.filter((event) => event.type === 'Harvested').map(({ plotId }) => plotId);
+  const harvestAutomation = applyHarvestAutomation(nextState, effectiveNowMs, recentlyHarvested);
+  nextState = harvestAutomation.state;
+  events.push(...harvestAutomation.events);
+  if (nextState.owned.includes('delivery-cart') && nextState.crate.length && nextState.sellingSince === null) {
+    nextState = { ...nextState, sellingSince: effectiveNowMs };
   }
 
   const mutationResult = evaluateMature(nextState, effectiveNowMs);

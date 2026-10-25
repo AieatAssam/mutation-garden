@@ -1,4 +1,4 @@
-import { levelForXp, SHOP_PRICES, SELLING_UPGRADES } from '../content/species';
+import { levelForXp, SHOP_PRICES, SELLING_UPGRADES, AUTOMATION_UPGRADES } from '../content/species';
 import type { Command, GardenState, ShopItemId, SimEvent, StepResult } from '../state/types';
 import { water } from './water';
 
@@ -8,6 +8,9 @@ const ITEMS: Readonly<Record<ShopItemId, { price: number; level: number; require
   ...Object.fromEntries(SELLING_UPGRADES.map((upgrade) => [upgrade.id, {
     price: upgrade.price, level: upgrade.level, ...('requires' in upgrade ? { requires: upgrade.requires } : {}),
   }])) as Record<(typeof SELLING_UPGRADES)[number]['id'], { price: number; level: number; requires?: ShopItemId }>,
+  ...Object.fromEntries(AUTOMATION_UPGRADES.map((upgrade) => [upgrade.id, {
+    price: upgrade.price, level: upgrade.level, ...('requires' in upgrade ? { requires: upgrade.requires } : {}),
+  }])) as Record<(typeof AUTOMATION_UPGRADES)[number]['id'], { price: number; level: number; requires?: ShopItemId }>,
 };
 
 export function buy(state: GardenState, command: Extract<Command, { type: 'Buy' }>): StepResult {

@@ -24,7 +24,7 @@ describe('lint rules', () => {
   it('the generated palette may contain hex', async () => {
     expect(await errors("export const c = '#FF0000';\n", 'src/render/palette.ts')).toEqual([]);
   });
-  it('nothing imports src/lab before M4', async () => {
-    expect(await errors("import '../lab/bench';\n", 'src/app/x.ts')).toContain('no-restricted-imports');
+  it('the app can dynamically enter the M6 lab', async () => {
+    expect(await errors("void import('../lab/laboratory');\n", 'src/app/x.ts')).toEqual([]);
   });
 });

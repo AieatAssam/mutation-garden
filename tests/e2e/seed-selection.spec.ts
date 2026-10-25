@@ -28,7 +28,9 @@ test('offers all eight seeds and shows later unlock levels', async ({ page }, te
   await expect(bubble).toBeVisible();
   await expect(twistroot).toBeVisible();
   await expect(trayLabel).toBeVisible();
-  await expect(seeds.locator('[data-species-id]')).toHaveCount(8);
+  await expect(seeds.locator('[data-species-id]:visible')).toHaveCount(8);
+  await expect(seeds.locator('[data-species-id="prism-fig"]')).toBeHidden();
+  await expect(seeds.locator('[data-species-id="sunburst"]')).toBeHidden();
   await expect(seeds.getByRole('button', { name: 'Puffcap' })).toHaveAttribute('aria-disabled', 'true');
   await expect(lantern).toHaveAttribute('aria-disabled', 'true');
   await expect(seeds.getByRole('button', { name: 'Comet Pear' })).toHaveAttribute('aria-disabled', 'true');

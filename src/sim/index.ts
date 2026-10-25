@@ -3,7 +3,7 @@ export { SIM_SCHEMA_VERSION, createInitialState, INITIAL_COINS } from './state/i
 export { levelForXp, xpForLevel, LEVEL_XP, CRATE_CAPACITY, crateCapacity, saleIntervalMs, SELL_INTERVAL_MS, SELLING_UPGRADES, AUTOMATION_UPGRADES, SHOP_PRICES, COMBO_CAP, COMBO_STEP, FRESH_BONUS, FRESH_WINDOW_MS, SPECIES, WATER_SPEEDUP, YIELD_SIZES } from './content/species';
 export { MUTATIONS, mutationRoll } from './content/mutations';
 export { ORDER_DECK, getOrderSnapshot, nextOrder, orderEventCount } from './content/orders';
-export { MAX_LAB_SPECIMENS } from './content/laboratory';
+export { MAX_LAB_SPECIMENS, MAX_LAB_SEEDS } from './content/laboratory';
 export type { OrderDefinition } from './content/orders';
 export type { GrowthStageDefinition, SpeciesDefinition } from './content/species';
 export { nextRandom } from './state/rng';

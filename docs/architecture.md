@@ -65,7 +65,7 @@ ESLint enforces this table (`eslint.config.js`, `no-restricted-imports` per fold
 - **Integer economy.** Coins and prices are integers. Timestamps and durations are integer milliseconds. No floating-point money.
 - **Deterministic elements (brief section 9):** plant placement, growth stages, growth timers, harvest eligibility, mutation rules, inventory, currency and progression all live in `src/sim`. Plant growth never depends on physics or animation. Gameplay stays correct if rendering or physics is interrupted.
 
-The M6 lab is a separate adapter under [ADR 0011](decisions/0011-optional-laboratory-boundary.md). The sim owns saved specimen IDs and fruit data; crate-to-lab transfers are atomic commands that validate the expected fruit. Drag state, poses and contacts remain transient. Lab callbacks propose commands through app; they never award or consume specimens directly. Reload and exit return owned specimens to the lab tray. Schema 10 adds an empty lab inventory and ID counter through a fixture-tested schema-9 migration.
+The M6 lab is a separate adapter under [ADR 0011](decisions/0011-optional-laboratory-boundary.md). The sim owns saved specimen IDs, fruit data and lab seed packets; crate-to-lab transfers and recipe merges are atomic commands that validate their inputs. Drag state, poses and contacts remain transient. Lab callbacks propose commands through app; recipes never depend on physics. Schema 10 adds specimen inventory; schema 11 adds seed packets through sequential migrations.
 
 ## M1 public contract
 

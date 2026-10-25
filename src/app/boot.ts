@@ -38,6 +38,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   let latestSnapshot: GardenSnapshot = getSnapshot(initialState);
   const acceptPlotActivation = createPlotActivationGuard();
   let uiCommand: (command: Command) => void = () => {};
+  let openLaboratory: () => void = () => {};
+  let reportLabEvents: (events: readonly SimEvent[]) => void = () => {};
   const uiRoot = document.createElement('div');
   uiRoot.dataset.gardenUi = '';
   for (const [name, value] of Object.entries({
@@ -57,15 +59,20 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     '--mg-ui-panel-sunk': palette.ui['panel-sunk'],
     '--mg-ui-text-muted': palette.ui['text-muted'],
     '--mg-ui-success': palette.ui.success,
+    '--mg-wood-light': palette.environment['wood-crate'][0],
+    '--mg-wood-mid': palette.environment['wood-crate'][1],
+    '--mg-wood-dark': palette.environment['wood-crate'][2],
+    '--mg-glass-highlight': palette.environment.water[0],
   })) {
     uiRoot.style.setProperty(name, value);
   }
+  for (const [id, plant] of Object.entries(palette.plants)) uiRoot.style.setProperty(`--mg-fruit-${id}`, plant.fruit[1]);
   document.body.append(uiRoot);
   // Set once saves load; the shop's Start over calls it.
   let resetGarden: () => Promise<void> = async () => {};
   const gardenUI = createGardenUI(uiRoot, {
     species: SPECIES
-      .map(({ id, name, seedCost, unlockLevel }) => ({ id, name, cost: seedCost, unlockLevel, color: palette.plants[id].fruit[1] })),
+      .map(({ id, name, seedCost, unlockLevel }) => ({ id, name, cost: seedCost, unlockLevel, color: palette.plants[id].fruit[1], ...(id === 'prism-fig' || id === 'sunburst' ? { labSeed: true } : {}) })),
     journalTraits: [
       { id: 'giant', name: 'Giant', multiplier: MUTATIONS.giant.value, naturalChance: MUTATIONS.giant.naturalChance,
         rule: 'Water twice while the plant sprouts and grows.' },
@@ -107,6 +114,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     },
     onHarvestAll: () => harvestAll(),
     onSell: () => uiCommand({ type: 'StartSelling' }),
+    onOpenLab: () => openLaboratory(),
     onBuy: (item) => uiCommand({ type: 'Buy', item }),
     onReset: () => {
       if (dailyMode) {
@@ -135,6 +143,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       selectedId: selectedSpeciesId,
       coins,
       bonusSeeds: snapshot.bonusSeeds ?? 0,
+      labSeeds: snapshot.labSeeds ?? [],
       level: snapshot.level,
       levelProgress: (snapshot.xp - snapshot.levelStartXp) / span,
       hint: dailyMode ? notice || `Daily: sell the highest-value fruit. Back two beds are closed. Best sale: ${dailyBest}.` : notice || hintFor(snapshot, selectedSpeciesId),
@@ -225,6 +234,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         r.render(frame.previous, frame.current, frame.alpha, motion.matches);
       },
       onEvents: (events) => {
+        reportLabEvents(events);
         scheduleSave(events);
         for (const event of events) {
           if (event.type === 'LevelUp') {
@@ -293,6 +303,25 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         }
       }
     });
+    let labDispose: (() => void) | null = null;
+    let labOpening = false;
+    openLaboratory = () => {
+      if (labDispose || labOpening) return;
+      labOpening = true;
+      void import('../lab/laboratory').then(({ createLaboratory }) => {
+        labOpening = false;
+        if (disposed || labDispose) return;
+        const lab = createLaboratory(uiRoot, {
+          getState: () => loop.getState(),
+          store: (crateIndex, expectedFruit) => act({ type: 'StoreLabSpecimen', crateIndex, expectedFruit }),
+          merge: (specimenIds) => act({ type: 'MergeLabSpecimens', specimenIds }),
+          returnToCrate: (specimenIds) => act({ type: 'ReturnLabSpecimens', specimenIds }),
+          close: () => { labDispose?.(); labDispose = null; },
+        });
+        labDispose = () => { lab(); reportLabEvents = () => {}; labDispose = null; };
+        reportLabEvents = lab.report;
+      }).catch(() => { labOpening = false; showNotice('The laboratory could not be opened. Your garden is safe.'); });
+    };
     cancelActiveGesture = input.cancelGesture;
     harvestAll = () => {
       const ripe = latestSnapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').map(({ id }) => id);
@@ -408,7 +437,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       };
       scheduleSave = (events) => {
         if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered' || type === 'FruitSold'
-          || type === 'Mutated' || type === 'Bought' || type === 'OrderCompleted')) return;
+          || type === 'Mutated' || type === 'Bought' || type === 'OrderCompleted' || type === 'LabSpecimenStored' || type === 'LabMergeCompleted')) return;
         clearTimeout(pending);
         pending = setTimeout(saveNow, 800) as unknown as number;
       };
@@ -459,6 +488,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       clearInterval(saveTimer);
       saveNow();
       rewards.dispose();
+      labDispose?.();
       mutationReveal.dispose();
       sfx.dispose();
       r.dispose();

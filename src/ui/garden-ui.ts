@@ -10,6 +10,7 @@ export interface SeedDescriptor {
   readonly unlockLevel: number;
   /** The fruit colour shown on the seed card (a palette value). */
   readonly color?: string;
+  readonly labSeed?: boolean;
 }
 
 export interface GardenUIOptions {
@@ -30,12 +31,14 @@ export interface GardenUIOptions {
   readonly onReset?: () => void;
   readonly onWaterAll?: () => void;
   readonly onDismissHint?: () => void;
+  readonly onOpenLab?: () => void;
 }
 
 export interface GardenUIUpdate {
   readonly selectedId: SpeciesId;
   readonly coins: number;
   readonly bonusSeeds?: number;
+  readonly labSeeds?: readonly SpeciesId[];
   readonly level?: number;
   /** 0..1 progress through the current level. */
   readonly levelProgress?: number;
@@ -316,7 +319,11 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   // Main actions live in the bottom third (AGENTS.md): Shop is a tab on the seed tray.
   const trayTools = document.createElement('div');
   trayTools.className = 'garden-ui__tray-tools';
-  trayTools.append(dailyButton, journal.button, shopButton);
+  const labButton = document.createElement('button');
+  labButton.type = 'button'; labButton.className = 'garden-ui__shop'; labButton.textContent = 'Lab';
+  labButton.setAttribute('aria-label', 'Open laboratory');
+  labButton.addEventListener('click', () => options.onOpenLab?.());
+  trayTools.append(dailyButton, journal.button, shopButton, labButton);
   seedTray.append(trayTools);
   container.append(overlay);
 
@@ -350,6 +357,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       coinAmount.textContent = String(targetCoins);
     }
     const level = state.level ?? 1;
+    labButton.hidden = level < 18;
     levelText.textContent = `Level ${level}`;
     const progress = Math.round(Math.min(1, Math.max(0, state.levelProgress ?? 0)) * 100);
     levelFill.style.width = `${progress}%`;
@@ -402,7 +410,9 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     });
     for (const seed of seedButtons) {
       const selected = seed.species.id === state.selectedId;
-      const locked = seed.species.unlockLevel > level;
+      const hasLabSeed = (state.labSeeds ?? []).includes(seed.species.id);
+      const locked = seed.species.labSeed ? !hasLabSeed : seed.species.unlockLevel > level;
+      seed.button.hidden = Boolean(seed.species.labSeed && !hasLabSeed);
       seed.button.setAttribute('aria-pressed', String(selected));
       seed.button.classList.toggle('is-selected', selected);
       // Unlocked but unaffordable: still selectable, but the price reads as out of reach.
@@ -413,7 +423,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
         seed.button.classList.toggle('is-locked', locked);
         seed.locked = locked;
       }
-      seed.detail.textContent = locked ? `Level ${seed.species.unlockLevel}` : bonusLantern ? '1 free seed' : `${seed.species.cost} ${seed.species.cost === 1 ? 'coin' : 'coins'}`;
+      seed.detail.textContent = seed.species.labSeed && hasLabSeed ? 'Lab seed' : locked ? `Level ${seed.species.unlockLevel}` : bonusLantern ? '1 free seed' : `${seed.species.cost} ${seed.species.cost === 1 ? 'coin' : 'coins'}`;
     }
   };
   update(options);

@@ -1,7 +1,7 @@
 import type { GardenState, PlotState, TraitId } from './types';
 import { INITIAL_COINS } from '../content/species';
 
-export const SIM_SCHEMA_VERSION = 10;
+export const SIM_SCHEMA_VERSION = 11;
 export { INITIAL_COINS };
 
 function assertTimestamp(nowMs: number): void {
@@ -51,6 +51,7 @@ export function createInitialState(seed: number, nowMs: number, options: Initial
     xp: options.xp ?? 0,
     crate: [],
     labSpecimens: [],
+    labSeeds: [],
     nextLabSpecimenId: 0,
     sellingSince: null,
     order: { index: 0, progress: 0 },

@@ -37,12 +37,12 @@ export interface PlantModels {
   dispose(): void;
 }
 
-const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap', 'lantern-pod', 'comet-pear', 'clockvine', 'dewbell'];
+const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap', 'lantern-pod', 'comet-pear', 'clockvine', 'dewbell', 'prism-fig', 'sunburst'];
 const MODEL_FALLBACK: Partial<Record<SpeciesId, SpeciesId>> = {
-  'lantern-pod': 'bubble-berry', 'comet-pear': 'sunny-sprout', clockvine: 'twistroot', dewbell: 'puffcap',
+  'lantern-pod': 'bubble-berry', 'comet-pear': 'sunny-sprout', clockvine: 'twistroot', dewbell: 'puffcap', 'prism-fig': 'twistroot', sunburst: 'sunny-sprout',
 };
 /** Display size per species, tuned so each plant fills its bed at phone size. */
-export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4, puffcap: 1.25, 'lantern-pod': 1.35, 'comet-pear': 1.25, clockvine: 1.35, dewbell: 1.25 };
+export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4, puffcap: 1.25, 'lantern-pod': 1.35, 'comet-pear': 1.25, clockvine: 1.35, dewbell: 1.25, 'prism-fig': 1.35, sunburst: 1.35 };
 const RIPE_SWELL = 1.14;
 /** Harvested parts show their rolled yield size (design.md 4.3). */
 export const YIELD_SCALE = { small: 0.88, regular: 1, big: 1.2 } as const;
@@ -142,9 +142,16 @@ export function readPlantModels(scene: Object3D): PlantModels {
 }
 
 export async function loadPlantModels(url: string): Promise<PlantModels> {
-  const gltf = await new GLTFLoader().loadAsync(url);
-  const models = readPlantModels(gltf.scene);
-  gltf.scene.traverse((object) => {
+  const loader = new GLTFLoader();
+  const [gltf, lab] = await Promise.all([
+    loader.loadAsync(url),
+    loader.loadAsync(`${import.meta.env.BASE_URL}models/lab-plants.glb`).catch(() => null),
+  ]);
+  const scene = new Group();
+  scene.add(gltf.scene);
+  if (lab) scene.add(lab.scene);
+  const models = readPlantModels(scene);
+  scene.traverse((object) => {
     if (object instanceof Mesh) {
       (object.geometry as BufferGeometry).dispose();
       for (const material of [object.material].flat()) material.dispose();

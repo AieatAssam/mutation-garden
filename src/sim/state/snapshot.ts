@@ -38,6 +38,7 @@ export function getSnapshot(state: GardenState): GardenSnapshot {
     fertiliser: state.fertiliser,
     crate: state.crate,
     labSpecimens: state.labSpecimens,
+    labSeeds: state.labSeeds,
     crateCount: state.crate.length,
     crateCapacity: crateCapacity(state.owned),
     selling: state.sellingSince !== null,

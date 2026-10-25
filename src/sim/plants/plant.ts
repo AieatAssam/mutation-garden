@@ -28,10 +28,9 @@ export function plant(
     return rejected(state, command, 'occupied');
   }
 
-  if (species.unlockLevel > levelForXp(state.xp)) {
-    return rejected(state, command, 'locked');
-  }
-
+  const labSeed = species.id === 'prism-fig' || species.id === 'sunburst';
+  const labSeedIndex = labSeed ? state.labSeeds.indexOf(species.id) : -1;
+  if (labSeed ? labSeedIndex < 0 : species.unlockLevel > levelForXp(state.xp)) return rejected(state, command, 'locked');
   const bonusSeed = species.id === 'lantern-pod' && state.bonusSeeds > 0;
   if (!bonusSeed && state.coins < species.seedCost) {
     return rejected(state, command, 'insufficient-coins');
@@ -53,6 +52,7 @@ export function plant(
     ...state,
     coins: state.coins - (bonusSeed ? 0 : species.seedCost),
     bonusSeeds: state.bonusSeeds - Number(bonusSeed),
+    labSeeds: labSeed ? state.labSeeds.filter((_, index) => index !== labSeedIndex) : state.labSeeds,
     rngState: roll.nextState,
     mutationRngState: mutationRoll.nextState,
     plantCount: state.plantCount + 1,

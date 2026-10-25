@@ -115,7 +115,7 @@ export function createPlantReconciler(
             ? createSunnySprout(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
             : plant.speciesId === 'bubble-berry'
               ? createBubbleBerry(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
-            : plant.speciesId === 'twistroot' || plant.speciesId === 'puffcap' || plant.speciesId === 'clockvine' || plant.speciesId === 'dewbell'
+            : plant.speciesId === 'twistroot' || plant.speciesId === 'puffcap' || plant.speciesId === 'clockvine' || plant.speciesId === 'dewbell' || plant.speciesId === 'prism-fig'
               ? createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
               : plant.speciesId === 'lantern-pod'
                 ? createBubbleBerry(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)

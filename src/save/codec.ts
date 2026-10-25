@@ -1,4 +1,4 @@
-import { crateCapacity, levelForXp, MAX_LAB_SPECIMENS, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
+import { crateCapacity, levelForXp, MAX_LAB_SEEDS, MAX_LAB_SPECIMENS, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
 import type { GardenState, TraitId } from '../sim';
 
 /** The stored and exported save format (docs/architecture.md, Saves). Keep it stable. */
@@ -57,6 +57,7 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
   }) : state.plots }),
   8: (state) => ({ ...state, schema: 9, bonusSeeds: 0 }),
   9: (state) => ({ ...state, schema: 10, labSpecimens: [], nextLabSpecimenId: 0 }),
+  10: (state) => ({ ...state, schema: 11, labSeeds: [] }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
@@ -81,6 +82,7 @@ export function validateState(value: unknown): value is GardenState {
   };
   if (!Array.isArray(state.labSpecimens) || state.labSpecimens.length > MAX_LAB_SPECIMENS
     || !isCount(state.nextLabSpecimenId)) return false;
+  if (!Array.isArray(state.labSeeds) || state.labSeeds.length > MAX_LAB_SEEDS || !state.labSeeds.every((seed) => seed === 'prism-fig' || seed === 'sunburst')) return false;
   const specimenIds = state.labSpecimens.map((specimen) => specimen && typeof specimen === 'object'
     ? (specimen as Record<string, unknown>).id : undefined);
   if (specimenIds.some((id) => !isCount(id)) || new Set(specimenIds).size !== specimenIds.length

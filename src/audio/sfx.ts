@@ -140,6 +140,7 @@ export function createSfx(): Sfx {
           case 'Harvestable': play('ripe'); break;
           case 'Watered': play('water'); break;
           case 'OrderCompleted': play('chime'); break;
+          case 'LabMergeCompleted': play('chime', 1.25); break;
           case 'Harvested': {
             if (!context) break;
             // The coin ladder climbs while harvests keep coming and resets after 1.2 s of quiet.

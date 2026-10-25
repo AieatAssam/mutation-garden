@@ -13,7 +13,8 @@ const seed = 0x1234_5678;
 
 function plantOne(speciesId: (typeof SPECIES)[number]['id'], plotId = 'plot-0') {
   const species = SPECIES.find(({ id }) => id === speciesId)!;
-  const initial = { ...createInitialState(seed, 0, { xp: xpForLevel(species.unlockLevel) }), coins: species.seedCost, plantCount: 2 };
+  const initial = { ...createInitialState(seed, 0, { xp: xpForLevel(species.unlockLevel) }), coins: species.seedCost, plantCount: 2,
+    labSeeds: speciesId === 'prism-fig' || speciesId === 'sunburst' ? [speciesId] : [] };
   const command: Command = { type: 'Plant', plotId, seedId: speciesId };
   const planted = step(initial, [command], 0);
   return { state: planted.state, plantedAt: 0 };
@@ -132,6 +133,7 @@ describe('timestamp-derived plant growth', () => {
       fertiliser: 0,
       crate: [],
       labSpecimens: [],
+      labSeeds: [],
       crateCount: 0,
       crateCapacity: 12,
       saleIntervalMs: 1_200,
@@ -157,7 +159,7 @@ describe('timestamp-derived plant growth', () => {
       stage: 'Seed',
       progress: 0,
     });
-    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'bonusSeeds', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'scriptedGoldenUsed', 'plantCount', 'badLuck', 'discoveries', 'rewardsPaid', 'crystalReadyPlots', 'rainbowPlots', 'owned', 'fertiliser', 'xp', 'crate', 'labSpecimens', 'nextLabSpecimenId', 'sellingSince', 'order', 'plots']);
+    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'bonusSeeds', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'scriptedGoldenUsed', 'plantCount', 'badLuck', 'discoveries', 'rewardsPaid', 'crystalReadyPlots', 'rainbowPlots', 'owned', 'fertiliser', 'xp', 'crate', 'labSpecimens', 'labSeeds', 'nextLabSpecimenId', 'sellingSince', 'order', 'plots']);
     expect(Object.keys(planted.state.plots[0]!.plant!)).toEqual(['speciesId', 'plantedAt', 'size', 'mutationSeed', 'waterCount']);
 
     const half = step(planted.state, [], 4_100);

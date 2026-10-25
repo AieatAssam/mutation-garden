@@ -13,7 +13,7 @@ describe('palette', () => {
 
   it('has the groups the style guide requires', () => {
     for (const k of ['ink', 'environment', 'plants', 'mutations', 'ui', 'lighting']) expect(palette).toHaveProperty(k);
-    expect(Object.keys(palette.plants).sort()).toEqual(['bubble-berry', 'clockvine', 'comet-pear', 'dewbell', 'lantern-pod', 'puffcap', 'sunny-sprout', 'twistroot']);
+    expect(Object.keys(palette.plants).sort()).toEqual(['bubble-berry', 'clockvine', 'comet-pear', 'dewbell', 'lantern-pod', 'prism-fig', 'puffcap', 'sunburst', 'sunny-sprout', 'twistroot']);
     expect(Object.keys(palette.mutations).sort()).toEqual(['crystal', 'giant', 'glowing', 'golden', 'rainbow']);
   });
 });

@@ -66,7 +66,7 @@ describe('M2 mutation rules', () => {
     const blocked = step(state, [{ type: 'Plant', plotId: 'plot-3', seedId: 'bubble-berry' }], 0).state;
     expect(getSnapshot(blocked).nearMiss).toBeNull();
 
-    let full = createInitialState(22, 0, { xp: 900 });
+    let full = { ...createInitialState(22, 0, { xp: 900 }), coins: 13 };
     full = step(full, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },

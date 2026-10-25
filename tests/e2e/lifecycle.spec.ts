@@ -133,10 +133,10 @@ test('catches up once and resumes fixed-step frames across visibility changes', 
     trackedNowCalls: window.__gardenLifecycleProbe.trackedNowCalls,
     pendingFrames: window.__gardenLifecycleProbe.callbacks.size,
     requested: window.__gardenLifecycleProbe.requested,
-  }))).toEqual({ trackedNowCalls: 1, pendingFrames: 1, requested: 4 });
+  }))).toEqual({ trackedNowCalls: 2, pendingFrames: 1, requested: 4 });
 
-  expect(await runFrame(10_000)).toEqual({ trackedNowCalls: 1, pendingFrames: 1 });
-  expect(await runFrame(10_099)).toEqual({ trackedNowCalls: 1, pendingFrames: 1 });
-  expect(await runFrame(10_100)).toEqual({ trackedNowCalls: 2, pendingFrames: 1 });
+  expect(await runFrame(10_000)).toEqual({ trackedNowCalls: 2, pendingFrames: 1 });
+  expect(await runFrame(10_099)).toEqual({ trackedNowCalls: 2, pendingFrames: 1 });
+  expect(await runFrame(10_100)).toEqual({ trackedNowCalls: 3, pendingFrames: 1 });
   expect(errors).toEqual([]);
 });

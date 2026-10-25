@@ -51,12 +51,21 @@ export interface GardenUIUpdate {
   readonly order?: JournalOrder;
 }
 
+export interface AwaySummary {
+  readonly plantsGrown: number;
+  readonly plotsWatered: number;
+  readonly fruitHarvested: number;
+  readonly coinsSold: number;
+  readonly crateContents: string;
+  readonly ripeCount: number;
+}
+
 export interface GardenUI {
   update(update: GardenUIUpdate): void;
   /** Stamps the new level and names what it unlocked (motion.md 4.7). */
   levelUp(level: number, unlocked: readonly string[], reducedMotion: boolean): void;
   /** "While you were away" card with a one-tap harvest of everything ripe. */
-  showAway(ripeCount: number, onHarvestAll: () => void): void;
+  showAway(summary: AwaySummary, onHarvestAll: () => void): void;
   hideAway(): void;
   /** Nudges the coin chip when a seed costs more than the player has. */
   noCoins(reducedMotion: boolean): void;
@@ -248,19 +257,31 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
 
   const away = document.createElement('div');
   away.className = 'garden-ui__away';
+  away.setAttribute('role', 'status');
+  away.setAttribute('aria-label', 'While you were away');
+  away.setAttribute('aria-live', 'polite');
   away.hidden = true;
   const awayText = document.createElement('p');
   const awayButton = document.createElement('button');
   awayButton.type = 'button';
   awayButton.className = 'garden-ui__away-button';
   awayButton.textContent = 'Harvest all';
-  away.append(awayText, awayButton);
+  const awayClose = document.createElement('button');
+  awayClose.type = 'button';
+  awayClose.className = 'garden-ui__away-close';
+  awayClose.setAttribute('aria-label', 'Close return summary');
+  awayClose.textContent = '×';
+  const awayActions = document.createElement('div');
+  awayActions.className = 'garden-ui__away-actions';
+  awayActions.append(awayButton, awayClose);
+  away.append(awayText, awayActions);
   away.addEventListener('click', (event) => { if (event.target === away) away.hidden = true; });
   let onAwayHarvest: (() => void) | null = null;
   awayButton.addEventListener('click', () => {
     onAwayHarvest?.();
     away.hidden = true;
   });
+  awayClose.addEventListener('click', () => { away.hidden = true; });
 
   overlay.append(coinStatus, crateAmount, levelBadge, toggles, hint, stamp, away, seedTray);
   seedTray.append(harvestAll, sell);
@@ -387,9 +408,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       clearTimeout(stampTimer);
       stampTimer = window.setTimeout(() => { stamp.hidden = true; }, readingTimeMs(stamp.textContent ?? ''));
     },
-    showAway(ripeCount, onHarvestAll) {
-      awayText.textContent = `${ripeCount} ${ripeCount === 1 ? 'plant' : 'plants'} ripened while you were away.`;
+    showAway(summary, onHarvestAll) {
+      awayText.textContent = `While you were away\nPlants grown: ${summary.plantsGrown} · Plots watered: ${summary.plotsWatered}\nFruit harvested: ${summary.fruitHarvested} · Coins sold: ${summary.coinsSold}\nCrate: ${summary.crateContents || 'empty'}`;
       onAwayHarvest = onHarvestAll;
+      awayButton.hidden = summary.ripeCount === 0;
       away.hidden = false;
     },
     noCoins(reducedMotion) {

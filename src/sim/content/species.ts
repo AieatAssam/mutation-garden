@@ -35,7 +35,7 @@ export const SPECIES = [
   {
     id: 'bubble-berry',
     name: 'Bubble Berry',
-    seedCost: 3,
+    seedCost: 4,
     baseValue: 6,
     growthDurationMs: 15000,
     unlockLevel: 2,

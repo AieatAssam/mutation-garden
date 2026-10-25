@@ -13,7 +13,7 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
     return mutationRoll(mutationSeed, 'golden') >= 0.01 && mutationRoll(mutationSeed, 'glowing') >= 0.01;
   })!;
   await startWithSave(page, xpForLevel(3), {
-    coins: SHOP_PRICES['plot-6'] + 3, mutationRngState, plantCount: 100,
+    coins: SHOP_PRICES['plot-6'] + 4, mutationRngState, plantCount: 100,
   });
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');

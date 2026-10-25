@@ -274,13 +274,16 @@
 
 .garden-ui__away {
   position: absolute;
+  box-sizing: border-box;
   right: var(--garden-safe-right);
-  bottom: calc(var(--garden-safe-bottom) + 150px);
+  bottom: calc(var(--garden-safe-bottom) + 210px);
   left: var(--garden-safe-left);
   display: flex;
+  max-width: 560px;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  margin: 0 auto;
   padding: 10px 12px 10px 16px;
   border: 3px solid var(--mg-ui-border);
   border-radius: 18px;
@@ -290,9 +293,14 @@
 }
 
 .garden-ui__away p {
+  min-width: 0;
+  flex: 1 1 auto;
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 700;
+  line-height: 1.3;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
 }
 
 .garden-ui__away-button {
@@ -306,6 +314,35 @@
   cursor: pointer;
   font: 700 17px/1 'Fraunces', Georgia, serif;
   white-space: nowrap;
+}
+
+.garden-ui__away-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+}
+
+.garden-ui__away-close {
+  width: 48px;
+  min-height: 48px;
+  border: 3px solid var(--mg-ui-border);
+  border-radius: 50%;
+  background: var(--mg-ui-panel);
+  box-shadow: 0 4px 0 var(--mg-ui-border);
+  color: var(--mg-ui-ink);
+  cursor: pointer;
+  font: 700 28px/1 'Fraunces', Georgia, serif;
+}
+
+.garden-ui__away-close:focus-visible {
+  outline: 3px solid var(--mg-ui-focus);
+  outline-offset: 3px;
+}
+
+@media (max-width: 520px) {
+  .garden-ui__away { flex-direction: column; align-items: stretch; }
+  .garden-ui__away-actions { align-self: flex-end; }
 }
 
 [hidden] {

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInitialState, getSnapshot, SPECIES, step, type GardenSnapshot, type SpeciesId } from '../sim';
 import * as loopModule from './loop';
+import * as saveModule from '../save/store';
 import { boot } from './boot';
 
 const {
@@ -191,7 +192,7 @@ describe('boot animation wiring', () => {
     expect(createGardenUI).toHaveBeenCalledWith(uiRoot, expect.objectContaining({
       species: [
         expect.objectContaining({ id: 'sunny-sprout', name: 'Sunny Sprout', cost: 1, unlockLevel: 1 }),
-        expect.objectContaining({ id: 'bubble-berry', name: 'Bubble Berry', cost: 3, unlockLevel: 2 }),
+        expect.objectContaining({ id: 'bubble-berry', name: 'Bubble Berry', cost: 4, unlockLevel: 2 }),
         expect.objectContaining({ id: 'twistroot', name: 'Twistroot', cost: 5, unlockLevel: 3 }),
         expect.objectContaining({ id: 'puffcap', name: 'Puffcap', cost: 6, unlockLevel: 4 }),
         expect.objectContaining({ id: 'lantern-pod', name: 'Lantern Pod', cost: 12, unlockLevel: 6 }),
@@ -260,6 +261,58 @@ describe('boot animation wiring', () => {
       { selectedId: 'sunny-sprout', coins: 12 },
       { selectedId: 'sunny-sprout', coins: 7 },
     ]);
+    cleanup();
+  });
+
+  it('keeps saving after the first offline catch-up write fails', async () => {
+    createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI, showAway: vi.fn() });
+    const nowMs = 32_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
+    const backend = saveModule.memoryBackend();
+    const seedStore = saveModule.createSaveStore(backend, 'test', () => nowMs);
+    await seedStore.save(createInitialState(3, 0), 1_000);
+    let writes = 0;
+    const retryBackend: saveModule.SaveBackend = {
+      get: (key) => backend.get(key),
+      set: (entries) => backend.set(entries),
+      async swap(key, decide) {
+        writes += 1;
+        if (writes === 1) throw new Error('temporary storage failure');
+        await backend.swap(key, decide);
+      },
+    };
+    vi.spyOn(saveModule, 'chooseBackend').mockResolvedValue({ backend: retryBackend, persistent: true });
+    let onSaveTimer: (() => void) | undefined;
+    vi.spyOn(globalThis, 'setInterval').mockImplementation((callback: Parameters<typeof setInterval>[0]) => {
+      onSaveTimer = callback as () => void;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    });
+    vi.spyOn(loopModule, 'createFixedStepLoop').mockImplementation((options) => {
+      let state = options.initialState;
+      return {
+        enqueue: vi.fn(), catchUp: vi.fn(), getState: () => state,
+        restore: (next) => { state = next; }, stop: vi.fn(), start: vi.fn(),
+      };
+    });
+    const windowStub = {
+      innerWidth: 390, innerHeight: 844, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      matchMedia: vi.fn(() => ({ matches: false })),
+    };
+    const uiRoot = { dataset: {}, style: { setProperty: vi.fn() }, remove: vi.fn() };
+    const documentStub = {
+      body: { style: {}, dataset: {}, append: vi.fn() }, hidden: false,
+      addEventListener: vi.fn(), removeEventListener: vi.fn(), createElement: vi.fn(() => uiRoot),
+    };
+    vi.stubGlobal('window', windowStub as unknown as Window);
+    vi.stubGlobal('document', documentStub as unknown as Document);
+
+    const cleanup = boot({} as HTMLCanvasElement);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes).toBe(1);
+    expect(onSaveTimer).toBeTypeOf('function');
+    onSaveTimer!();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(writes).toBe(2);
     cleanup();
   });
 });

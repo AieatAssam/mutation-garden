@@ -165,7 +165,7 @@ test('Sunny harvest blocks a cross-tick repeat before allowing replant', async (
   expect(errors).toEqual([]);
 });
 
-test('Bubble Berry costs three coins, matures in fifteen seconds and pays its yield', async ({ page }, testInfo) => {
+test('Bubble Berry costs four coins, matures in fifteen seconds and pays its yield', async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   const mobile = testInfo.project.name === 'mobile-portrait';
   const errors: string[] = [];
@@ -186,7 +186,7 @@ test('Bubble Berry costs three coins, matures in fifteen seconds and pays its yi
   else await bubble.click();
   await expect(bubble).toHaveAttribute('aria-pressed', 'true');
   await activatePlot(page, plot, mobile);
-  await expect(coins).toHaveText('9');
+  await expect(coins).toHaveText('8');
   const plantedAt = await page.evaluate(() => Date.now());
   await waitUntilTimestampIsRendered(page, plantedAt + 15_000);
 

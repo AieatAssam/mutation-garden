@@ -20,7 +20,7 @@ describe('species content', () => {
 
   it.each([
     { id: 'sunny-sprout', name: 'Sunny Sprout', seedCost: 1, baseValue: 2, unlockLevel: 1 },
-    { id: 'bubble-berry', name: 'Bubble Berry', seedCost: 3, baseValue: 6, unlockLevel: 2 },
+    { id: 'bubble-berry', name: 'Bubble Berry', seedCost: 4, baseValue: 6, unlockLevel: 2 },
     { id: 'twistroot', name: 'Twistroot', seedCost: 5, baseValue: 10, unlockLevel: 3 },
     { id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14, unlockLevel: 4 },
     { id: 'lantern-pod', name: 'Lantern Pod', seedCost: 12, baseValue: 28, unlockLevel: 6 },

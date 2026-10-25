@@ -43,7 +43,7 @@ describe('Plant commands', () => {
   );
 
   it('allows spending exactly the available coins', () => {
-    const initial = withCoins(createInitialState(seed, startTime, { xp: 500 }), 3);
+    const initial = withCoins(createInitialState(seed, startTime, { xp: 500 }), 4);
     const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' }], startTime);
 
     expect(result.state.coins).toBe(0);
@@ -97,7 +97,7 @@ describe('Plant commands', () => {
   });
 
   it('spends commands in order, allowing later cheaper seeds after an unaffordable command', () => {
-    const state = withCoins(createInitialState(seed, startTime, { xp: 900 }), 4);
+    const state = withCoins(createInitialState(seed, startTime, { xp: 900 }), 5);
     const result = step(state, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },

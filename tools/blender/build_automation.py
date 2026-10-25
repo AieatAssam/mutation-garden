@@ -36,6 +36,7 @@ def box(bm, center, scale):
     geom = bmesh.ops.create_cube(bm, size=1)['verts']
     bmesh.ops.scale(bm, verts=geom, vec=scale)
     bmesh.ops.translate(bm, verts=geom, vec=center)
+    return geom
 
 
 def sphere(bm, center, scale, segments=16, rings=10):

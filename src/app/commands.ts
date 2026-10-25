@@ -17,7 +17,7 @@ export function createPlotActivationGuard(
   const lastAcceptedIntent: ({ type: Command['type']; atMs: number } | undefined)[] = Array(PLOT_IDS.length).fill(undefined);
 
   return (command, nowMs) => {
-    if (command.type === 'Buy' || command.type === 'WaterAll' || command.type === 'StartSelling') return true;
+    if (command.type === 'Buy' || command.type === 'WaterAll' || command.type === 'StartSelling' || command.type === 'StoreLabSpecimen') return true;
     const plotIds = command.type === 'Harvest' ? command.plotIds : [command.plotId];
     if (plotIds.length === 0 || !Number.isSafeInteger(nowMs) || nowMs < 0) return false;
     const plotIndices = plotIds.map((plotId) => PLOT_IDS.indexOf(plotId));

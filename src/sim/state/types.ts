@@ -75,6 +75,7 @@ export interface GardenSnapshot {
   readonly owned?: readonly ShopItemId[];
   readonly fertiliser?: number;
   readonly crate?: readonly Fruit[];
+  readonly labSpecimens?: readonly LabSpecimen[];
   readonly crateCount?: number;
   readonly crateCapacity?: number;
   readonly saleIntervalMs?: number;
@@ -90,7 +91,7 @@ export interface OrderProgress { readonly index: number; readonly progress: numb
 export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number; readonly bonusSpeciesId?: SpeciesId; readonly bonusPercent?: number }
 
 export interface GardenState {
-  readonly schema: 9;
+  readonly schema: 10;
   readonly coins: number;
   readonly bonusSeeds: number;
   readonly lastNowMs: number;
@@ -109,6 +110,8 @@ export interface GardenState {
   /** Garden XP; the level is derived from it (design.md 4.4). */
   readonly xp: number;
   readonly crate: readonly Fruit[];
+  readonly labSpecimens: readonly LabSpecimen[];
+  readonly nextLabSpecimenId: number;
   readonly sellingSince: number | null;
   readonly order: OrderProgress;
   readonly plots: readonly PlotState[];
@@ -116,13 +119,16 @@ export interface GardenState {
 
 export interface Fruit { readonly speciesId: SpeciesId; readonly size: YieldSize; readonly mutations: readonly TraitId[]; readonly value: number; readonly xp: number }
 
+export interface LabSpecimen { readonly id: number; readonly fruit: Fruit }
+
 export type Command =
   | { readonly type: 'Plant'; readonly plotId: PlotId; readonly seedId: SpeciesId }
   | { readonly type: 'Harvest'; readonly plotIds: readonly PlotId[] }
   | { readonly type: 'Water'; readonly plotId: PlotId }
   | { readonly type: 'WaterAll' }
   | { readonly type: 'Buy'; readonly item: ShopItemId }
-  | { readonly type: 'StartSelling' };
+  | { readonly type: 'StartSelling' }
+  | { readonly type: 'StoreLabSpecimen'; readonly crateIndex: number; readonly expectedFruit: Fruit };
 
 export type RejectionReason =
   | 'unknown-plot'
@@ -172,6 +178,8 @@ export type SimEvent =
   | { readonly type: 'FruitSold'; readonly value: number; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[] }
   | { readonly type: 'OrderCompleted'; readonly title: string; readonly coins: number; readonly xp: number }
   | { readonly type: 'LevelUp'; readonly level: number; readonly unlocked: readonly SpeciesId[] }
+  | { readonly type: 'LabSpecimenStored'; readonly specimenId: number }
+  | { readonly type: 'LabSpecimenRejected'; readonly reason: 'invalid-selection' | 'laboratory-full' | 'crate-empty' }
   | {
       readonly type: 'CommandRejected';
       readonly command: Command['type'];

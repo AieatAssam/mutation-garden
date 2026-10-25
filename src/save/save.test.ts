@@ -62,7 +62,7 @@ describe('save codec', () => {
     const { bonusSeeds: _bonusSeeds, ...schema8State } = state;
     void _bonusSeeds;
     const legacy = { schema: 8, savedAt: 5_000, appVersion: 'test', state: { ...schema8State, schema: 8 }, checksum: checksum(JSON.stringify({ ...schema8State, schema: 8 })) };
-    expect(decodeSave(legacy)).toMatchObject({ ok: true, state: { schema: 9, bonusSeeds: 0 } });
+    expect(decodeSave(legacy)).toMatchObject({ ok: true, state: { schema: 10, bonusSeeds: 0 } });
   });
 
   it('continues a saved mature mutation without rerolling it', () => {
@@ -94,7 +94,7 @@ describe('save codec', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-2.json', 'utf8'));
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
-    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 9, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
+    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 10, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
   });
 
   it('migrates the M2 schema 3 fixture with mutations to an empty, idle crate', () => {
@@ -102,7 +102,7 @@ describe('save codec', () => {
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
-      expect(decoded.state).toMatchObject({ schema: 9, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
+      expect(decoded.state).toMatchObject({ schema: 10, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
       expect(decoded.state.plots[0]?.plant).toMatchObject({ mutations: ['golden'] });
     }
   });
@@ -113,7 +113,7 @@ describe('save codec', () => {
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
-      expect(decoded.state).toMatchObject({ schema: 9, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser, crystalReadyPlots: [], rainbowPlots: [] });
+      expect(decoded.state).toMatchObject({ schema: 10, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser, crystalReadyPlots: [], rainbowPlots: [] });
       const { crystalReadyPlots: _crystal, rainbowPlots: _rainbow, bonusSeeds: _bonusSeeds, ...migrated } = decoded.state;
       void _crystal; void _rainbow; void _bonusSeeds;
       expect(migrated.plots[0]?.lastSeedId).toBe('twistroot');
@@ -124,13 +124,13 @@ describe('save codec', () => {
   it('migrates a schema 5 fixture with the new one-shot plot flags empty', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-5.json', 'utf8'));
     const decoded = decodeSave(fixture);
-    expect(decoded).toMatchObject({ ok: true, state: { schema: 9, crystalReadyPlots: [], rainbowPlots: [] } });
+    expect(decoded).toMatchObject({ ok: true, state: { schema: 10, crystalReadyPlots: [], rainbowPlots: [] } });
   });
 
   it('migrates schema 6 without changing plant fields', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-6.json', 'utf8'));
     const decoded = decodeSave(fixture);
-    expect(decoded).toMatchObject({ ok: true, state: { schema: 9, bonusSeeds: 0 } });
+    expect(decoded).toMatchObject({ ok: true, state: { schema: 10, bonusSeeds: 0 } });
     if (decoded.ok) expect(decoded.state.plots[0]?.plant).toMatchObject({ speciesId: 'twistroot', plantedAt: 10_000 });
   });
 

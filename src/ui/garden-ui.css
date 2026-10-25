@@ -118,11 +118,12 @@
   bottom: var(--garden-safe-bottom);
   left: var(--garden-safe-left);
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   align-items: stretch;
   gap: 10px;
   box-sizing: border-box;
   max-width: 560px;
+  overflow: visible;
   margin: 0 auto;
   padding: 22px 10px 10px;
   border: 3px solid var(--mg-ui-border);
@@ -130,6 +131,16 @@
   background: var(--mg-ui-panel);
   box-shadow: 4px 4px 0 var(--mg-ui-misprint);
   pointer-events: none;
+}
+
+.garden-ui__seeds {
+  display: flex;
+  gap: 10px;
+  box-sizing: border-box;
+  padding: 8px;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
 }
 
 .garden-ui__tray-label {
@@ -305,7 +316,7 @@
 /* Seed cards, after the look prototype: fruit swatch, name, price. */
 .garden-ui__seed {
   display: grid;
-  flex: 1 1 0;
+  flex: 0 0 92px;
   justify-items: center;
   align-content: center;
   gap: 4px;

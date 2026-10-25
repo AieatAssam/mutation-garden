@@ -66,6 +66,22 @@ export const SPECIES = [
     id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14, growthDurationMs: 30_000, unlockLevel: 4,
     stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 4_000 }, { stage: 'Growing', startsAtMs: 12_000 }, { stage: 'Mature', startsAtMs: 26_000 }, { stage: 'Harvestable', startsAtMs: 30_000 }],
   },
+  {
+    id: 'lantern-pod', name: 'Lantern Pod', seedCost: 12, baseValue: 28, growthDurationMs: 45_000, unlockLevel: 6,
+    stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 4_000 }, { stage: 'Growing', startsAtMs: 18_000 }, { stage: 'Mature', startsAtMs: 38_000 }, { stage: 'Harvestable', startsAtMs: 45_000 }],
+  },
+  {
+    id: 'comet-pear', name: 'Comet Pear', seedCost: 24, baseValue: 58, growthDurationMs: 75_000, unlockLevel: 9,
+    stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 7_500 }, { stage: 'Growing', startsAtMs: 30_000 }, { stage: 'Mature', startsAtMs: 60_000 }, { stage: 'Harvestable', startsAtMs: 75_000 }],
+  },
+  {
+    id: 'clockvine', name: 'Clockvine', seedCost: 20, baseValue: 46, growthDurationMs: 55_000, unlockLevel: 11,
+    stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 5_500 }, { stage: 'Growing', startsAtMs: 22_000 }, { stage: 'Mature', startsAtMs: 44_000 }, { stage: 'Harvestable', startsAtMs: 55_000 }],
+  },
+  {
+    id: 'dewbell', name: 'Dewbell', seedCost: 34, baseValue: 82, growthDurationMs: 90_000, unlockLevel: 13,
+    stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 9_000 }, { stage: 'Growing', startsAtMs: 36_000 }, { stage: 'Mature', startsAtMs: 72_000 }, { stage: 'Harvestable', startsAtMs: 90_000 }],
+  },
 ] as const satisfies readonly SpeciesDefinition[];
 
 export const INITIAL_COINS = 12;

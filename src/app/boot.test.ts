@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createInitialState, getSnapshot, step, type GardenSnapshot } from '../sim';
+import { createInitialState, getSnapshot, SPECIES, step, type GardenSnapshot, type SpeciesId } from '../sim';
 import * as loopModule from './loop';
 import { boot } from './boot';
 
@@ -139,12 +139,14 @@ describe('boot animation wiring', () => {
     // Input waits for the save to load (here the memory fallback).
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(createRenderer).toHaveBeenCalledWith(expect.anything(), {
-      species: [
-        { id: 'sunny-sprout', stageFractions: [0.125, 0.375, 0.875] },
-        { id: 'bubble-berry', stageFractions: [2 / 15, 0.4, 13 / 15] },
-        { id: 'twistroot', stageFractions: [0.12, 0.4, 0.88] },
-        { id: 'puffcap', stageFractions: [4 / 30, 0.4, 26 / 30] },
-      ],
+      species: SPECIES.map(({ id, stages, growthDurationMs }) => ({
+        id,
+        stageFractions: [
+          stages.find(({ stage }) => stage === 'Sprout')!.startsAtMs / growthDurationMs,
+          stages.find(({ stage }) => stage === 'Growing')!.startsAtMs / growthDurationMs,
+          stages.find(({ stage }) => stage === 'Mature')!.startsAtMs / growthDurationMs,
+        ],
+      })),
     });
     const onIntent = createPointerInput.mock.calls[0]![2] as (intent: import('../input/types').InputIntent) => void;
     const planted = getSnapshot(step(createInitialState(1, 1_000), [
@@ -192,6 +194,10 @@ describe('boot animation wiring', () => {
         expect.objectContaining({ id: 'bubble-berry', name: 'Bubble Berry', cost: 3, unlockLevel: 2 }),
         expect.objectContaining({ id: 'twistroot', name: 'Twistroot', cost: 5, unlockLevel: 3 }),
         expect.objectContaining({ id: 'puffcap', name: 'Puffcap', cost: 6, unlockLevel: 4 }),
+        expect.objectContaining({ id: 'lantern-pod', name: 'Lantern Pod', cost: 12, unlockLevel: 6 }),
+        expect.objectContaining({ id: 'comet-pear', name: 'Comet Pear', cost: 24, unlockLevel: 9 }),
+        expect.objectContaining({ id: 'clockvine', name: 'Clockvine', cost: 20, unlockLevel: 11 }),
+        expect.objectContaining({ id: 'dewbell', name: 'Dewbell', cost: 34, unlockLevel: 13 }),
       ],
       selectedId: 'sunny-sprout',
       coins: 12,
@@ -199,7 +205,7 @@ describe('boot animation wiring', () => {
     }));
     expect(documentStub.body.append).toHaveBeenCalledWith(uiRoot);
     const uiOptions = createGardenUI.mock.calls[0]![1] as {
-      onSelect: (id: 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap') => void;
+      onSelect: (id: SpeciesId) => void;
     };
     uiOptions.onSelect('bubble-berry');
     expect(updateGardenUI).toHaveBeenLastCalledWith(expect.objectContaining({ selectedId: 'bubble-berry', coins: 12 }));

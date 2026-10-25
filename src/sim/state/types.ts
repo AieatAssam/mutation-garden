@@ -1,4 +1,4 @@
-export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap';
+export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap' | 'lantern-pod' | 'clockvine' | 'dewbell' | 'comet-pear';
 export type PlotId = string;
 export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm' | 'quick-counter-1' | 'quick-counter-2' | 'quick-counter-3' | 'crate-1' | 'crate-2' | 'second-counter' | 'fresh-produce';
 export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestable';
@@ -20,11 +20,14 @@ export interface PlantState {
   readonly scriptedGiant?: boolean;
   readonly fertilised?: boolean;
   readonly rainbow?: boolean;
+  readonly clockBoostMs?: number;
+  readonly clockBoostedBy?: readonly PlotId[];
+  readonly dewUsed?: boolean;
 }
 
 /** The timestamp growth is measured from. */
 export function growthStart(plant: PlantState): number {
-  return plant.plantedAt - (plant.boostMs ?? 0);
+  return plant.plantedAt - (plant.boostMs ?? 0) - (plant.clockBoostMs ?? 0);
 }
 
 export interface GrowthView {
@@ -82,7 +85,7 @@ export interface OrderProgress { readonly index: number; readonly progress: numb
 export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number }
 
 export interface GardenState {
-  readonly schema: 6;
+  readonly schema: 7;
   readonly coins: number;
   readonly lastNowMs: number;
   readonly rngState: number;

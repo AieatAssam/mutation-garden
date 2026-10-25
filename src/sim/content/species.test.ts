@@ -3,28 +3,37 @@ import { createInitialState, INITIAL_COINS, SPECIES } from '../index';
 
 const expectedStages = ['Seed', 'Sprout', 'Growing', 'Mature', 'Harvestable'];
 
-describe('starter species content', () => {
+describe('species content', () => {
   it('contains unique stable species IDs', () => {
     expect(SPECIES.map(({ id }) => id)).toEqual([
       'sunny-sprout',
       'bubble-berry',
       'twistroot',
       'puffcap',
+      'lantern-pod',
+      'comet-pear',
+      'clockvine',
+      'dewbell',
     ]);
     expect(new Set(SPECIES.map(({ id }) => id)).size).toBe(SPECIES.length);
   });
 
   it.each([
-    { id: 'sunny-sprout', name: 'Sunny Sprout', seedCost: 1, baseValue: 2 },
-    { id: 'bubble-berry', name: 'Bubble Berry', seedCost: 3, baseValue: 6 },
-    { id: 'twistroot', name: 'Twistroot', seedCost: 5, baseValue: 10 },
-    { id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14 },
-  ])('defines $name with the M1-02 price and reward', (expected) => {
+    { id: 'sunny-sprout', name: 'Sunny Sprout', seedCost: 1, baseValue: 2, unlockLevel: 1 },
+    { id: 'bubble-berry', name: 'Bubble Berry', seedCost: 3, baseValue: 6, unlockLevel: 2 },
+    { id: 'twistroot', name: 'Twistroot', seedCost: 5, baseValue: 10, unlockLevel: 3 },
+    { id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14, unlockLevel: 4 },
+    { id: 'lantern-pod', name: 'Lantern Pod', seedCost: 12, baseValue: 28, unlockLevel: 6 },
+    { id: 'comet-pear', name: 'Comet Pear', seedCost: 24, baseValue: 58, unlockLevel: 9 },
+    { id: 'clockvine', name: 'Clockvine', seedCost: 20, baseValue: 46, unlockLevel: 11 },
+    { id: 'dewbell', name: 'Dewbell', seedCost: 34, baseValue: 82, unlockLevel: 13 },
+  ])('defines $name with its seed price, reward and unlock', (expected) => {
     const species = SPECIES.find(({ id }) => id === expected.id);
 
     expect(species?.name).toBe(expected.name);
     expect(species?.seedCost).toBe(expected.seedCost);
     expect(species?.baseValue).toBe(expected.baseValue);
+    expect(species?.unlockLevel).toBe(expected.unlockLevel);
   });
 
   it.each([
@@ -43,6 +52,10 @@ describe('starter species content', () => {
       durationMs: 25_000,
       stageStartsAtMs: [0, 3_000, 10_000, 22_000, 25_000],
     },
+    { id: 'lantern-pod', durationMs: 45_000, stageStartsAtMs: [0, 4_000, 18_000, 38_000, 45_000] },
+    { id: 'comet-pear', durationMs: 75_000, stageStartsAtMs: [0, 7_500, 30_000, 60_000, 75_000] },
+    { id: 'clockvine', durationMs: 55_000, stageStartsAtMs: [0, 5_500, 22_000, 44_000, 55_000] },
+    { id: 'dewbell', durationMs: 90_000, stageStartsAtMs: [0, 9_000, 36_000, 72_000, 90_000] },
   ] as const)('%s has all growth stages through its total duration', (expected) => {
     const species = SPECIES.find(({ id }) => id === expected.id);
 
@@ -56,7 +69,7 @@ describe('starter species content', () => {
     expect(species?.stages.at(-1)?.startsAtMs).toBe(expected.durationMs);
   });
 
-  it('uses integer prices and rewards that every starter can afford initially', () => {
+  it('uses integer prices and rewards; only the starting crop must be affordable initially', () => {
     expect(INITIAL_COINS).toBe(12);
     expect(createInitialState(1, 0).coins).toBe(12);
 
@@ -65,7 +78,7 @@ describe('starter species content', () => {
       expect(Number.isSafeInteger(species.baseValue)).toBe(true);
       expect(species.seedCost).toBeGreaterThanOrEqual(0);
       expect(species.baseValue).toBeGreaterThanOrEqual(0);
-      expect(species.seedCost).toBeLessThanOrEqual(INITIAL_COINS);
+      if (species.unlockLevel === 1) expect(species.seedCost).toBeLessThanOrEqual(INITIAL_COINS);
     }
   });
 

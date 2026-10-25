@@ -85,6 +85,34 @@ function plantSilhouette(speciesId?: SpeciesId): SVGSVGElement {
     const stem = document.createElementNS(svg.namespaceURI, 'path');
     stem.setAttribute('d', 'M9 11v9h6v-9Z');
     svg.append(cap, stem);
+  } else if (speciesId === 'lantern-pod') {
+    const stems = document.createElementNS(svg.namespaceURI, 'path');
+    stems.setAttribute('d', 'M12 21V4m0 3L6 11m6-4 6 4');
+    stems.setAttribute('fill', 'none'); stems.setAttribute('stroke', 'currentColor'); stems.setAttribute('stroke-width', '1.8');
+    for (const [cx, cy] of [[6, 14], [18, 14], [12, 17]] as const) {
+      const pod = document.createElementNS(svg.namespaceURI, 'ellipse');
+      pod.setAttribute('cx', String(cx)); pod.setAttribute('cy', String(cy)); pod.setAttribute('rx', '2.5'); pod.setAttribute('ry', '3.5');
+      svg.append(pod);
+    }
+    svg.prepend(stems);
+  } else if (speciesId === 'comet-pear') {
+    const pear = document.createElementNS(svg.namespaceURI, 'path');
+    pear.setAttribute('d', 'M11 9c-5 5-3 11 1 11s7-6 1-11c-1-1-1-3-1-4');
+    const tail = document.createElementNS(svg.namespaceURI, 'path');
+    tail.setAttribute('d', 'M9 13 3 10m6 5-5 1'); tail.setAttribute('fill', 'none'); tail.setAttribute('stroke', 'currentColor'); tail.setAttribute('stroke-width', '1.7');
+    svg.append(pear, tail);
+  } else if (speciesId === 'clockvine') {
+    const vine = document.createElementNS(svg.namespaceURI, 'path');
+    vine.setAttribute('d', 'M12 21V14c-6 1-7-4-5-7m5 7c6 0 7-4 5-8');
+    const seed = document.createElementNS(svg.namespaceURI, 'circle');
+    seed.setAttribute('cx', '12'); seed.setAttribute('cy', '15'); seed.setAttribute('r', '2.4');
+    svg.append(vine, seed);
+  } else if (speciesId === 'dewbell') {
+    const bell = document.createElementNS(svg.namespaceURI, 'path');
+    bell.setAttribute('d', 'M12 3v4m0 0c-1 5-5 5-5 9h10c0-4-4-4-5-9Zm0 13v2');
+    const dew = document.createElementNS(svg.namespaceURI, 'circle');
+    dew.setAttribute('cx', '12'); dew.setAttribute('cy', '21'); dew.setAttribute('r', '1.5');
+    svg.append(bell, dew);
   } else {
     const stem = document.createElementNS(svg.namespaceURI, 'path');
     stem.setAttribute('d', 'M11 21V10c0-3 2-5 5-6-1 4-2 6-5 7');

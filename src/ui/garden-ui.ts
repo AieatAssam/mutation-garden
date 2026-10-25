@@ -201,6 +201,8 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const trayLabel = document.createElement('span');
   trayLabel.className = 'garden-ui__tray-label';
   trayLabel.textContent = 'Seeds';
+  const seedScroll = document.createElement('div');
+  seedScroll.className = 'garden-ui__seeds';
   const seedButtons = options.species.map((species) => {
     const button = document.createElement('button');
     button.className = 'garden-ui__seed';
@@ -224,10 +226,14 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     button.addEventListener('click', () => {
       if (button.getAttribute('aria-disabled') !== 'true') options.onSelect(species.id);
     });
-    seedTray.append(button);
+    button.addEventListener('focus', () => {
+      if (button.matches(':focus-visible')) button.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
+    seedScroll.append(button);
     return { species, button, detail: detailText, locked: null as boolean | null };
   });
   seedTray.prepend(trayLabel);
+  seedTray.append(seedScroll);
   const journal = createDiscoveryJournal(overlay, {
     species: options.species,
     traits: options.journalTraits ?? [],

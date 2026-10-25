@@ -30,7 +30,7 @@ describe('Plant commands', () => {
   it.each(SPECIES)(
     'plants %s and debits its exact seed cost',
     (species) => {
-      const initial = createInitialState(seed, startTime, { xp: xpForLevel(species.unlockLevel) });
+      const initial = { ...createInitialState(seed, startTime, { xp: xpForLevel(species.unlockLevel) }), coins: species.seedCost };
       const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: species.id }], startTime + 250);
 
       expect(result.state.coins).toBe(initial.coins - species.seedCost);

@@ -24,13 +24,14 @@ export function water(state: GardenState, command: WaterCommand, effectiveNowMs:
   if (before.stage === 'Seed') return rejected(state, command, 'too-early');
 
   const remainingMs = start + species.growthDurationMs - effectiveNowMs;
-  const boostMs = (plantState.boostMs ?? 0) + Math.round(remainingMs * WATER_SPEEDUP);
+  const addedBoostMs = Math.round(remainingMs * WATER_SPEEDUP);
+  const boostMs = (plantState.boostMs ?? 0) + addedBoostMs;
   const plots = state.plots.slice();
   plots[plotIndex] = { ...plot, plant: { ...plantState, boostMs, waterCount: waterCount + 1 } };
 
   const events: SimEvent[] = [{ type: 'Watered', plotId: plot.id }];
   const elapsedBefore = effectiveNowMs - start;
-  const elapsedAfter = elapsedBefore + boostMs;
+  const elapsedAfter = elapsedBefore + addedBoostMs;
   for (const definition of species.stages) {
     if (definition.stage === 'Seed' || definition.startsAtMs <= elapsedBefore || definition.startsAtMs > elapsedAfter) continue;
     events.push(definition.stage === 'Harvestable'

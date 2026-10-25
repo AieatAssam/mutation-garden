@@ -4,6 +4,7 @@ import { harvest } from '../plants/harvest';
 import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
 import { evaluateMature } from '../plants/mutate';
+import { applySpeciesHooks } from '../plants/species-hooks';
 import { buy, waterAll } from '../plants/shop';
 import { levelForXp, saleIntervalMs, SPECIES } from '../content/species';
 import { nextOrder, orderEventCount, ORDER_DECK } from '../content/orders';
@@ -26,6 +27,9 @@ export function step(
   let nextState = effectiveNowMs === state.lastNowMs
     ? state
     : { ...state, lastNowMs: effectiveNowMs };
+  const cropHooks = applySpeciesHooks(nextState, effectiveNowMs);
+  nextState = cropHooks.state;
+  events.push(...cropHooks.events);
   if (nextState.sellingSince !== null && nextState.crate.length) {
     const sales = Math.min(nextState.crate.length, Math.floor((effectiveNowMs - nextState.sellingSince) / saleIntervalMs(nextState.owned)));
     if (sales) {

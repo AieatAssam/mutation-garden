@@ -3,6 +3,7 @@ import {
   createInitialState,
   getSnapshot,
   SPECIES,
+  xpForLevel,
   step,
   type Command,
   type GardenState,
@@ -11,7 +12,8 @@ import {
 const seed = 0x1234_5678;
 
 function plantOne(speciesId: (typeof SPECIES)[number]['id'], plotId = 'plot-0') {
-  const initial = { ...createInitialState(seed, 0, { xp: 2_500 }), plantCount: 2 };
+  const species = SPECIES.find(({ id }) => id === speciesId)!;
+  const initial = { ...createInitialState(seed, 0, { xp: xpForLevel(species.unlockLevel) }), coins: species.seedCost, plantCount: 2 };
   const command: Command = { type: 'Plant', plotId, seedId: speciesId };
   const planted = step(initial, [command], 0);
   return { state: planted.state, plantedAt: 0 };

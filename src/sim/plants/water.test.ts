@@ -36,6 +36,14 @@ describe('Water commands', () => {
     ]);
   });
 
+  it('counts only the new speedup when a plant is watered a second time', () => {
+    const first = step(planted(), [{ type: 'Water', plotId: 'plot-0' }], start + 10_000);
+    const second = step(first.state, [{ type: 'Water', plotId: 'plot-0' }], start + 20_000);
+    expect(second.events).toContainEqual({ type: 'Watered', plotId: 'plot-0' });
+    expect(second.events).not.toContainEqual({ type: 'Harvestable', plotId: 'plot-0' });
+    expect(getSnapshot(second.state).plots[0]?.plant?.stage).toBe('Mature');
+  });
+
   it('rejects empty, unknown and ripe plots without changing state', () => {
     const state = planted();
     const ripe = step(state, [], start + 25_000).state;

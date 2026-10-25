@@ -1,4 +1,5 @@
 import type { GardenSnapshot, PlantSnapshot, PlotId } from '../../sim';
+import { SPECIES } from '../../sim';
 import { Box3, InstancedMesh, Matrix4, Vector3, type Camera, type Group, type Mesh, type Object3D } from 'three';
 import type { MaterialLibrary } from '../materials';
 import { createBubbleBerry } from './bubble-berry';
@@ -13,7 +14,7 @@ export interface PlantReconciler {
   getTop(plotId: PlotId, target: Vector3): boolean;
   shiver(plotId: PlotId, nowMs: number, durationMs: number): void;
   /** Switches to the authored Blender plants; existing rigs are rebuilt on the next update. */
-  setModels(models: PlantModels): void;
+  setModels(models: PlantModels | null): void;
   dispose(): void;
 }
 
@@ -84,6 +85,7 @@ export function createPlantReconciler(
   let currentPlants = new Set<PlotId>();
   // ponytail: procedural rigs stay as the fallback until plants.glb loads; delete them once S2 is accepted.
   let models: PlantModels | null = null;
+  let modelsReady = !options.waitForModels;
   const remove = (plotId: PlotId) => {
     const entry = entries.get(plotId);
     if (!entry) return;
@@ -102,10 +104,10 @@ export function createPlantReconciler(
       for (const plot of current.plots) {
         seen.add(plot.id);
         const plant = plot.plant;
-        if (!plant || (plant.speciesId !== 'sunny-sprout' && plant.speciesId !== 'bubble-berry' && plant.speciesId !== 'twistroot' && plant.speciesId !== 'puffcap') || !anchors.has(plot.id)) { remove(plot.id); continue; }
+        if (!plant || !SPECIES.some(({ id }) => id === plant.speciesId) || !anchors.has(plot.id)) { remove(plot.id); continue; }
         let entry = entries.get(plot.id);
         if (entry && (entry.speciesId !== plant.speciesId || entry.plantedAt !== plant.plantedAt)) { remove(plot.id); entry = undefined; }
-        if (!entry && !models && options.waitForModels) continue;
+        if (!entry && !models && !modelsReady) continue;
         if (!entry) {
           const rig = models
             ? createAuthoredRig(plant.speciesId, models, materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
@@ -113,8 +115,11 @@ export function createPlantReconciler(
             ? createSunnySprout(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
             : plant.speciesId === 'bubble-berry'
               ? createBubbleBerry(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
-              : plant.speciesId === 'twistroot' ? createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
-                : createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0);
+            : plant.speciesId === 'twistroot' || plant.speciesId === 'puffcap' || plant.speciesId === 'clockvine' || plant.speciesId === 'dewbell'
+              ? createTwistroot(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
+              : plant.speciesId === 'lantern-pod'
+                ? createBubbleBerry(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0)
+                : createSunnySprout(materials, phase(plot.id), hopPhaseOffsets.get(plot.id) ?? 0);
           entry = { speciesId: plant.speciesId, plantedAt: plant.plantedAt, rig };
           entries.set(plot.id, entry);
           anchors.get(plot.id)!.add(entry.rig.root);
@@ -140,6 +145,7 @@ export function createPlantReconciler(
     setModels(next) {
       if (disposed) return;
       models = next;
+      modelsReady = true;
       for (const plotId of [...entries.keys()]) remove(plotId);
     },
     getTop(plotId, target) {

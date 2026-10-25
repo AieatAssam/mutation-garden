@@ -48,6 +48,7 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
   3: (state) => ({ ...state, schema: 4, crate: [], sellingSince: null }),
   4: (state) => ({ ...state, schema: 5, order: { index: 0, progress: 0 } }),
   5: (state) => ({ ...state, schema: 6, crystalReadyPlots: [], rainbowPlots: [] }),
+  6: (state) => ({ ...state, schema: 7 }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
@@ -91,7 +92,7 @@ export function validateState(value: unknown): value is GardenState {
     if (typeof id !== 'string') return false;
     if (plant === null) return true;
     if (!plant || typeof plant !== 'object') return false;
-    const { speciesId, plantedAt, size, boostMs, mutationSeed, waterCount, mutations, scriptedGiant, rainbow } = plant as Record<string, unknown>;
+    const { speciesId, plantedAt, size, boostMs, clockBoostMs, mutationSeed, waterCount, mutations, scriptedGiant, rainbow } = plant as Record<string, unknown>;
     return typeof speciesId === 'string' && SPECIES_IDS.has(speciesId) && isCount(plantedAt)
       && Number.isInteger(mutationSeed) && (mutationSeed as number) >= 0 && (mutationSeed as number) <= 0xffff_ffff
       && (waterCount === undefined || isCount(waterCount))
@@ -99,8 +100,13 @@ export function validateState(value: unknown): value is GardenState {
       && (mutations === undefined || (Array.isArray(mutations) && mutations.length <= traits.length && new Set(mutations).size === mutations.length && mutations.every((trait) => traits.includes(trait as TraitId))))
       && (scriptedGiant === undefined || typeof scriptedGiant === 'boolean')
       && (rainbow === undefined || typeof rainbow === 'boolean')
+      && ((plant as Record<string, unknown>).dewUsed === undefined || typeof (plant as Record<string, unknown>).dewUsed === 'boolean')
+      && ((plant as Record<string, unknown>).clockBoostedBy === undefined || (Array.isArray((plant as Record<string, unknown>).clockBoostedBy)
+        && new Set((plant as Record<string, unknown>).clockBoostedBy as unknown[]).size === ((plant as Record<string, unknown>).clockBoostedBy as unknown[]).length
+        && ((plant as Record<string, unknown>).clockBoostedBy as unknown[]).every((id) => typeof id === 'string')))
       && (size === undefined || (typeof size === 'string' && SIZES.has(size)))
-      && (boostMs === undefined || isCount(boostMs));
+      && (boostMs === undefined || isCount(boostMs))
+      && (clockBoostMs === undefined || isCount(clockBoostMs));
   });
 }
 

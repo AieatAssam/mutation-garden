@@ -5,7 +5,7 @@ import { startWithSave } from './garden-save';
 // These specs use seeds that unlock at levels 2 and 3, so they start from a level-3 save.
 test.beforeEach(async ({ page }) => startWithSave(page));
 
-test('offers all four seeds, with locked Puffcap visible until Level 4', async ({ page }, testInfo) => {
+test('offers all eight seeds and shows later unlock levels', async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
@@ -19,6 +19,7 @@ test('offers all four seeds, with locked Puffcap visible until Level 4', async (
   const sunny = seeds.getByRole('button', { name: 'Sunny Sprout' });
   const bubble = seeds.getByRole('button', { name: 'Bubble Berry' });
   const twistroot = seeds.getByRole('button', { name: 'Twistroot' });
+  const lantern = seeds.getByRole('button', { name: 'Lantern Pod' });
   const trayLabel = seeds.getByText('Seeds', { exact: true });
   const coins = page.getByRole('status', { name: 'Coins' });
 
@@ -27,8 +28,12 @@ test('offers all four seeds, with locked Puffcap visible until Level 4', async (
   await expect(bubble).toBeVisible();
   await expect(twistroot).toBeVisible();
   await expect(trayLabel).toBeVisible();
-  await expect(seeds.locator('[data-species-id]')).toHaveCount(4);
+  await expect(seeds.locator('[data-species-id]')).toHaveCount(8);
   await expect(seeds.getByRole('button', { name: 'Puffcap' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(lantern).toHaveAttribute('aria-disabled', 'true');
+  await expect(seeds.getByRole('button', { name: 'Comet Pear' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(seeds.getByRole('button', { name: 'Clockvine' })).toHaveAttribute('aria-disabled', 'true');
+  await expect(seeds.getByRole('button', { name: 'Dewbell' })).toHaveAttribute('aria-disabled', 'true');
   await expect(sunny).toHaveAttribute('aria-pressed', 'true');
   await expect(bubble).toHaveAttribute('aria-pressed', 'false');
   await expect(coins).toHaveText('12');

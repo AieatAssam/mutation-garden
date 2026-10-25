@@ -49,6 +49,30 @@
       "stem": ["#FFF0CC", "#E8D5AE", "#B99B78"],
       "fruit": ["#FFD2A0", "#F39B65", "#C95E53", "#853D51"],
       "accent": { "spots": "#FFF0CC" }
+    },
+    "lantern-pod": {
+      "leaf": ["#DCE58A", "#A8B64B", "#6C8135", "#40572C"],
+      "stem": ["#B9C477", "#87954B", "#596537"],
+      "fruit": ["#FFE7A0", "#F8BE4D", "#DB7A35", "#9A472D"],
+      "accent": { "glow": "#FFF4BD" }
+    },
+    "comet-pear": {
+      "leaf": ["#C6E3A0", "#7BB477", "#4C815A", "#30513F"],
+      "stem": ["#C0D59C", "#799867", "#506C4E"],
+      "fruit": ["#FFE0A0", "#E5A34A", "#BD623D", "#793D3A"],
+      "accent": { "tail": "#FFF1D2" }
+    },
+    "clockvine": {
+      "leaf": ["#A9E2D4", "#55B8A9", "#32887F", "#205B59"],
+      "stem": ["#B7D9BF", "#6F9F89", "#42685F"],
+      "fruit": ["#E0D5A2", "#B9A857", "#817A42", "#50502F"],
+      "accent": { "dial": "#F4E7B4" }
+    },
+    "dewbell": {
+      "leaf": ["#B7E1D8", "#6AB7B0", "#438A8B", "#2C5D68"],
+      "stem": ["#BDD9CF", "#7FA89D", "#506F73"],
+      "fruit": ["#D8F1F1", "#8ECFD6", "#4E9FB5", "#37647E"],
+      "accent": { "dew": "#E9FFFF" }
     }
   },
   "mutations": {

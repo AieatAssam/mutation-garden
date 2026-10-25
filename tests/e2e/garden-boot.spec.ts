@@ -161,3 +161,31 @@ test('daily garden starts as a four-plot challenge and returns to the saved gard
   await expect(page).toHaveURL(/\/mutation-garden\/$/);
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
 });
+
+test('fresh and late-game gardens boot without browser errors', async ({ browser }) => {
+  const scenarios = [
+    { name: 'fresh', save: false },
+    { name: 'late game', save: true },
+  ];
+  for (const scenario of scenarios) {
+    const context = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1 });
+    const page = await context.newPage();
+    const errors: string[] = [];
+    page.on('pageerror', (error) => errors.push(error.message));
+    page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+    if (scenario.save) {
+      await startWithSave(page, xpForLevel(18), {
+        coins: 2_000,
+        owned: ['sprinkler', 'bee-hive', 'harvest-helper', 'delivery-cart'],
+        twistrootPlantedAt: Date.now() - 60_000,
+        twistrootMutations: ['golden', 'twin'],
+        crateMutations: [['frozen'], ['electric']],
+      });
+    }
+    await page.goto('http://localhost:4173/mutation-garden/', { waitUntil: 'domcontentloaded' });
+    await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+    if (scenario.save) await expect(page.getByRole('button', { name: 'Open laboratory' })).toBeVisible();
+    expect(errors, `${scenario.name} save`).toEqual([]);
+    await context.close();
+  }
+});

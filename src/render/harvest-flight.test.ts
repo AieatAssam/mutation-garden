@@ -1,4 +1,4 @@
-import { BoxGeometry, Vector3 } from 'three';
+import { BoxGeometry, Mesh, MeshToonMaterial, Vector3 } from 'three';
 import { describe, expect, it } from 'vitest';
 import { createHarvestFlights, CRATE_TOP } from './harvest-flight';
 import { createMaterialLibrary } from './materials';
@@ -19,6 +19,13 @@ describe('harvest flights', () => {
     flights.launch('sunny-sprout', new Vector3(1, 0.65, 2), 'regular', 0, false);
     expect(flights.activeCount).toBe(1);
     const group = flights.root.children[0]!;
+    const baseMaterial = library.toon(palette.plants['sunny-sprout'].fruit[1]);
+    const flightMaterial = (group.children.find((child) => child instanceof Mesh) as Mesh).material as MeshToonMaterial;
+    expect(flightMaterial).not.toBe(baseMaterial);
+    expect(flightMaterial.customProgramCacheKey()).toBe(baseMaterial.customProgramCacheKey());
+    const shader = { uniforms: {}, vertexShader: '', fragmentShader: '#include <common>' };
+    flightMaterial.onBeforeCompile(shader as never, {} as never);
+    expect(shader.fragmentShader).toContain('seedPacketRimColor');
     flights.update(30);
     expect(group.position.y).toBeGreaterThan(1.5);
     expect(group.scale.y).toBeGreaterThan(group.scale.x);

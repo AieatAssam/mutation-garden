@@ -8,8 +8,10 @@ import { GROUND_SURFACE } from './garden';
 
 /** Resolves a palette path such as "environment.grass.1" to its hex colour. */
 export function paletteColor(path: string): string {
+  // Blender appends a zero-padded suffix when the same named material is created repeatedly.
+  const palettePath = path.replace(/\.\d{3}$/, '.1');
   let node: unknown = palette;
-  for (const key of path.split('.')) {
+  for (const key of palettePath.split('.')) {
     if (node === null || typeof node !== 'object' || !(key in node)) {
       throw new Error(`Unknown palette path "${path}"`);
     }

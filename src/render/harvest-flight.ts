@@ -40,7 +40,11 @@ function makeFruit(species: SpeciesId, current: PlantModels, materials: Material
   for (const part of flying) centre.add(part.origin).add(part.grownCenter);
   centre.divideScalar(Math.max(1, flying.length));
   for (const part of flying) {
-    const mesh = new Mesh(part.geometry, materials.toon(part.ripe ? fruitColor : part.color).clone());
+    const baseMaterial = materials.toon(part.ripe ? fruitColor : part.color);
+    const flightMaterial = baseMaterial.clone();
+    flightMaterial.onBeforeCompile = baseMaterial.onBeforeCompile;
+    flightMaterial.customProgramCacheKey = baseMaterial.customProgramCacheKey;
+    const mesh = new Mesh(part.geometry, flightMaterial);
     const hull = materials.outline(part.geometry).clone();
     for (const item of [mesh, hull]) {
       if (part.morph) item.morphTargetInfluences![0] = 1;

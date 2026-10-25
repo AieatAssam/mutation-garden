@@ -15,6 +15,7 @@ function authored(name: string, materialName: string): Mesh {
 describe('scenery', () => {
   it('resolves palette paths and rejects unknown ones', () => {
     expect(paletteColor('environment.grass.1')).toBe(palette.environment.grass[1]);
+    expect(paletteColor('plants.sunburst.fruit.002')).toBe(palette.plants.sunburst.fruit[1]);
     expect(() => paletteColor('environment.grass.9')).toThrow(/Unknown palette path/);
     expect(() => paletteColor('environment.grass')).toThrow(/not a colour/);
   });

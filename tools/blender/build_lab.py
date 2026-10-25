@@ -7,7 +7,7 @@ bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
 
 def material(name, color, roughness=0.65):
-    value = bpy.data.materials.new(name)
+    value = bpy.data.materials.get(name) or bpy.data.materials.new(name)
     value.diffuse_color = (*color, 1)
     value.roughness = roughness
     return value

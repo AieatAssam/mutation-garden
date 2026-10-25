@@ -5,6 +5,7 @@ import {
   ColorManagement,
   DirectionalLight,
   Group,
+  AnimationMixer,
   Mesh,
   MeshBasicMaterial,
   HemisphereLight,
@@ -78,6 +79,7 @@ export function islandDropY(elapsedMs: number): number {
 
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
   const clock = options.now ?? (() => performance.now());
+  let lastAutomationFrame: number | null = null;
   ColorManagement.enabled = true;
   const gl = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   gl.outputColorSpace = SRGBColorSpace;
@@ -146,11 +148,12 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     plants.setModels(null);
   });
   const automationObjects = new Map<string, Group>();
-  const automationLoaded = new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/automation.glb`).then(({ scene: source }) => {
+  const automationMixers = new Map<string, AnimationMixer>();
+  const automationLoaded = new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/automation.glb`).then(({ scene: source, animations }) => {
     source.updateMatrixWorld(true);
     const positions: Record<string, [number, number, number]> = {
-      sprinkler: [0, 0.65, 3.0], 'bee-hive': [2.5, 0.65, -2.4], 'seed-hopper': [-2.5, 0.65, 2.6],
-      'harvest-helper': [0, 0.65, -3.0], 'delivery-cart': [3.3, 0.65, 0.4],
+      sprinkler: [0, 0.65, 2.8], 'bee-hive': [2.0, 0.65, -1.8], 'seed-hopper': [-2.0, 0.65, 2.1],
+      'harvest-helper': [0, 0.65, -2.8], 'delivery-cart': [2.8, 0.65, 0.4],
     };
     for (const name of Object.keys(positions)) {
       const authored = source.getObjectByName(name);
@@ -165,7 +168,14 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       });
       prop.add(mesh);
       prop.position.set(...positions[name]!);
+      prop.scale.setScalar(0.8);
       prop.visible = false;
+      const idle = animations.find(({ name: clipName }) => clipName === `${name.replace('-', '_')}_idle`);
+      if (idle) {
+        const mixer = new AnimationMixer(prop);
+        mixer.clipAction(idle).play();
+        automationMixers.set(name, mixer);
+      }
       automationObjects.set(name, prop);
       garden.add(prop);
     }
@@ -271,6 +281,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   function playEvents(events: readonly SimEvent[], reducedMotion: boolean): void {
     const now = clock();
+    const automationDelta = Math.max(0, Math.min(0.05, (now - (lastAutomationFrame ?? now)) / 1000));
+    lastAutomationFrame = now;
+    if (!currentReducedMotion) for (const mixer of automationMixers.values()) mixer.update(automationDelta);
     for (const event of events) {
       if (event.type === 'FruitSold') {
         const stall = scenery?.stall;
@@ -358,11 +371,10 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
         || id === 'delivery-cart' && owned.includes('delivery-cart-3');
       if (!currentReducedMotion) {
         const cartTier = owned.includes('delivery-cart-3') ? 3 : owned.includes('delivery-cart-2') ? 2 : 1;
-        object.rotation.y = Math.sin(now / 1_000 + id.length) * 0.035;
-        if (id === 'delivery-cart') object.position.x = 3.3 + Math.sin(now / (2_400 / cartTier)) * 0.35;
+        if (id === 'delivery-cart') object.position.x = 2.8 + Math.sin(now / (2_400 / cartTier)) * 0.2;
         if (id === 'harvest-helper') {
           const helperTier = owned.includes('harvest-helper-3') ? 3 : owned.includes('harvest-helper-2') ? 2 : 1;
-          object.position.x = Math.sin(now / (3_000 / helperTier)) * 0.45;
+          object.position.x = Math.sin(now / (3_000 / helperTier)) * 0.2;
         }
       }
     }

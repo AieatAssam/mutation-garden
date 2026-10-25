@@ -30,7 +30,8 @@ describe('Plant commands', () => {
   it.each(SPECIES)(
     'plants %s and debits its exact seed cost',
     (species) => {
-      const initial = { ...createInitialState(seed, startTime, { xp: xpForLevel(species.unlockLevel) }), coins: species.seedCost };
+      const initial = { ...createInitialState(seed, startTime, { xp: species.id === 'prism-fig' || species.id === 'sunburst' ? 0 : xpForLevel(species.unlockLevel) }), coins: species.seedCost,
+        labSeeds: species.id === 'prism-fig' || species.id === 'sunburst' ? [species.id] : [] };
       const result = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: species.id }], startTime + 250);
 
       expect(result.state.coins).toBe(initial.coins - species.seedCost);
@@ -39,6 +40,7 @@ describe('Plant commands', () => {
         plant: { speciesId: species.id, plantedAt: startTime + 250 },
       });
       expect(result.events).toEqual([{ type: 'Planted', plotId: 'plot-0', speciesId: species.id }]);
+      if (species.id === 'prism-fig' || species.id === 'sunburst') expect(result.state.labSeeds).toEqual([]);
     },
   );
 

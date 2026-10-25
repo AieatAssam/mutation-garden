@@ -82,6 +82,14 @@ export const SPECIES = [
     id: 'dewbell', name: 'Dewbell', seedCost: 34, baseValue: 82, growthDurationMs: 90_000, unlockLevel: 13,
     stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 9_000 }, { stage: 'Growing', startsAtMs: 36_000 }, { stage: 'Mature', startsAtMs: 72_000 }, { stage: 'Harvestable', startsAtMs: 90_000 }],
   },
+  {
+    id: 'prism-fig', name: 'Prism Fig', seedCost: 0, baseValue: 75, growthDurationMs: 100_000, unlockLevel: 18,
+    stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 10_000 }, { stage: 'Growing', startsAtMs: 40_000 }, { stage: 'Mature', startsAtMs: 80_000 }, { stage: 'Harvestable', startsAtMs: 100_000 }],
+  },
+  {
+    id: 'sunburst', name: 'Sunburst', seedCost: 0, baseValue: 90, growthDurationMs: 120_000, unlockLevel: 18,
+    stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 12_000 }, { stage: 'Growing', startsAtMs: 48_000 }, { stage: 'Mature', startsAtMs: 96_000 }, { stage: 'Harvestable', startsAtMs: 120_000 }],
+  },
 ] as const satisfies readonly SpeciesDefinition[];
 
 export const INITIAL_COINS = 12;

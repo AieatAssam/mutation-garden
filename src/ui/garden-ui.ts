@@ -10,6 +10,7 @@ export interface SeedDescriptor {
   readonly unlockLevel: number;
   /** The fruit colour shown on the seed card (a palette value). */
   readonly color?: string;
+  readonly labSeed?: boolean;
 }
 
 export interface GardenUIOptions {
@@ -22,6 +23,7 @@ export interface GardenUIOptions {
   readonly onToggleMusic?: () => void;
   readonly onToggleHaptics?: () => void;
   readonly onToggleLargeText?: () => void;
+  readonly onToggleDaily?: () => void;
   readonly onHarvestAll?: () => void;
   readonly onSell?: () => void;
   readonly onBuy?: (item: ShopItemId) => void;
@@ -29,12 +31,14 @@ export interface GardenUIOptions {
   readonly onReset?: () => void;
   readonly onWaterAll?: () => void;
   readonly onDismissHint?: () => void;
+  readonly onOpenLab?: () => void;
 }
 
 export interface GardenUIUpdate {
   readonly selectedId: SpeciesId;
   readonly coins: number;
   readonly bonusSeeds?: number;
+  readonly labSeeds?: readonly SpeciesId[];
   readonly level?: number;
   /** 0..1 progress through the current level. */
   readonly levelProgress?: number;
@@ -56,6 +60,8 @@ export interface GardenUIUpdate {
   readonly naturalChanceBonus?: number;
   readonly opportunities?: Partial<Record<TraitId, readonly string[]>>;
   readonly order?: JournalOrder;
+  readonly dailyMode?: boolean;
+  readonly dailyBest?: number;
 }
 
 export interface AwaySummary {
@@ -165,6 +171,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const musicButton = toggle('Music', ['M9 18V6l10-2v12', 'M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z', 'M19 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z'], options.onToggleMusic);
   const hapticsButton = toggle('Haptics', ['M8 4v16 M12 2v20 M16 4v16'], options.onToggleHaptics);
   const largeTextButton = toggle('Large text', ['M3 6h18 M12 6v14 M7 20h10'], options.onToggleLargeText);
+  const dailyButton = document.createElement('button');
+  dailyButton.type = 'button';
+  dailyButton.className = 'garden-ui__daily';
+  dailyButton.addEventListener('click', () => options.onToggleDaily?.());
   const photoButton = toggle('Photo mode', ['M4 7h3l2-2h6l2 2h3v12H4Z', 'M12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z']);
   photoButton.classList.add('garden-ui__photo-toggle');
   photoButton.addEventListener('click', () => {
@@ -309,7 +319,11 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   // Main actions live in the bottom third (AGENTS.md): Shop is a tab on the seed tray.
   const trayTools = document.createElement('div');
   trayTools.className = 'garden-ui__tray-tools';
-  trayTools.append(journal.button, shopButton);
+  const labButton = document.createElement('button');
+  labButton.type = 'button'; labButton.className = 'garden-ui__shop'; labButton.textContent = 'Lab';
+  labButton.setAttribute('aria-label', 'Open laboratory');
+  labButton.addEventListener('click', () => options.onOpenLab?.());
+  trayTools.append(dailyButton, journal.button, shopButton, labButton);
   seedTray.append(trayTools);
   container.append(overlay);
 
@@ -343,14 +357,17 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       coinAmount.textContent = String(targetCoins);
     }
     const level = state.level ?? 1;
+    labButton.hidden = level < 18;
     levelText.textContent = `Level ${level}`;
     const progress = Math.round(Math.min(1, Math.max(0, state.levelProgress ?? 0)) * 100);
     levelFill.style.width = `${progress}%`;
     levelBar.setAttribute('aria-valuenow', String(progress));
-    hint.textContent = state.hint ?? '';
-    hint.hidden = !state.hint;
+    const visibleHint = state.dailyMode && !state.hint ? 'Daily challenge: sell your most valuable fruit.' : state.hint;
+    hint.textContent = visibleHint ?? '';
+    hint.hidden = !visibleHint;
     // Objectives fit one line; rare long notices (saves) wrap so nothing is cut off.
-    hint.classList.toggle('is-long', (state.hint ?? '').length > 40);
+    hint.classList.toggle('is-long', !state.dailyMode && (visibleHint ?? '').length > 40);
+    hint.classList.toggle('is-daily', Boolean(state.dailyMode));
     const ripe = state.ripeCount ?? 0;
     const crateCount = state.crateCount ?? 0;
     const crateCapacity = state.crateCapacity ?? 12;
@@ -364,9 +381,15 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     musicButton.setAttribute('aria-pressed', String(state.music ?? true));
     hapticsButton.setAttribute('aria-pressed', String(state.haptics ?? false));
     largeTextButton.setAttribute('aria-pressed', String(state.largeText ?? false));
+    dailyButton.setAttribute('aria-label', state.dailyMode
+      ? `Exit daily garden. Sell the highest-value fruit. Back two beds unavailable. Best sale today: ${state.dailyBest ?? 0}.`
+      : `Daily garden. Back two beds unavailable. Best sale today: ${state.dailyBest ?? 0}.`);
+    dailyButton.title = `Sell the highest-value fruit. The back two beds are closed. Best sale today: ${state.dailyBest ?? 0}.`;
+    dailyButton.textContent = state.dailyMode ? 'Exit daily' : `Daily ${state.dailyBest ?? 0}`;
     document.documentElement.classList.toggle('garden-large-text', state.largeText ?? false);
     const owned = state.owned ?? [];
-    trayLabel.textContent = state.fertiliser ? `Seeds · Fertiliser x${state.fertiliser}` : state.bonusSeeds ? `Seeds · Lantern Pod x${state.bonusSeeds} free` : 'Seeds';
+    trayLabel.textContent = state.fertiliser ? `Fert x${state.fertiliser}` : state.bonusSeeds ? `Free x${state.bonusSeeds}` : 'Seeds';
+    trayLabel.title = state.fertiliser ? `Seeds · Fertiliser x${state.fertiliser}` : state.bonusSeeds ? `Seeds · Lantern Pod x${state.bonusSeeds} free` : 'Seeds';
     bigCan.hidden = !owned.includes('big-can');
     bigCan.textContent = `Water all${state.fertiliser ? ` · Fertiliser x${state.fertiliser}` : ''}`;
     for (const { item, row, action } of shopRows) {
@@ -374,7 +397,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       const locked = level < item.level || Boolean(item.requires && !owned.includes(item.requires));
       const affordable = state.coins >= item.price;
       row.classList.toggle('is-muted', locked || !affordable);
-      action.disabled = (has && item.id !== 'fertiliser') || locked || !affordable;
+      action.disabled = (has && item.id !== 'fertiliser') || locked || !affordable || Boolean(state.dailyMode && (item.id === 'plot-6' || item.id === 'plot-7'));
       const requiredTitle = shopItems.find(({ id }) => id === item.requires)?.title;
       action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? item.requires && !owned.includes(item.requires) ? `Requires ${requiredTitle}` : `Level ${item.level}` : `Buy · ${item.price}`;
     }
@@ -387,7 +410,9 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     });
     for (const seed of seedButtons) {
       const selected = seed.species.id === state.selectedId;
-      const locked = seed.species.unlockLevel > level;
+      const hasLabSeed = (state.labSeeds ?? []).includes(seed.species.id);
+      const locked = seed.species.labSeed ? !hasLabSeed : seed.species.unlockLevel > level;
+      seed.button.hidden = Boolean(seed.species.labSeed && !hasLabSeed);
       seed.button.setAttribute('aria-pressed', String(selected));
       seed.button.classList.toggle('is-selected', selected);
       // Unlocked but unaffordable: still selectable, but the price reads as out of reach.
@@ -398,7 +423,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
         seed.button.classList.toggle('is-locked', locked);
         seed.locked = locked;
       }
-      seed.detail.textContent = locked ? `Level ${seed.species.unlockLevel}` : bonusLantern ? '1 free seed' : `${seed.species.cost} ${seed.species.cost === 1 ? 'coin' : 'coins'}`;
+      seed.detail.textContent = seed.species.labSeed && hasLabSeed ? 'Lab seed' : locked ? `Level ${seed.species.unlockLevel}` : bonusLantern ? '1 free seed' : `${seed.species.cost} ${seed.species.cost === 1 ? 'coin' : 'coins'}`;
     }
   };
   update(options);

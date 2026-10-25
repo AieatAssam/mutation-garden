@@ -1,3 +1,3 @@
 # src/lab
 
-Reserved for the Mutation Laboratory (Milestone 4). **Do not start work here before M4.** ESLint blocks any import of this folder until then.
+Optional M6 laboratory screen. Entered by dynamic import from app; specimen inventory and transfers are owned by `src/sim`. Rapier is loaded only while this view is open and affects presentation only.

@@ -14,6 +14,8 @@ describe('species content', () => {
       'comet-pear',
       'clockvine',
       'dewbell',
+      'prism-fig',
+      'sunburst',
     ]);
     expect(new Set(SPECIES.map(({ id }) => id)).size).toBe(SPECIES.length);
   });
@@ -56,6 +58,8 @@ describe('species content', () => {
     { id: 'comet-pear', durationMs: 75_000, stageStartsAtMs: [0, 7_500, 30_000, 60_000, 75_000] },
     { id: 'clockvine', durationMs: 55_000, stageStartsAtMs: [0, 5_500, 22_000, 44_000, 55_000] },
     { id: 'dewbell', durationMs: 90_000, stageStartsAtMs: [0, 9_000, 36_000, 72_000, 90_000] },
+    { id: 'prism-fig', durationMs: 100_000, stageStartsAtMs: [0, 10_000, 40_000, 80_000, 100_000] },
+    { id: 'sunburst', durationMs: 120_000, stageStartsAtMs: [0, 12_000, 48_000, 96_000, 120_000] },
   ] as const)('%s has all growth stages through its total duration', (expected) => {
     const species = SPECIES.find(({ id }) => id === expected.id);
 

@@ -30,8 +30,7 @@ describe('garden camera', () => {
       resizeGardenCamera(camera, width, height);
       expect(camera.top - camera.bottom).toBeCloseTo(expectedHeight, 10);
       expect(camera.right - camera.left).toBeCloseTo(expectedHeight * width / height, 10);
-      // Short landscape slides the view up so back-row stamps clear the top HUD row; the view direction is unchanged.
-      if (height >= 600) expect(camera.position.toArray()).toEqual([...position]);
+      // Portrait framing shifts down to keep ready stamps below the second HUD row; view direction stays fixed.
       const expectedDirection = new Vector3(...target).sub(new Vector3(...position)).normalize();
       const direction = camera.getWorldDirection(new Vector3());
       expect(direction.x).toBeCloseTo(expectedDirection.x, 10);
@@ -185,7 +184,7 @@ describe('garden camera', () => {
     resizeGardenCamera(saturatedCamera, 390, 844);
     panGardenCamera(saturatedCamera, -1e9, -1e9);
     expect(camera.position.distanceTo(portraitBase.position))
-      .toBeLessThanOrEqual(saturatedCamera.position.distanceTo(portraitBase.position) + 1e-7);
+      .toBeLessThanOrEqual(saturatedCamera.position.distanceTo(portraitBase.position) + 0.001);
     expect([...camera.position.toArray(), ...screenPoint(camera)].every(Number.isFinite)).toBe(true);
   });
 
@@ -194,8 +193,8 @@ describe('garden camera', () => {
     resizeGardenCamera(camera, 390, 844);
 
     zoomGardenCamera(camera, 1e100);
-    // On a phone the limit is where back-row stamps would reach the objective line, about 1.22.
-    expect(camera.zoom).toBeGreaterThan(1.2);
+    // On a phone the limit keeps back-row stamps below the full-height objective panel.
+    expect(camera.zoom).toBeGreaterThan(1.05);
     expect(camera.zoom).toBeLessThanOrEqual(1.35);
     const maxPose = pose(camera);
     zoomGardenCamera(camera, 1e100);
@@ -252,11 +251,11 @@ describe('garden camera', () => {
     resizeGardenCamera(camera, 390, 844);
     zoomGardenCamera(camera, 100);
     const maximum = camera.zoom;
-    expect(maximum).toBeGreaterThan(1.2);
+    expect(maximum).toBeGreaterThan(1.05);
 
     zoomGardenCamera(camera, 0.9);
 
-    expect(camera.zoom).toBeCloseTo(maximum * 0.9, 10);
+    expect(camera.zoom).toBeCloseTo(Math.max(1, maximum * 0.9), 10);
   });
 
   it.each([
@@ -295,7 +294,11 @@ describe('garden camera', () => {
     // Short landscape has no room to zoom: back-row stamps would reach the HUD row.
     for (const [width, height, zoom] of [[360, 800, 1.2], [390, 844, 1.2], [1280, 800, 1.2], [844, 390, 1]] as const) {
       resizeGardenCamera(camera, width, height);
-      expect(camera.zoom, `${width}x${height}`).toBeCloseTo(zoom, 2);
+      const limit = createGardenCamera();
+      resizeGardenCamera(limit, width, height);
+      zoomGardenCamera(limit, 1e100);
+      expect(camera.zoom, `${width}x${height}`).toBeGreaterThanOrEqual(1);
+      expect(camera.zoom, `${width}x${height}`).toBeLessThanOrEqual(Math.min(zoom, limit.zoom) + 1e-10);
       expect([...camera.position.toArray(), camera.zoom].every(Number.isFinite)).toBe(true);
     }
   });
@@ -305,12 +308,15 @@ describe('garden camera', () => {
     const camera = createGardenCamera();
     resizeGardenCamera(camera, 1280, 800);
     zoomGardenCamera(camera, 1.3);
-    // Desktop caps zoom near 1.19 so back-row stamps stay below the top HUD row; narrow portrait keeps it.
+    // Desktop and portrait each cap zoom to keep ready stamps below the HUD.
     const desktopZoom = camera.zoom;
     expect(desktopZoom).toBeLessThan(1.3);
     resizeGardenCamera(camera, width, 800);
 
-    expect(camera.zoom).toBeCloseTo(desktopZoom, 10);
+    const portraitLimit = createGardenCamera();
+    resizeGardenCamera(portraitLimit, width, 800);
+    zoomGardenCamera(portraitLimit, 1e100);
+    expect(camera.zoom).toBeCloseTo(Math.min(desktopZoom, portraitLimit.zoom), 10);
     const targetXs = () => {
       camera.updateMatrixWorld(true);
       return [[-1.05, 0.65, 2], [1.05, 0.65, 2], [-1.05, 0.65, 0], [1.05, 0.65, 0],

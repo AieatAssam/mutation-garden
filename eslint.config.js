@@ -31,7 +31,7 @@ const SIM_DETERMINISM = [
 const mod = (name) => ({ regex: `(^|/)${name}(/|$)`, message: `Module boundary: see docs/architecture.md before importing ${name}.` });
 const THREE = { regex: '^three($|/)', message: 'Only src/render and src/app may import three.' };
 const RAPIER = { regex: '^@dimforge/', message: 'Only src/physics (and src/app for init) may import Rapier.' };
-const LAB = { regex: '(^|/)lab(/|$)', message: 'The Mutation Laboratory is Milestone 4. Nothing imports src/lab before M4.' };
+const LAB = { regex: '(^|/)lab(/|$)', message: 'Only src/app may enter the optional laboratory.' };
 
 const boundary = (files, patterns) => ({ files, rules: { 'no-restricted-imports': ['error', { patterns }] } });
 
@@ -59,7 +59,8 @@ export default tseslint.config(
   boundary(['src/ui/**'], [THREE, RAPIER, LAB, mod('render'), mod('physics'), mod('input'), mod('audio'), mod('save'), mod('app')]),
   boundary(['src/input/**'], [THREE, RAPIER, LAB, mod('render'), mod('physics'), mod('ui'), mod('audio'), mod('save'), mod('app')]),
   boundary(['src/audio/**'], [THREE, RAPIER, LAB, mod('render'), mod('physics'), mod('ui'), mod('input'), mod('save'), mod('app')]),
-  boundary(['src/app/**'], [LAB]),
+  boundary(['src/app/**'], []),
+  boundary(['src/lab/**'], [mod('app'), mod('save'), mod('ui'), mod('input'), mod('audio'), mod('render')]),
   // Colour literals are allowed only in the generated palette and in tests.
   {
     files: ['src/render/palette.ts', 'tests/**', '**/*.test.ts', 'scripts/**'],

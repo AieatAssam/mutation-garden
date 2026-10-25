@@ -54,7 +54,7 @@ test('Journal shows discoveries, recipes and live odds; closes by button or Esca
   });
   await openGarden(page, mobile);
 
-  const journal = page.getByRole('button', { name: /^Journal \d+\/\d+$/ });
+  const journal = page.getByRole('button', { name: /^Journal \d+ of \d+$/ });
   const journalBounds = await journal.boundingBox();
   expect(journalBounds).not.toBeNull();
   expect(journalBounds!.width).toBeGreaterThanOrEqual(48);
@@ -124,7 +124,7 @@ test('selling the first order pays once and keeps the next order through reload'
   const mobile = info.project.name === 'mobile-portrait';
   await startWithSave(page, 487, { crateCount: 3, order: { index: 0, progress: 0 } });
   await openGarden(page, mobile);
-  const journal = page.getByRole('button', { name: /^Journal \d+\/\d+$/ });
+  const journal = page.getByRole('button', { name: /^Journal \d+ of \d+$/ });
   await activate(page, journal, mobile);
   const dialog = page.getByRole('dialog', { name: 'Discoveries' });
   await expect(dialog.getByText('Sell 3 Sunny Sprouts', { exact: true })).toBeVisible();
@@ -170,7 +170,7 @@ test('watering four times completes the active order through player input', asyn
   await tapPlot(page, 1, mobile);
 
   await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('14');
-  const journal = page.getByRole('button', { name: /^Journal \d+\/\d+$/ });
+  const journal = page.getByRole('button', { name: /^Journal \d+ of \d+$/ });
   await activate(page, journal, mobile);
   const dialog = page.getByRole('dialog', { name: 'Discoveries' });
   await expect(dialog.getByText('Harvest 3 together', { exact: true })).toBeVisible();
@@ -186,7 +186,7 @@ test('finishing saved order progress once survives reload without another payout
   await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('19');
   await expect(page.locator('.garden-ui__level-text')).toHaveText('Level 2');
 
-  const journal = page.getByRole('button', { name: /^Journal \d+\/\d+$/ });
+  const journal = page.getByRole('button', { name: /^Journal \d+ of \d+$/ });
   await activate(page, journal, mobile);
   const dialog = page.getByRole('dialog', { name: 'Discoveries' });
   await expect(dialog.getByText('Water 4 times', { exact: true })).toBeVisible();
@@ -215,7 +215,7 @@ test('first mutation reward is not paid again after reload', async ({ page }, in
   await page.reload();
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('212');
-  const journal = page.getByRole('button', { name: /^Journal \d+\/\d+$/ });
+  const journal = page.getByRole('button', { name: /^Journal \d+ of \d+$/ });
   await activate(page, journal, mobile);
   const dialog = page.getByRole('dialog', { name: 'Discoveries' });
   await expect(dialog.getByText('First on this device')).toBeVisible();

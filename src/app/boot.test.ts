@@ -199,6 +199,8 @@ describe('boot animation wiring', () => {
         expect.objectContaining({ id: 'comet-pear', name: 'Comet Pear', cost: 24, unlockLevel: 9 }),
         expect.objectContaining({ id: 'clockvine', name: 'Clockvine', cost: 20, unlockLevel: 11 }),
         expect.objectContaining({ id: 'dewbell', name: 'Dewbell', cost: 34, unlockLevel: 13 }),
+        expect.objectContaining({ id: 'prism-fig', name: 'Prism Fig', cost: 0, unlockLevel: 18, labSeed: true }),
+        expect.objectContaining({ id: 'sunburst', name: 'Sunburst', cost: 0, unlockLevel: 18, labSeed: true }),
       ],
       selectedId: 'sunny-sprout',
       coins: 12,

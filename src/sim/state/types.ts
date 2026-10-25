@@ -1,4 +1,4 @@
-export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap' | 'lantern-pod' | 'clockvine' | 'dewbell' | 'comet-pear';
+export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap' | 'lantern-pod' | 'clockvine' | 'dewbell' | 'comet-pear' | 'prism-fig' | 'sunburst';
 export type PlotId = string;
 export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm' | 'quick-counter-1' | 'quick-counter-2' | 'quick-counter-3' | 'crate-1' | 'crate-2' | 'second-counter' | 'fresh-produce' | 'sprinkler' | 'sprinkler-2' | 'sprinkler-3' | 'bee-hive' | 'bee-hive-2' | 'bee-hive-3' | 'seed-hopper' | 'seed-hopper-2' | 'seed-hopper-3' | 'harvest-helper' | 'harvest-helper-2' | 'harvest-helper-3' | 'delivery-cart' | 'delivery-cart-2' | 'delivery-cart-3';
 export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestable';
@@ -6,6 +6,7 @@ export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestabl
 /** Fruit size rolled at planting (design.md 4.3). Absent means regular. */
 export type YieldSize = 'small' | 'regular' | 'big';
 export type TraitId = 'giant' | 'golden' | 'glowing' | 'crystal' | 'rainbow' | 'frozen' | 'electric' | 'twin';
+export type LabSeedId = 'prism-fig' | 'sunburst';
 
 export interface PlantState {
   readonly speciesId: SpeciesId;
@@ -75,6 +76,8 @@ export interface GardenSnapshot {
   readonly owned?: readonly ShopItemId[];
   readonly fertiliser?: number;
   readonly crate?: readonly Fruit[];
+  readonly labSpecimens?: readonly LabSpecimen[];
+  readonly labSeeds?: readonly LabSeedId[];
   readonly crateCount?: number;
   readonly crateCapacity?: number;
   readonly saleIntervalMs?: number;
@@ -90,7 +93,7 @@ export interface OrderProgress { readonly index: number; readonly progress: numb
 export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number; readonly bonusSpeciesId?: SpeciesId; readonly bonusPercent?: number }
 
 export interface GardenState {
-  readonly schema: 9;
+  readonly schema: 11;
   readonly coins: number;
   readonly bonusSeeds: number;
   readonly lastNowMs: number;
@@ -109,6 +112,9 @@ export interface GardenState {
   /** Garden XP; the level is derived from it (design.md 4.4). */
   readonly xp: number;
   readonly crate: readonly Fruit[];
+  readonly labSpecimens: readonly LabSpecimen[];
+  readonly labSeeds: readonly LabSeedId[];
+  readonly nextLabSpecimenId: number;
   readonly sellingSince: number | null;
   readonly order: OrderProgress;
   readonly plots: readonly PlotState[];
@@ -116,13 +122,18 @@ export interface GardenState {
 
 export interface Fruit { readonly speciesId: SpeciesId; readonly size: YieldSize; readonly mutations: readonly TraitId[]; readonly value: number; readonly xp: number }
 
+export interface LabSpecimen { readonly id: number; readonly fruit: Fruit }
+
 export type Command =
   | { readonly type: 'Plant'; readonly plotId: PlotId; readonly seedId: SpeciesId }
   | { readonly type: 'Harvest'; readonly plotIds: readonly PlotId[] }
   | { readonly type: 'Water'; readonly plotId: PlotId }
   | { readonly type: 'WaterAll' }
   | { readonly type: 'Buy'; readonly item: ShopItemId }
-  | { readonly type: 'StartSelling' };
+  | { readonly type: 'StartSelling' }
+  | { readonly type: 'StoreLabSpecimen'; readonly crateIndex: number; readonly expectedFruit: Fruit }
+  | { readonly type: 'MergeLabSpecimens'; readonly specimenIds: readonly number[] }
+  | { readonly type: 'ReturnLabSpecimens'; readonly specimenIds: readonly number[] };
 
 export type RejectionReason =
   | 'unknown-plot'
@@ -172,6 +183,12 @@ export type SimEvent =
   | { readonly type: 'FruitSold'; readonly value: number; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[] }
   | { readonly type: 'OrderCompleted'; readonly title: string; readonly coins: number; readonly xp: number }
   | { readonly type: 'LevelUp'; readonly level: number; readonly unlocked: readonly SpeciesId[] }
+  | { readonly type: 'LabSpecimenStored'; readonly specimenId: number }
+  | { readonly type: 'LabSpecimenRejected'; readonly reason: 'invalid-selection' | 'laboratory-full' | 'crate-empty' }
+  | { readonly type: 'LabMergeCompleted'; readonly seedId: LabSeedId; readonly specimens: readonly number[]; readonly chainLength: number }
+  | { readonly type: 'LabMergeRejected'; readonly reason: 'invalid-pair' | 'seed-tray-full' }
+  | { readonly type: 'LabSpecimensReturned'; readonly specimens: readonly number[] }
+  | { readonly type: 'LabReturnRejected'; readonly reason: 'invalid-selection' | 'crate-full' }
   | {
       readonly type: 'CommandRejected';
       readonly command: Command['type'];

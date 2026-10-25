@@ -1,4 +1,4 @@
-import { crateCapacity, levelForXp, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
+import { crateCapacity, levelForXp, MAX_LAB_SEEDS, MAX_LAB_SPECIMENS, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
 import type { GardenState, TraitId } from '../sim';
 
 /** The stored and exported save format (docs/architecture.md, Saves). Keep it stable. */
@@ -56,6 +56,8 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
     return { ...item, ...(typeof plant?.speciesId === 'string' ? { lastSeedId: plant.speciesId } : {}) };
   }) : state.plots }),
   8: (state) => ({ ...state, schema: 9, bonusSeeds: 0 }),
+  9: (state) => ({ ...state, schema: 10, labSpecimens: [], nextLabSpecimenId: 0 }),
+  10: (state) => ({ ...state, schema: 11, labSeeds: [] }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
@@ -78,6 +80,15 @@ export function validateState(value: unknown): value is GardenState {
       && isCount(item.value) && isCount(item.xp) && Array.isArray(item.mutations)
       && new Set(item.mutations).size === item.mutations.length && item.mutations.every((trait) => traits.includes(trait as TraitId));
   };
+  if (!Array.isArray(state.labSpecimens) || state.labSpecimens.length > MAX_LAB_SPECIMENS
+    || !isCount(state.nextLabSpecimenId)) return false;
+  if (!Array.isArray(state.labSeeds) || state.labSeeds.length > MAX_LAB_SEEDS || !state.labSeeds.every((seed) => seed === 'prism-fig' || seed === 'sunburst')) return false;
+  const specimenIds = state.labSpecimens.map((specimen) => specimen && typeof specimen === 'object'
+    ? (specimen as Record<string, unknown>).id : undefined);
+  if (specimenIds.some((id) => !isCount(id)) || new Set(specimenIds).size !== specimenIds.length
+    || (specimenIds.length > 0 && (state.nextLabSpecimenId as number) <= Math.max(...specimenIds as number[]))) return false;
+  if (!state.labSpecimens.every((specimen) => specimen && typeof specimen === 'object'
+    && validFruit((specimen as Record<string, unknown>).fruit))) return false;
   if (!Array.isArray(state.owned) || !state.owned.every((item) => SHOP_ITEM_IDS.has(item as string))
     || new Set(state.owned).size !== state.owned.length) return false;
   if (!Array.isArray(state.crate) || state.crate.length > crateCapacity(state.owned as GardenState['owned']) || !state.crate.every(validFruit)

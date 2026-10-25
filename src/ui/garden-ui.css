@@ -201,15 +201,16 @@
   touch-action: manipulation;
 }
 
-.garden-ui__shop,.garden-ui__water-all,.garden-ui__shop-close,.garden-ui__buy {
+.garden-ui__shop,.garden-ui__daily,.garden-ui__water-all,.garden-ui__shop-close,.garden-ui__buy {
   min-height: 48px; padding: 0 14px; border: 3px solid var(--mg-ui-border); border-radius: 14px;
   background: var(--mg-ui-panel); color: var(--mg-ui-text); box-shadow: 3px 3px 0 var(--mg-ui-misprint);
   font: 700 15px 'Atkinson Hyperlegible', system-ui, sans-serif; cursor: pointer; pointer-events: auto; touch-action: manipulation;
 }
 .garden-ui__shop { display:flex; align-items:center; gap:7px; }
+.garden-ui__daily { max-width:132px; padding:0 9px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 /* A tab on the tray's top-right edge, mirroring the Seeds label on the left. */
 .garden-ui__tray-tools { position:absolute; right:14px; bottom:calc(100% - 12px); display:flex; gap:8px; }
-.garden-ui__tray-label { max-width:calc(100% - 230px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.garden-ui__tray-label { max-width:calc(100% - 285px); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .garden-ui__shop-backdrop { position:absolute; z-index:5; inset:0; display:grid; align-items:end; background:color-mix(in srgb, var(--mg-ui-border) 55%, transparent); pointer-events:auto; }
 .garden-ui__shop-backdrop[hidden] { display:none; }
 .garden-ui__shop-sheet { width:min(100%,560px); max-height:70dvh; overflow:auto; box-sizing:border-box; justify-self:center; padding:16px; border:3px solid var(--mg-ui-border); border-bottom:0; border-radius:20px 20px 0 0; background:var(--mg-ui-panel); box-shadow:0 -5px 0 var(--mg-ui-misprint); }
@@ -508,15 +509,38 @@
   white-space: normal;
 }
 
+.garden-ui__hint.is-daily {
+  top: calc(var(--garden-safe-top) + 116px);
+  right: var(--garden-safe-right);
+  left: var(--garden-safe-left);
+  width: auto;
+  max-width: none;
+  text-align: center;
+  transform: none;
+  white-space: normal;
+}
+
 /* Wide screens: the objective joins the top row, right of the level chip, so it never covers
    back-row stamps (src/render/camera.ts keeps stamps below that row). */
 @media (min-aspect-ratio: 1/1) {
   .garden-ui__hint {
     top: var(--garden-safe-top);
-    right: calc(var(--garden-safe-right) + 220px);
+    right: calc(var(--garden-safe-right) + 280px);
     left: auto;
     max-width: calc(50% - 280px);
     font-size: 14px;
+    text-align: left;
+    transform: none;
+  }
+  .garden-ui__hint.is-daily {
+    top: var(--garden-safe-top);
+    right: calc(var(--garden-safe-right) + 280px);
+    left: auto;
+    width: auto;
+    max-width: calc(50% - 350px);
+    padding:4px 8px;
+    border-width:2px;
+    font-size:13px;
     text-align: left;
     transform: none;
   }
@@ -590,6 +614,33 @@
 
 @media (max-width: 420px) {
   .garden-ui__tray { gap: 6px; padding-inline: 8px; }
+}
+
+@media (max-aspect-ratio: 1/1) {
+  .garden-ui__hint { top:calc(var(--garden-safe-top) + 116px); right:var(--garden-safe-right); left:var(--garden-safe-left); width:auto; max-width:none; text-align:center; transform:none; }
+  .garden-ui__hint:not(.is-long) { padding:3px 8px; border-width:2px; font-size:14px; line-height:1.1; }
+  .garden-ui__hint.is-long { padding:2px 8px; border-width:2px; font-size:13px; line-height:1; }
+  .garden-ui__hint.is-daily { padding:4px 8px; border-width:2px; font-size:13px; }
+  .garden-ui__card { top:calc(var(--garden-safe-top) + 62px); left:var(--garden-safe-left); transform:none; }
+  .garden-ui__crate-amount { top:calc(var(--garden-safe-top) + 62px); right:var(--garden-safe-right); left:auto; }
+  .garden-ui__daily { width:86px; max-width:86px; box-sizing:border-box; padding-inline:5px; }
+  .garden-ui__journal { width:94px; max-width:94px; box-sizing:border-box; overflow:hidden; padding-inline:6px; }
+  .garden-ui__journal-count { display:none; }
+  .garden-ui__shop { width:76px; max-width:76px; box-sizing:border-box; justify-content:center; padding-inline:6px; }
+  .garden-ui__tray-label { max-width:55px; }
+}
+
+@media (max-width: 370px) and (max-aspect-ratio: 1/1) {
+  .garden-ui__daily { width:66px; max-width:66px; }
+  .garden-ui__journal { width:76px; max-width:76px; }
+  .garden-ui__shop { width:60px; max-width:60px; }
+  .garden-ui__tray-label { max-width:54px; }
+}
+
+@media (max-width: 340px) and (max-aspect-ratio: 1/1) {
+  .garden-ui__daily { width:60px; max-width:60px; }
+  .garden-ui__shop { width:55px; max-width:55px; }
+  .garden-ui__tray-label { max-width:42px; }
 }
 
 /* Start over sits apart at the bottom of the shop so it is never hit by accident. */

@@ -1,6 +1,6 @@
 # Architecture
 
-Status: v0.6, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADRs 0004, 0006, 0007 and 0008. Changes to this document need an ADR.
+Status: v0.7, reconciled with brief section 13 (Technical Architecture) and section 9 (Physics and Interaction Reliability). M1 contracts: ADRs 0004, 0006, 0007 and 0008. M6 laboratory boundary: ADR 0011. Changes to this document need an ADR.
 
 ## Stack (brief section 13)
 
@@ -26,21 +26,17 @@ Status: v0.6, reconciled with brief section 13 (Technical Architecture) and sect
 ## Modules and boundaries
 
 ```
-            ┌──────────────── src/app ────────────────┐
-            │ boot, fixed-timestep loop, wiring        │
-            └──┬─────────┬──────────┬────────┬────────┘
-   intents     │         │snapshots │        │ events
-  ┌────────────▼┐   ┌────▼─────┐ ┌──▼────┐ ┌─▼─────┐ ┌──────────┐
-  │ src/input   │   │src/render│ │src/ui │ │src/   │ │src/      │
-  │ touch→intent│   │three.js  │ │DOM    │ │audio  │ │physics   │
-  └─────────────┘   └──────────┘ └───────┘ └───────┘ │Rapier,   │
-                                                     │visual    │
-         commands ┌──────────────┐  serialise        │only      │
-         ────────►│   src/sim    │◄────────┐         └──────────┘
-                  │ pure rules   │   ┌─────┴────┐
-                  └──────────────┘   │ src/save │
-                                     │ IndexedDB│
-                                     └──────────┘
+src/input ──intents──► src/app ──commands──► src/sim
+                         │                   │
+                         │             snapshots/events
+                         ▼                   │
+                src/render, src/ui, src/audio ◄┘
+
+src/app ──import on entry──► src/lab ──import()──► src/physics
+   │                           │                 optional Rapier
+   │                    intents back to app      poses/contacts only
+   ▼
+src/save ──serialise/restore──► src/sim
 ```
 
 | Module | Owns | May import | Must not import |
@@ -48,12 +44,12 @@ Status: v0.6, reconciled with brief section 13 (Technical Architecture) and sect
 | `src/sim` | Game state and rules: plots, plants, growth, harvest, coins, upgrades, mutations, discoveries, offline catch-up | nothing else in src | three, Rapier, DOM globals, any other src module |
 | `src/save` | IndexedDB persistence, versioned envelopes, migrations | `src/sim` | three, Rapier, render, ui, input, audio, physics |
 | `src/render` | three.js scene, materials, palette, camera, effects | `src/sim` types (read-only), `palette.ts` | Rapier, physics, ui, input, audio, save |
-| `src/physics` | Rapier world for visual juice, and the M4 lab | `src/sim` types | three, render, ui, input, audio, save |
+| `src/physics` | Optional Rapier world for laboratory feel; dynamically loaded by the lab | `src/sim` types | three, render, ui, input, audio, save, app, lab |
 | `src/input` | Pointer and touch to intents | `src/sim` types | three, Rapier, render, ui |
 | `src/ui` | DOM overlay labels, tray, counters, journal | `src/sim` types | three, Rapier, render |
 | `src/audio` | Web Audio | `src/sim` types | three, Rapier, render |
-| `src/app` | Bootstrap and wiring | everything except `src/lab` | `src/lab` before M4 |
-| `src/lab` | Mutation Laboratory | — | Not started before M4 |
+| `src/app` | Bootstrap and wiring; dynamically enters the M6 lab | sim, save, render, input, ui, audio; lab on entry | Rapier, physics |
+| `src/lab` | Optional laboratory scene and specimen touch interaction | three, render helpers, `src/sim` types; physics loaded on entry | Rapier, save, app, ui, input, audio |
 
 Inside `src/sim`, the brief's gameplay systems (section 13) each get a folder: `state/` (authoritative game state, commands, events, RNG), `garden/` (plots, placement, expansion), `plants/` (species, growth, harvesting), `mutations/` (rules, traits, discovery), `economy/` (coins, prices, upgrades) and `content/` (data tables). Brief "Persistence: save, load and offline progression" maps to `src/save` plus the closed-form growth in `src/sim/plants`. "Gameplay systems must not depend directly on Three.js scene objects" is the core rule of this table.
 
@@ -68,6 +64,8 @@ ESLint enforces this table (`eslint.config.js`, `no-restricted-imports` per fold
 - **Visuals interpolate, never decide.** Render reads the latest snapshot and the previous one and interpolates for smooth motion. Animations triggered by events, such as squash, fly-to-crate and coin counters, are purely cosmetic. The coin total in the UI always comes from state; it may tick up for show, but it lands on the state value.
 - **Integer economy.** Coins and prices are integers. Timestamps and durations are integer milliseconds. No floating-point money.
 - **Deterministic elements (brief section 9):** plant placement, growth stages, growth timers, harvest eligibility, mutation rules, inventory, currency and progression all live in `src/sim`. Plant growth never depends on physics or animation. Gameplay stays correct if rendering or physics is interrupted.
+
+The M6 lab is a separate adapter under [ADR 0011](decisions/0011-optional-laboratory-boundary.md). The sim owns saved specimen IDs, fruit data and lab seed packets; crate-to-lab transfers and recipe merges are atomic commands that validate their inputs. Drag state, poses and contacts remain transient. Lab callbacks propose commands through app; recipes never depend on physics. Schema 10 adds specimen inventory; schema 11 adds seed packets through sequential migrations.
 
 ## M1 public contract
 
@@ -176,13 +174,13 @@ The brief says growth timers use real elapsed time, with reasonable offline prog
 
 ## Physics (Rapier)
 
-- `@dimforge/rapier3d-compat` is loaded with a dynamic `import()` the first time it's needed, so it never blocks first paint or the first planting.
-- Brief section 9 limits rigid bodies to: harvested fruit falling and bouncing, dropped objects, small environmental interactions, and (M4) laboratory merging. Each body is spawned from an event and removed when it settles or after 3 s. Pool frequent effects, and cap live bodies (start at 24) so they never pile up.
+- Only `src/physics` loads `@dimforge/rapier3d-compat`, using dynamic `import()` after entry to the M6 lab. Only the lab dynamically loads that adapter; app and garden have no static physics dependency. Rapier never blocks first paint or planting.
+- Brief section 9 permits rigid bodies for harvested fruit, dropped objects, environmental touches and laboratory merging. In the current implementation Rapier is confined to the lab; garden effects use their existing animation path. Pool and cap lab bodies and specimen inventory at 24. Sleep settled bodies and release the pool on exit; owned specimens remain safe in the tray. Cosmetic effects may expire after 3 s, but saved specimens never expire with their bodies.
 - Keep object scale and collision shapes consistent: 1 world unit = one plot width / 2. Use simple colliders (spheres, capsules, boxes), never mesh colliders on plants.
 - **Physics never changes state.** A fruit that bounces off the island still counts, because the harvest was already applied by `step` before the body existed.
 - If Rapier fails to load or the device is slow, use tweened fallbacks with the same timing. The game must be fully playable with physics off; e2e tests cover this.
 - Physics steps at its own fixed 60 Hz in `src/physics`, separate from the sim's tick.
-- M4 lab: specimen manipulation uses physics for feel, but merge results come from deterministic rules in `src/sim`, keyed only on which specimens were combined (brief M4: "Physics does not affect reward correctness").
+- M6 lab: specimen manipulation uses physics for feel, but merge results come from deterministic rules in `src/sim`, keyed only on stable specimen IDs and their saved data (brief M4 acceptance: "Physics does not affect reward correctness"). Contact proposes a pair; it cannot award or consume anything. The physics-free lab provides the same proposal path.
 
 ## Saves (IndexedDB)
 

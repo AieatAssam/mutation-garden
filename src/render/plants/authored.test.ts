@@ -67,11 +67,13 @@ describe('authored plants', () => {
 
   it('uses existing authored plants only for species missing from an older GLB', () => {
     const models = readPlantModels(scene());
-    expect(models.parts.size).toBe(8);
+    expect(models.parts.size).toBe(10);
     expect(models.parts.get('lantern-pod')?.map(({ name }) => name)).toEqual(models.parts.get('bubble-berry')?.map(({ name }) => name));
     expect(models.parts.get('comet-pear')?.map(({ name }) => name)).toEqual(models.parts.get('sunny-sprout')?.map(({ name }) => name));
     expect(models.parts.get('clockvine')?.map(({ name }) => name)).toEqual(models.parts.get('twistroot')?.map(({ name }) => name));
     expect(models.parts.get('dewbell')?.map(({ name }) => name)).toEqual(models.parts.get('puffcap')?.map(({ name }) => name));
+    expect(models.parts.get('prism-fig')?.map(({ name }) => name)).toEqual(models.parts.get('twistroot')?.map(({ name }) => name));
+    expect(models.parts.get('sunburst')?.map(({ name }) => name)).toEqual(models.parts.get('sunny-sprout')?.map(({ name }) => name));
     models.dispose();
   });
 

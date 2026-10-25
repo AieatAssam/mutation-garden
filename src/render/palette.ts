@@ -253,6 +253,50 @@ export const palette = {
       "accent": {
         "dew": "#E9FFFF"
       }
+    },
+    "prism-fig": {
+      "leaf": [
+        "#CFE3B4",
+        "#94B87C",
+        "#5E8763",
+        "#3C5B4A"
+      ],
+      "stem": [
+        "#D7C7E8",
+        "#A28AC1",
+        "#6A568D"
+      ],
+      "fruit": [
+        "#F3D9F0",
+        "#C18FC4",
+        "#865B9A",
+        "#513C70"
+      ],
+      "accent": {
+        "facet": "#FFF2CB"
+      }
+    },
+    "sunburst": {
+      "leaf": [
+        "#D9E294",
+        "#A5B84C",
+        "#758A38",
+        "#4B5D2D"
+      ],
+      "stem": [
+        "#E7B66F",
+        "#BD7844",
+        "#80503A"
+      ],
+      "fruit": [
+        "#FFF0A0",
+        "#FFC74C",
+        "#F07D32",
+        "#A94A2C"
+      ],
+      "accent": {
+        "rays": "#FFF6D1"
+      }
     }
   },
   "mutations": {

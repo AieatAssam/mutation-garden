@@ -115,6 +115,18 @@ function plantSilhouette(speciesId?: SpeciesId): SVGSVGElement {
     const dew = document.createElementNS(svg.namespaceURI, 'circle');
     dew.setAttribute('cx', '12'); dew.setAttribute('cy', '21'); dew.setAttribute('r', '1.5');
     svg.append(bell, dew);
+  } else if (speciesId === 'prism-fig') {
+    const leaves = document.createElementNS(svg.namespaceURI, 'path');
+    leaves.setAttribute('d', 'M12 21V10m0 4C8 9 5 11 5 7c4-1 7 1 7 7Zm0 3c4-6 7-3 7-7-4-1-7 1-7 7Z');
+    const fruit = document.createElementNS(svg.namespaceURI, 'path');
+    fruit.setAttribute('d', 'M8 7 6 4l5 1 2-3 5 5-2 5-6 1Z');
+    svg.append(leaves, fruit);
+  } else if (speciesId === 'sunburst') {
+    const rays = document.createElementNS(svg.namespaceURI, 'path');
+    rays.setAttribute('d', 'M12 2v3m0 14v3M2 12h3m14 0h3M5 5l2 2m10 10 2 2M19 5l-2 2M7 17l-2 2');
+    rays.setAttribute('fill', 'none'); rays.setAttribute('stroke', 'currentColor'); rays.setAttribute('stroke-width', '2');
+    const fruit = document.createElementNS(svg.namespaceURI, 'circle'); fruit.setAttribute('cx', '12'); fruit.setAttribute('cy', '12'); fruit.setAttribute('r', '5.5');
+    svg.append(rays, fruit);
   } else {
     const stem = document.createElementNS(svg.namespaceURI, 'path');
     stem.setAttribute('d', 'M11 21V10c0-3 2-5 5-6-1 4-2 6-5 7');
@@ -132,7 +144,11 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'garden-ui__journal';
-  button.textContent = 'Journal';
+  const buttonLabel = document.createElement('span');
+  buttonLabel.textContent = 'Journal';
+  const buttonCount = document.createElement('span');
+  buttonCount.className = 'garden-ui__journal-count';
+  button.append(buttonLabel, buttonCount);
   button.setAttribute('aria-haspopup', 'dialog');
   button.setAttribute('aria-expanded', 'false');
 
@@ -193,6 +209,18 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
     recipes.append(article);
     return { trait, recipeText, odds };
   });
+  const labRecipeRows = [
+    ['lab:electric+frozen:prism-fig', 'Frozen + Electric', 'Prism Fig'],
+    ['lab:glowing+golden:sunburst', 'Golden + Glowing', 'Sunburst'],
+    ['lab:prism-fig+golden:sunburst', 'Prism Fig + Golden', 'Sunburst'],
+    ['lab:sunburst+twin:prism-fig', 'Sunburst + Twin', 'Prism Fig'],
+  ].map(([key, ingredients, result]) => {
+    const article = document.createElement('article'); article.className = 'discovery-journal__recipe'; article.hidden = true;
+    const title = document.createElement('h3'); title.textContent = `${ingredients} → ${result}`;
+    const detail = document.createElement('p'); detail.textContent = 'Mutation Laboratory recipe';
+    article.append(title, detail); recipes.append(article);
+    return { key: key!, article };
+  });
   const pairs = document.createElement('section');
   pairs.className = 'discovery-journal__pairs'; pairs.hidden = true;
   const pairRows: { first: JournalTraitDescriptor; second: JournalTraitDescriptor; label: HTMLElement; status: HTMLElement }[] = [];
@@ -249,7 +277,8 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
     const found = cells.filter(({ species, trait }) => state.discoveries.includes(`${species.id}:${trait.id}`)).length;
     const total = cells.length;
     progress.textContent = `${found} of ${total} entries found`;
-    button.textContent = `Journal ${found}/${total}`;
+    buttonCount.textContent = ` ${found}/${total}`;
+    button.setAttribute('aria-label', `Journal ${found} of ${total}`);
     if (state.order) {
       const { title: orderTitle, progress: done, target, rewardCoins, rewardXp, bonusSpeciesId, bonusPercent } = state.order;
       order.hidden = false;
@@ -289,6 +318,7 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
         : 'No natural chance.';
       odds.textContent = [naturalOdds, trait.ruleOdds].filter(Boolean).join(' · ');
     }
+    for (const { key, article } of labRecipeRows) article.hidden = !state.discoveries.includes(key);
     for (const { first, second, label, status } of pairRows) {
       const found = state.discoveries.some((entry) => entry.endsWith(`:${first.id}`))
         && state.discoveries.some((entry) => entry.endsWith(`:${second.id}`));

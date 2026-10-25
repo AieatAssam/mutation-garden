@@ -14,6 +14,7 @@ import { createSfx } from '../audio/sfx';
 import { createPageLifecycle } from './lifecycle';
 import { createFixedStepLoop } from './loop';
 import { advanceOffline, capClockOffset } from './offline';
+import { dailyChallengeDate, dailyChallengeSeed, readDailyBest, recordDailyBest } from './daily-challenge';
 import {
   commandForPlotActivation,
   commandForSwipeHarvest,
@@ -23,7 +24,13 @@ import {
 export function boot(canvas: HTMLCanvasElement): () => void {
   document.body.style.background = palette.environment['sky-day'].horizon;
   // Each new garden gets its own seed, so yield sizes (and later mutations) differ between players.
-  const initialState = createInitialState(crypto.getRandomValues(new Uint32Array(1))[0]!, Date.now());
+  const startedAt = Date.now();
+  const dailyMode = typeof location !== 'undefined' && new URLSearchParams(location.search).has('daily');
+  const dailyDate = dailyChallengeDate(startedAt);
+  const freshState = createInitialState(dailyMode ? dailyChallengeSeed(dailyDate) : crypto.getRandomValues(new Uint32Array(1))[0]!, startedAt);
+  const initialState = dailyMode ? { ...freshState, plots: freshState.plots.slice(0, 4) } : freshState;
+  let dailyBest = 0;
+  try { dailyBest = readDailyBest(dailyDate); } catch { /* Private browsing can disable local storage. */ }
   let clockOffsetMs = 0;
   const simulationNowMs = () => Math.max(0, Date.now() - clockOffsetMs);
   let selectedSpeciesId: SpeciesId = 'sunny-sprout';
@@ -31,6 +38,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   let latestSnapshot: GardenSnapshot = getSnapshot(initialState);
   const acceptPlotActivation = createPlotActivationGuard();
   let uiCommand: (command: Command) => void = () => {};
+  let openLaboratory: () => void = () => {};
+  let reportLabEvents: (events: readonly SimEvent[]) => void = () => {};
   const uiRoot = document.createElement('div');
   uiRoot.dataset.gardenUi = '';
   for (const [name, value] of Object.entries({
@@ -50,15 +59,20 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     '--mg-ui-panel-sunk': palette.ui['panel-sunk'],
     '--mg-ui-text-muted': palette.ui['text-muted'],
     '--mg-ui-success': palette.ui.success,
+    '--mg-wood-light': palette.environment['wood-crate'][0],
+    '--mg-wood-mid': palette.environment['wood-crate'][1],
+    '--mg-wood-dark': palette.environment['wood-crate'][2],
+    '--mg-glass-highlight': palette.environment.water[0],
   })) {
     uiRoot.style.setProperty(name, value);
   }
+  for (const [id, plant] of Object.entries(palette.plants)) uiRoot.style.setProperty(`--mg-fruit-${id}`, plant.fruit[1]);
   document.body.append(uiRoot);
   // Set once saves load; the shop's Start over calls it.
   let resetGarden: () => Promise<void> = async () => {};
   const gardenUI = createGardenUI(uiRoot, {
     species: SPECIES
-      .map(({ id, name, seedCost, unlockLevel }) => ({ id, name, cost: seedCost, unlockLevel, color: palette.plants[id].fruit[1] })),
+      .map(({ id, name, seedCost, unlockLevel }) => ({ id, name, cost: seedCost, unlockLevel, color: palette.plants[id].fruit[1], ...(id === 'prism-fig' || id === 'sunburst' ? { labSeed: true } : {}) })),
     journalTraits: [
       { id: 'giant', name: 'Giant', multiplier: MUTATIONS.giant.value, naturalChance: MUTATIONS.giant.naturalChance,
         rule: 'Water twice while the plant sprouts and grows.' },
@@ -93,10 +107,20 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     onToggleMusic: () => changeSettings({ ...settings, music: !settings.music }),
     onToggleHaptics: () => changeSettings({ ...settings, haptics: !settings.haptics }),
     onToggleLargeText: () => changeSettings({ ...settings, largeText: !settings.largeText }),
+    onToggleDaily: () => {
+      const url = new URL(location.href);
+      if (dailyMode) url.searchParams.delete('daily'); else url.searchParams.set('daily', '');
+      location.assign(url);
+    },
     onHarvestAll: () => harvestAll(),
     onSell: () => uiCommand({ type: 'StartSelling' }),
+    onOpenLab: () => openLaboratory(),
     onBuy: (item) => uiCommand({ type: 'Buy', item }),
     onReset: () => {
+      if (dailyMode) {
+        const url = new URL(location.href); url.searchParams.delete('daily'); location.assign(url);
+        return;
+      }
       if (!window.confirm('Start over? Your garden, coins and discoveries will be lost.')) return;
       void resetGarden();
     },
@@ -119,9 +143,10 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       selectedId: selectedSpeciesId,
       coins,
       bonusSeeds: snapshot.bonusSeeds ?? 0,
+      labSeeds: snapshot.labSeeds ?? [],
       level: snapshot.level,
       levelProgress: (snapshot.xp - snapshot.levelStartXp) / span,
-      hint: notice || hintFor(snapshot, selectedSpeciesId),
+      hint: dailyMode ? notice || `Daily: sell the highest-value fruit. Back two beds are closed. Best sale: ${dailyBest}.` : notice || hintFor(snapshot, selectedSpeciesId),
       sound: settings.sound,
       music: settings.music,
       haptics: settings.haptics,
@@ -134,6 +159,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       crateCapacity: snapshot.crateCapacity ?? 12,
       selling: snapshot.selling ?? false,
       discoveries: snapshot.discoveries ?? [],
+      dailyMode,
+      dailyBest,
       naturalChanceBonus: snapshot.owned?.includes('lucky-charm') ? 0.03 : 0,
       opportunities: mutationOpportunitiesFor(snapshot),
       ...(snapshot.order ? { order: snapshot.order } : {}),
@@ -207,6 +234,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         r.render(frame.previous, frame.current, frame.alpha, motion.matches);
       },
       onEvents: (events) => {
+        reportLabEvents(events);
         scheduleSave(events);
         for (const event of events) {
           if (event.type === 'LevelUp') {
@@ -214,8 +242,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
             gardenUI.levelUp(event.level, names, motion.matches);
           }
           if (event.type === 'Harvested') gardenUI.hideAway();
-          if (settings.haptics && (event.type === 'HarvestCompleted' || event.type === 'Mutated')) navigator.vibrate?.(event.type === 'Mutated' ? [12, 35, 18] : 12);
+          if (settings.haptics && !motion.matches && (event.type === 'HarvestCompleted' || event.type === 'Mutated')) navigator.vibrate?.(event.type === 'Mutated' ? [12, 35, 18] : 12);
           if (event.type === 'OrderCompleted') showNotice(`Order complete. +${event.coins} coins, +${event.xp} XP.`);
+          if (dailyMode && event.type === 'FruitSold') {
+            try { dailyBest = recordDailyBest(dailyDate, event.value); } catch { /* The challenge works without local storage. */ }
+            refreshUI();
+          }
           if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
           if (event.type === 'CommandRejected' && event.reason === 'crate-full') {
             gardenUI.crateFull(motion.matches);
@@ -236,11 +268,11 @@ export function boot(canvas: HTMLCanvasElement): () => void {
             ], { duration: 420 });
           }
           sfx.mutation(event.mutations, event.firstDiscovery);
-          if (event.firstDiscovery && !motion.matches && 'vibrate' in navigator) navigator.vibrate([20, 40, 20]);
+          if (event.firstDiscovery && settings.haptics && !motion.matches) navigator.vibrate?.([20, 40, 20]);
         }
-        if (!motion.matches && 'vibrate' in navigator) {
-          if (events.some(({ type }) => type === 'Harvested')) navigator.vibrate(15);
-          else if (events.some(({ type }) => type === 'Planted')) navigator.vibrate(10);
+        if (settings.haptics && !motion.matches && 'vibrate' in navigator) {
+          if (events.some(({ type }) => type === 'Harvested')) navigator.vibrate?.(15);
+          else if (events.some(({ type }) => type === 'Planted')) navigator.vibrate?.(10);
         }
       },
     });
@@ -271,6 +303,25 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         }
       }
     });
+    let labDispose: (() => void) | null = null;
+    let labOpening = false;
+    openLaboratory = () => {
+      if (labDispose || labOpening) return;
+      labOpening = true;
+      void import('../lab/laboratory').then(({ createLaboratory }) => {
+        labOpening = false;
+        if (disposed || labDispose) return;
+        const lab = createLaboratory(uiRoot, {
+          getState: () => loop.getState(),
+          store: (crateIndex, expectedFruit) => act({ type: 'StoreLabSpecimen', crateIndex, expectedFruit }),
+          merge: (specimenIds) => act({ type: 'MergeLabSpecimens', specimenIds }),
+          returnToCrate: (specimenIds) => act({ type: 'ReturnLabSpecimens', specimenIds }),
+          close: () => { labDispose?.(); labDispose = null; },
+        });
+        labDispose = () => { lab(); reportLabEvents = () => {}; labDispose = null; };
+        reportLabEvents = lab.report;
+      }).catch(() => { labOpening = false; showNotice('The laboratory could not be opened. Your garden is safe.'); });
+    };
     cancelActiveGesture = input.cancelGesture;
     harvestAll = () => {
       const ripe = latestSnapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').map(({ id }) => id);
@@ -320,6 +371,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         refreshUI();
         void store.saveSettings(next);
       };
+      if (dailyMode) return;
       const loaded = await store.load();
       if (loaded.kind === 'newer') {
         // Leave the newer save alone: playing here would overwrite it with older progress.
@@ -385,7 +437,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       };
       scheduleSave = (events) => {
         if (!events.some(({ type }) => type === 'Planted' || type === 'Harvested' || type === 'Watered' || type === 'FruitSold'
-          || type === 'Mutated' || type === 'Bought' || type === 'OrderCompleted')) return;
+          || type === 'Mutated' || type === 'Bought' || type === 'OrderCompleted' || type === 'LabSpecimenStored' || type === 'LabMergeCompleted')) return;
         clearTimeout(pending);
         pending = setTimeout(saveNow, 800) as unknown as number;
       };
@@ -436,6 +488,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       clearInterval(saveTimer);
       saveNow();
       rewards.dispose();
+      labDispose?.();
       mutationReveal.dispose();
       sfx.dispose();
       r.dispose();

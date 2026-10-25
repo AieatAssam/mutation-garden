@@ -8,6 +8,7 @@ import { applyHarvestAutomation, applySpeciesHooks, applyWateringAutomation } fr
 import { buy, waterAll } from '../plants/shop';
 import { levelForXp, saleIntervalMs, SPECIES } from '../content/species';
 import { nextOrder, orderEventCount, ORDER_DECK } from '../content/orders';
+import { mergeLabSpecimens, returnLabSpecimens, storeLabSpecimen } from '../laboratory';
 
 function assertTimestamp(nowMs: number): void {
   if (!Number.isSafeInteger(nowMs) || nowMs < 0) {
@@ -70,7 +71,13 @@ export function step(
           ? harvest(nextState, command, effectiveNowMs)
           : command.type === 'Buy'
             ? buy(nextState, command)
-            : waterAll(nextState, effectiveNowMs);
+            : command.type === 'StoreLabSpecimen'
+              ? storeLabSpecimen(nextState, command.crateIndex, command.expectedFruit)
+              : command.type === 'MergeLabSpecimens'
+                ? mergeLabSpecimens(nextState, command.specimenIds)
+                : command.type === 'ReturnLabSpecimens'
+                  ? returnLabSpecimens(nextState, command.specimenIds)
+              : waterAll(nextState, effectiveNowMs);
     nextState = result.state;
     events.push(...result.events);
   }

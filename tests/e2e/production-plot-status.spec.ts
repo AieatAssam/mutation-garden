@@ -21,19 +21,19 @@ test.beforeEach(async ({ page }, info) => startWithSave(page, xpForLevel(3), {
 type Point = { x: number; y: number };
 type Box = { x: number; y: number; width: number; height: number };
 type SpeciesId = (typeof SPECIES)[number]['id'];
-const speciesPlot: Record<SpeciesId, number> = { 'sunny-sprout': 0, 'bubble-berry': 2, twistroot: 4, puffcap: 5, 'lantern-pod': 1, 'comet-pear': 3, clockvine: 0, dewbell: 2 };
+const speciesPlot: Record<SpeciesId, number> = { 'sunny-sprout': 0, 'bubble-berry': 2, twistroot: 4, puffcap: 5, 'lantern-pod': 1, 'comet-pear': 3, clockvine: 0, dewbell: 2, 'prism-fig': 3, sunburst: 4 };
 const speciesStampWorldY: Record<SpeciesId, number> = {
   // Authored plant tops (tools/blender/build_plants.py) plus the 0.45 stamp lift.
   'sunny-sprout': 2.89,
   'bubble-berry': 2.30,
-  twistroot: 3.13, puffcap: 2.75, 'lantern-pod': 2.7, 'comet-pear': 2.8, clockvine: 2.9, dewbell: 2.65,
+  twistroot: 3.13, puffcap: 2.75, 'lantern-pod': 2.7, 'comet-pear': 2.8, clockvine: 2.9, dewbell: 2.65, 'prism-fig': 2.8, sunburst: 2.9,
 };
 
 const speciesLabels: Record<SpeciesId, string> = {
   'sunny-sprout': 'Sunny Sprout',
   'bubble-berry': 'Bubble Berry',
   twistroot: 'Twistroot', puffcap: 'Puffcap', 'lantern-pod': 'Lantern Pod', 'comet-pear': 'Comet Pear',
-  clockvine: 'Clockvine', dewbell: 'Dewbell',
+  clockvine: 'Clockvine', dewbell: 'Dewbell', 'prism-fig': 'Prism Fig', sunburst: 'Sunburst',
 };
 
 function projectPlotPoint(

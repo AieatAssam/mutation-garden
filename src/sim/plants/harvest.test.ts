@@ -30,6 +30,29 @@ function harvest(...plotIds: string[]): Command {
 }
 
 describe('Harvest commands', () => {
+  it.each([
+    ['just before dusk', 18 * 60 * 60_000 - 1, false],
+    ['dusk begins', 18 * 60 * 60_000, true],
+    ['dusk ends', 20 * 60 * 60_000, false],
+  ])('awards the Lantern Pod seed %s', (_label, utcTime, expected) => {
+    const plantedAt = 86_400_000 + utcTime - SPECIES.find((entry) => entry.id === 'lantern-pod')!.growthDurationMs;
+    const state = stateWithPlants({ 'plot-0': plantAt('lantern-pod', plantedAt) }, plantedAt);
+    const result = step(state, [harvest('plot-0')], plantedAt + 45_000);
+    expect(result.state.bonusSeeds).toBe(expected ? 1 : 0);
+    const harvested = result.events.find((event) => event.type === 'Harvested');
+    expect(harvested?.type === 'Harvested' && harvested.bonusSeed === true).toBe(expected);
+  });
+
+  it('spends a Lantern Pod dusk seed without coins, while paid planting still costs coins', () => {
+    const initial = createInitialState(seed, startTime, { xp: 5_000 });
+    const freeState = { ...initial, bonusSeeds: 1 };
+    const free = step(freeState, [{ type: 'Plant', plotId: 'plot-0', seedId: 'lantern-pod' }], startTime);
+    expect(free.state.bonusSeeds).toBe(0);
+    expect(free.state.coins).toBe(freeState.coins);
+    const paid = step(initial, [{ type: 'Plant', plotId: 'plot-0', seedId: 'lantern-pod' }], startTime);
+    expect(paid.state.coins).toBe(initial.coins - 12);
+  });
+
   it.each(SPECIES)(
     'keeps %s unavailable at duration minus one and pays its exact value at maturity',
     (species) => {
@@ -149,7 +172,7 @@ describe('Harvest commands', () => {
       type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry',
     }], startTime);
 
-    expect(result.state.coins).toBe(state.coins - 4);
+    expect(result.state.coins).toBe(state.coins - 5);
     expect(result.state.plots[0]?.plant).toMatchObject({ speciesId: 'bubble-berry', plantedAt: startTime });
     expect(result.state.plots[0]?.plant?.mutationSeed).toEqual(expect.any(Number));
     expect(result.events).toEqual([
@@ -304,12 +327,12 @@ describe('Harvest commands', () => {
     expect(getSnapshot(started)).toMatchObject({ crateCount: 2, crateCapacity: 12, selling: true, nextSaleTime: startTime + 1_200 });
     const whole = step(started, [], startTime + 2_400);
     const split = step(step(started, [], startTime + 1_301).state, [], startTime + 2_400);
-    expect(whole.state.coins).toBe(started.coins + 9);
+    expect(whole.state.coins).toBe(started.coins + 13);
     expect(whole.state.xp).toBe(started.xp + 8);
     expect(whole.state.crate).toEqual([]);
     expect(whole.events.filter((event) => event.type === 'FruitSold')).toEqual([
-      { type: 'FruitSold', value: 7, speciesId: 'sunny-sprout', mutations: ['golden'] },
-      { type: 'FruitSold', value: 2, speciesId: 'sunny-sprout', mutations: [] },
+      { type: 'FruitSold', value: 10, speciesId: 'sunny-sprout', mutations: ['golden'] },
+      { type: 'FruitSold', value: 3, speciesId: 'sunny-sprout', mutations: [] },
     ]);
     expect(split.state.coins).toBe(whole.state.coins);
     expect(split.state.xp).toBe(whole.state.xp);

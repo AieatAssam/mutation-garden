@@ -1,11 +1,11 @@
 export type SpeciesId = 'sunny-sprout' | 'bubble-berry' | 'twistroot' | 'puffcap' | 'lantern-pod' | 'clockvine' | 'dewbell' | 'comet-pear';
 export type PlotId = string;
-export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm' | 'quick-counter-1' | 'quick-counter-2' | 'quick-counter-3' | 'crate-1' | 'crate-2' | 'second-counter' | 'fresh-produce';
+export type ShopItemId = 'plot-6' | 'plot-7' | 'big-can' | 'fertiliser' | 'lucky-charm' | 'quick-counter-1' | 'quick-counter-2' | 'quick-counter-3' | 'crate-1' | 'crate-2' | 'second-counter' | 'fresh-produce' | 'sprinkler' | 'sprinkler-2' | 'sprinkler-3' | 'bee-hive' | 'bee-hive-2' | 'bee-hive-3' | 'seed-hopper' | 'seed-hopper-2' | 'seed-hopper-3' | 'harvest-helper' | 'harvest-helper-2' | 'harvest-helper-3' | 'delivery-cart' | 'delivery-cart-2' | 'delivery-cart-3';
 export type GrowthStage = 'Seed' | 'Sprout' | 'Growing' | 'Mature' | 'Harvestable';
 
 /** Fruit size rolled at planting (design.md 4.3). Absent means regular. */
 export type YieldSize = 'small' | 'regular' | 'big';
-export type TraitId = 'giant' | 'golden' | 'glowing' | 'crystal' | 'rainbow';
+export type TraitId = 'giant' | 'golden' | 'glowing' | 'crystal' | 'rainbow' | 'frozen' | 'electric' | 'twin';
 
 export interface PlantState {
   readonly speciesId: SpeciesId;
@@ -23,6 +23,9 @@ export interface PlantState {
   readonly clockBoostMs?: number;
   readonly clockBoostedBy?: readonly PlotId[];
   readonly dewUsed?: boolean;
+  readonly sprinklerWaterCount?: number;
+  readonly beeVisited?: boolean;
+  readonly twinReady?: boolean;
 }
 
 /** The timestamp growth is measured from. */
@@ -40,6 +43,7 @@ export interface PlantSnapshot extends Omit<PlantState, 'mutationSeed' | 'script
 export interface PlotState {
   readonly id: PlotId;
   readonly plant: PlantState | null;
+  readonly lastSeedId?: SpeciesId;
 }
 
 export interface PlotSnapshot {
@@ -56,6 +60,7 @@ export interface MutationProgress {
 
 export interface GardenSnapshot {
   readonly coins: number;
+  readonly bonusSeeds?: number;
   readonly xp: number;
   readonly level: number;
   /** XP at which the current level started and the next one begins. */
@@ -82,18 +87,19 @@ export interface GardenSnapshot {
 }
 
 export interface OrderProgress { readonly index: number; readonly progress: number }
-export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number }
+export interface OrderSnapshot { readonly title: string; readonly progress: number; readonly target: number; readonly rewardCoins: number; readonly rewardXp: number; readonly bonusSpeciesId?: SpeciesId; readonly bonusPercent?: number }
 
 export interface GardenState {
-  readonly schema: 7;
+  readonly schema: 9;
   readonly coins: number;
+  readonly bonusSeeds: number;
   readonly lastNowMs: number;
   readonly rngState: number;
   readonly mutationRngState: number;
   readonly scriptedGiantUsed: boolean;
   readonly scriptedGoldenUsed: boolean;
   readonly plantCount: number;
-  readonly badLuck: Readonly<Record<TraitId, number>>;
+  readonly badLuck: Readonly<Record<Exclude<TraitId, 'frozen' | 'electric' | 'twin'>, number>>;
   readonly discoveries: readonly string[];
   readonly rewardsPaid: readonly string[];
   readonly crystalReadyPlots: readonly PlotId[];
@@ -149,6 +155,7 @@ export type SimEvent =
       /** Harvested within the fresh window after ripening. */
       readonly fresh: boolean;
       readonly lucky: boolean;
+      readonly bonusSeed?: true;
       readonly mutations?: readonly TraitId[];
     }
   | {

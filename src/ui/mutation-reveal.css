@@ -7,6 +7,7 @@
 .mutation-reveal__details { display: grid; gap: .4rem; margin-top: .5rem; }
 .mutation-reveal__stars { color: var(--mg-ui-coin-emboss); letter-spacing: .18em; }
 .mutation-reveal__line { font-size: .95rem; }
+.mutation-reveal__share { min-height: 48px; margin-top: .5rem; padding: 0 14px; border: 2px solid var(--mg-ui-border); border-radius: 12px; background: var(--mg-ui-coin-face); color: var(--mg-ui-text); font: 700 1rem 'Atkinson Hyperlegible', system-ui, sans-serif; }
 .mutation-reveal__repeat { position: fixed; transform: translate(-50%, -50%); padding: .35rem .7rem; color: var(--mg-ui-text); background: var(--mg-ui-panel); border-radius: 1rem; font-weight: 700; animation: mutation-repeat 900ms ease-out both; }
 .mutation-reveal--reduced { background: transparent; }
 .mutation-reveal--reduced .mutation-reveal__panel { animation: mutation-fade 180ms ease-out both; }

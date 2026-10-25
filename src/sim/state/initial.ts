@@ -1,7 +1,7 @@
 import type { GardenState, PlotState, TraitId } from './types';
 import { INITIAL_COINS } from '../content/species';
 
-export const SIM_SCHEMA_VERSION = 7;
+export const SIM_SCHEMA_VERSION = 9;
 export { INITIAL_COINS };
 
 function assertTimestamp(nowMs: number): void {
@@ -34,13 +34,14 @@ export function createInitialState(seed: number, nowMs: number, options: Initial
   return {
     schema: SIM_SCHEMA_VERSION,
     coins: INITIAL_COINS,
+    bonusSeeds: 0,
     lastNowMs: nowMs,
     rngState: seed >>> 0,
     mutationRngState: seedHash === (seed >>> 0) ? (seedHash ^ 0x9e3779b9) >>> 0 : seedHash,
     scriptedGiantUsed: false,
     scriptedGoldenUsed: false,
     plantCount: 0,
-    badLuck: { giant: 0, golden: 0, glowing: 0, crystal: 0, rainbow: 0 } satisfies Record<TraitId, number>,
+    badLuck: { giant: 0, golden: 0, glowing: 0, crystal: 0, rainbow: 0 } satisfies Record<Exclude<TraitId, 'frozen' | 'electric' | 'twin'>, number>,
     discoveries: [],
     rewardsPaid: [],
     crystalReadyPlots: [],

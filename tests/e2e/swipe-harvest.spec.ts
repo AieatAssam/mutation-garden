@@ -149,7 +149,7 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
   await expect(bubble).toHaveAttribute('aria-pressed', 'true');
   if (mobile) await page.touchscreen.tap(plots[1]!.x, plots[1]!.y);
   else await page.mouse.click(plots[1]!.x, plots[1]!.y);
-  await expect(coins).toHaveText('5');
+  await expect(coins).toHaveText('4');
   // Keep the newly planted Bubble Berry unripe while the desktop trace/screenshot runs.
   // Sunnys have already grown against the real clock; only the guard-boundary check below advances this clock.
   await freezeGrowthClock(page);
@@ -180,6 +180,6 @@ test('plot swipe harvests each ripe crossing once and cancellation preserves own
 
   if (mobile) await page.touchscreen.tap(plots[0]!.x, plots[0]!.y);
   else await page.mouse.click(plots[0]!.x, plots[0]!.y);
-  await expect(coins).toHaveText(String(harvest.after - 4));
+  await expect(coins).toHaveText(String(harvest.after - 5));
   expect(errors).toEqual([]);
 });

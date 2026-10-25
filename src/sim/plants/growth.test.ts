@@ -121,6 +121,7 @@ describe('timestamp-derived plant growth', () => {
     const initial = createInitialState(seed, 100, { xp: 500 });
     expect(getSnapshot(initial)).toEqual({
       coins: initial.coins,
+      bonusSeeds: 0,
       xp: 500,
       level: 2,
       levelStartXp: 500,
@@ -135,7 +136,7 @@ describe('timestamp-derived plant growth', () => {
       saleIntervalMs: 1_200,
       discoveries: [],
       rewardsPaid: [],
-      order: { title: 'Sell 3 Sunny Sprouts', progress: 0, target: 3, rewardCoins: 6, rewardXp: 10 },
+      order: { title: 'Sell 3 Sunny Sprouts', progress: 0, target: 3, rewardCoins: 6, rewardXp: 10, bonusSpeciesId: 'sunny-sprout', bonusPercent: 50 },
       mutationProgress: [],
       selling: false,
       nextSaleTime: null,
@@ -155,7 +156,7 @@ describe('timestamp-derived plant growth', () => {
       stage: 'Seed',
       progress: 0,
     });
-    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'scriptedGoldenUsed', 'plantCount', 'badLuck', 'discoveries', 'rewardsPaid', 'crystalReadyPlots', 'rainbowPlots', 'owned', 'fertiliser', 'xp', 'crate', 'sellingSince', 'order', 'plots']);
+    expect(Object.keys(planted.state)).toEqual(['schema', 'coins', 'bonusSeeds', 'lastNowMs', 'rngState', 'mutationRngState', 'scriptedGiantUsed', 'scriptedGoldenUsed', 'plantCount', 'badLuck', 'discoveries', 'rewardsPaid', 'crystalReadyPlots', 'rainbowPlots', 'owned', 'fertiliser', 'xp', 'crate', 'sellingSince', 'order', 'plots']);
     expect(Object.keys(planted.state.plots[0]!.plant!)).toEqual(['speciesId', 'plantedAt', 'size', 'mutationSeed', 'waterCount']);
 
     const half = step(planted.state, [], 4_100);

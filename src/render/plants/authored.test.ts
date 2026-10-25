@@ -125,14 +125,14 @@ describe('authored plants', () => {
     const library = createMaterialLibrary(); const models = readPlantModels(scene());
     const rig = createAuthoredRig('sunny-sprout', models, library);
     const fruit = rig.root.getObjectByName('sunny-sprout_fruit') as Mesh;
-    const traits = ['crystal', 'giant', 'glowing', 'golden', 'rainbow'] as const;
+    const traits = ['crystal', 'giant', 'glowing', 'golden', 'rainbow', 'frozen', 'electric', 'twin'] as const;
     const materials = new Map<string, MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial>();
     for (let first = 0; first < traits.length; first += 1) for (let second = first + 1; second < traits.length; second += 1) {
       rig.update({ ...plant(1, 'Harvestable'), mutations: [traits[first]!, traits[second]!] }, 0, true);
       materials.set(`${traits[first]}+${traits[second]}`, fruit.material as MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial);
     }
-    expect(materials.size).toBe(10);
-    expect(new Set([...materials.values()].map((material) => material.uuid)).size).toBe(10);
+    expect(materials.size).toBe(28);
+    expect(new Set([...materials.values()].map((material) => material.uuid)).size).toBe(28);
     expect(materials.get('crystal+giant')).toBeInstanceOf(MeshPhysicalMaterial);
     expect((materials.get('crystal+giant') as MeshPhysicalMaterial).transmission).toBe(0.92);
     expect(materials.get('crystal+rainbow')).toBeInstanceOf(MeshPhysicalMaterial);
@@ -140,6 +140,20 @@ describe('authored plants', () => {
     expect((materials.get('giant+glowing') as MeshStandardMaterial).emissive.getHex()).toBe(new Color(palette.mutations.glowing.emissive).getHex());
     expect((materials.get('glowing+golden') as MeshStandardMaterial).metalness).toBe(0.82);
     expect((materials.get('glowing+golden') as MeshStandardMaterial).color.getHex()).toBe(new Color(palette.ui.coin.face).getHex());
+
+    rig.update({ ...plant(1, 'Harvestable'), mutations: ['frozen'] }, 0, true);
+    expect(fruit.material).toBeInstanceOf(MeshPhysicalMaterial);
+    expect((fruit.material as MeshPhysicalMaterial).flatShading).toBe(true);
+    rig.update({ ...plant(1, 'Harvestable'), mutations: ['electric'] }, 0, true);
+    expect((fruit.material as MeshStandardMaterial).customProgramCacheKey()).toBe('electric-veins-v1');
+    const electricShader = { uniforms: {}, vertexShader: '#include <begin_vertex>', fragmentShader: '#include <color_fragment>' };
+    (fruit.material as MeshStandardMaterial).onBeforeCompile(electricShader as never, {} as never);
+    expect(electricShader.fragmentShader).toContain('veinA');
+    rig.root.traverse((object) => {
+      if (object instanceof Mesh) for (const material of (Array.isArray(object.material) ? object.material : [object.material])) {
+        expect(material.customProgramCacheKey).toBeTypeOf('function');
+      }
+    });
 
     rig.update({ ...plant(1, 'Harvestable'), mutations: ['crystal'] }, 0, true, 1);
     expect(fruit.material).toBeInstanceOf(MeshPhysicalMaterial);

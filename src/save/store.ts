@@ -37,8 +37,10 @@ export type LoadResult =
 export interface Settings {
   readonly sound: boolean;
   readonly music: boolean;
+  readonly haptics: boolean;
+  readonly largeText: boolean;
 }
-export const DEFAULT_SETTINGS: Settings = { sound: true, music: true };
+export const DEFAULT_SETTINGS: Settings = { sound: true, music: true, haptics: false, largeText: false };
 
 export interface SaveStore {
   load(): Promise<LoadResult>;
@@ -97,6 +99,8 @@ export function createSaveStore(backend: SaveBackend, appVersion: string, nowMs:
       return {
         sound: typeof raw?.sound === 'boolean' ? raw.sound : DEFAULT_SETTINGS.sound,
         music: typeof raw?.music === 'boolean' ? raw.music : DEFAULT_SETTINGS.music,
+        haptics: typeof raw?.haptics === 'boolean' ? raw.haptics : DEFAULT_SETTINGS.haptics,
+        largeText: typeof raw?.largeText === 'boolean' ? raw.largeText : DEFAULT_SETTINGS.largeText,
       };
     },
     async saveSettings(settings) {

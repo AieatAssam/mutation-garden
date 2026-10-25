@@ -20,11 +20,11 @@ describe('species content', () => {
 
   it.each([
     { id: 'sunny-sprout', name: 'Sunny Sprout', seedCost: 1, baseValue: 2, unlockLevel: 1 },
-    { id: 'bubble-berry', name: 'Bubble Berry', seedCost: 4, baseValue: 6, unlockLevel: 2 },
+    { id: 'bubble-berry', name: 'Bubble Berry', seedCost: 5, baseValue: 6, unlockLevel: 2 },
     { id: 'twistroot', name: 'Twistroot', seedCost: 5, baseValue: 10, unlockLevel: 3 },
-    { id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14, unlockLevel: 4 },
-    { id: 'lantern-pod', name: 'Lantern Pod', seedCost: 12, baseValue: 28, unlockLevel: 6 },
-    { id: 'comet-pear', name: 'Comet Pear', seedCost: 24, baseValue: 58, unlockLevel: 9 },
+    { id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 11, unlockLevel: 4 },
+    { id: 'lantern-pod', name: 'Lantern Pod', seedCost: 12, baseValue: 35, unlockLevel: 6 },
+    { id: 'comet-pear', name: 'Comet Pear', seedCost: 24, baseValue: 46, unlockLevel: 9 },
     { id: 'clockvine', name: 'Clockvine', seedCost: 20, baseValue: 46, unlockLevel: 11 },
     { id: 'dewbell', name: 'Dewbell', seedCost: 34, baseValue: 82, unlockLevel: 13 },
   ])('defines $name with its seed price, reward and unlock', (expected) => {

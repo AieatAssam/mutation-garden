@@ -1,4 +1,6 @@
 import { levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
+import { areAdjacent } from './mutate';
+import { getGrowthView } from './growth';
 import { nextRandom } from '../state/rng';
 import type { YieldSize } from '../state/types';
 import type { Command, GardenState, SimEvent, StepResult } from '../state/types';
@@ -30,22 +32,27 @@ export function plant(
     return rejected(state, command, 'locked');
   }
 
-  if (state.coins < species.seedCost) {
+  const bonusSeed = species.id === 'lantern-pod' && state.bonusSeeds > 0;
+  if (!bonusSeed && state.coins < species.seedCost) {
     return rejected(state, command, 'insufficient-coins');
   }
 
   const roll = nextRandom(state.rngState);
   const mutationRoll = nextRandom(state.mutationRngState);
   const rainbow = state.rainbowPlots.includes(plot.id);
+  const twinReady = state.plots.some((other) => other.id !== plot.id && other.plant?.speciesId === 'clockvine'
+    && areAdjacent(plot.id, other.id) && ['Mature', 'Harvestable'].includes(getGrowthView('clockvine', other.plant.plantedAt - (other.plant.boostMs ?? 0) - (other.plant.clockBoostMs ?? 0), state.lastNowMs).stage));
   const plots = state.plots.slice();
   plots[plotIndex] = {
     ...plot,
-    plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value), mutationSeed: mutationRoll.value === 0 ? 0 : Math.floor(mutationRoll.value * 0x1_0000_0000), waterCount: 0, ...(rainbow ? { rainbow: true } : {}), ...(state.fertiliser > 0 ? { fertilised: true, boostMs: Math.round(species.growthDurationMs * 0.4) } : {}) },
+    lastSeedId: species.id,
+    plant: { speciesId: species.id, plantedAt: effectiveNowMs, size: rollSize(roll.value), mutationSeed: mutationRoll.value === 0 ? 0 : Math.floor(mutationRoll.value * 0x1_0000_0000), waterCount: 0, ...(twinReady ? { twinReady: true } : {}), ...(rainbow ? { rainbow: true } : {}), ...(state.fertiliser > 0 ? { fertilised: true, boostMs: Math.round(species.growthDurationMs * 0.4) } : {}) },
   };
 
   const nextState: GardenState = {
     ...state,
-    coins: state.coins - species.seedCost,
+    coins: state.coins - (bonusSeed ? 0 : species.seedCost),
+    bonusSeeds: state.bonusSeeds - Number(bonusSeed),
     rngState: roll.nextState,
     mutationRngState: mutationRoll.nextState,
     plantCount: state.plantCount + 1,

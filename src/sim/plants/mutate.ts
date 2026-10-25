@@ -28,9 +28,14 @@ export function evaluateMature(state: GardenState, nowMs: number): { state: Gard
     if (glowingEligible || levelForXp(state.xp) >= 2 && mutationRoll(plant.mutationSeed ?? 0xffff_ffff, 'glowing') < MUTATIONS.glowing.naturalChance + charm) mutations.push('glowing');
     const crystalEligible = (plot.id === 'plot-0' || plot.id === 'plot-2') && state.crystalReadyPlots.includes(plot.id);
     const crystalRoll = mutationRoll(plant.mutationSeed ?? 0xffff_ffff, 'crystal');
-    const crystal = (crystalEligible && (crystalRoll < MUTATIONS.crystal.ruleChance || badLuck.crystal >= (MUTATIONS.crystal.guarantee ?? Infinity) - 1))
+    const crystal = (crystalEligible && (crystalRoll < MUTATIONS.crystal.ruleChance + (plant.beeVisited ? 0.1 : 0) || badLuck.crystal >= (MUTATIONS.crystal.guarantee ?? Infinity) - 1))
       || (levelForXp(state.xp) >= 2 && crystalRoll < MUTATIONS.crystal.naturalChance + charm);
     if (crystal) mutations.push('crystal');
+    const maturityAt = growthStart(plant) + (SPECIES.find((entry) => entry.id === plant.speciesId)?.stages.find((entry) => entry.stage === 'Mature')?.startsAtMs ?? 0);
+    for (const trait of ['frozen', 'electric', 'twin'] as const) {
+      if (conditionHolds(state, plot.id, plant, trait, trait === 'frozen' ? maturityAt : state.lastNowMs)
+        || levelForXp(state.xp) >= 2 && mutationRoll(plant.mutationSeed ?? 0xffff_ffff, trait) < MUTATIONS[trait].naturalChance + charm) mutations.push(trait);
+    }
     if (plant.rainbow) mutations.push('rainbow');
     if (crystalEligible) badLuck.crystal = crystal ? 0 : badLuck.crystal + 1;
     mutations.sort((a, b) => MUTATIONS[b].value - MUTATIONS[a].value);
@@ -60,8 +65,12 @@ export function evaluateMature(state: GardenState, nowMs: number): { state: Gard
 }
 
 /** Trait-specific rules live here so later traits add a condition without changing evaluation. */
-export function conditionHolds(state: GardenState, plotId: string, plant: NonNullable<GardenState['plots'][number]['plant']>, trait: TraitId): boolean {
+export function conditionHolds(state: GardenState, plotId: string, plant: NonNullable<GardenState['plots'][number]['plant']>, trait: TraitId, atMs = state.lastNowMs): boolean {
   if (trait === 'giant') return (plant.waterCount ?? (plant.boostMs === undefined ? 0 : 1)) >= 2;
+  if (trait === 'electric') return (plant.sprinklerWaterCount ?? 0) >= 2;
+  if (trait === 'twin') return plant.twinReady === true;
+  if (trait === 'frozen') return state.plots.some((other) => other.id !== plotId && other.plant?.speciesId === 'dewbell'
+    && areAdjacent(plotId, other.id) && ['Sprout', 'Growing'].includes(getGrowthView('dewbell', growthStart(other.plant), atMs).stage));
   if (trait === 'crystal') return (plotId === 'plot-0' || plotId === 'plot-2') && state.crystalReadyPlots.includes(plotId);
   if (trait !== 'golden') return false;
   return state.plots.filter((other) => other.id !== plotId && other.plant?.speciesId === 'sunny-sprout' && areAdjacent(plotId, other.id)).length >= 2;

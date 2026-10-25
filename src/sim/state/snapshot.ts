@@ -25,6 +25,7 @@ export function getSnapshot(state: GardenState): GardenSnapshot {
   });
   return {
     coins: state.coins,
+    bonusSeeds: state.bonusSeeds,
     xp: state.xp,
     level,
     levelStartXp: xpForLevel(level),

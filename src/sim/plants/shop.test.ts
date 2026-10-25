@@ -44,7 +44,7 @@ describe('shop purchases', () => {
     state = { ...state, crate: [{ speciesId: 'sunny-sprout', size: 'regular', mutations: [], value: 10, xp: 10 }] };
     state = step(state, [{ type: 'StartSelling' }], 0).state;
     const sold = step(state, [], 400);
-    expect(sold.state.coins).toBe(state.coins + 11);
-    expect(sold.events).toContainEqual({ type: 'FruitSold', value: 11, speciesId: 'sunny-sprout', mutations: [] });
+    expect(sold.state.coins).toBe(state.coins + 16);
+    expect(sold.events).toContainEqual({ type: 'FruitSold', value: 16, speciesId: 'sunny-sprout', mutations: [] });
   });
 });

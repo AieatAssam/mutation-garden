@@ -106,13 +106,13 @@ The brief excludes dozens of species. We ship eight across the game, each with o
 | Species | Unlock | Grow | Seed / value | Silhouette | Hook |
 |---|---|---|---|---|---|
 | Sunny Sprout | Start | 8 s | 1 / 2 | Lollipop | Fast filler. Two adjacent Sunnies give "full sun" to neighbours (Golden rule). |
-| Bubble Berry | Lv 2 | 15 s | 4 / 6 | Low dome of berries | Berries bounce out on harvest (Rapier). Yields 4–6 berries; each one is a coin. |
+| Bubble Berry | Lv 2 | 15 s | 5 / 6 | Low dome of berries | Berries bounce out on harvest (Rapier). Yields 4–6 berries; each one is a coin. |
 | Twistroot | Lv 3 | 25 s | 5 / 10 | Corkscrew root | Pulled up with a stretchy tug on harvest. Twist count = value. |
-| Puffcap | Lv 4 | 30 s | 6 / 14 | Fat mushroom | Plants next to Puffcap always become Glowing. |
-| Lantern Pod | Lv 6 | 45 s | 12 / 28 | Three hanging lantern pods | A harvest after dusk grants one bonus seed (once per plant). |
+| Puffcap | Lv 4 | 30 s | 6 / 11 | Fat mushroom | Plants next to Puffcap always become Glowing. |
+| Lantern Pod | Lv 6 | 45 s | 12 / 35 | Three hanging lantern pods | Harvest from 18:00 to 20:00 UTC for one free Lantern Pod seed. |
 | Clockvine | Lv 11 | 55 s | 20 / 46 | Two clock-hand tendrils around a seed | Each ripe neighbour reduces Clockvine's remaining growth time by 2 s, once per neighbour. |
 | Dewbell | Lv 13 | 90 s | 34 / 82 | Downward bell flower with a dew bead | Its ripe dew waters one orthogonal growing neighbour once. |
-| Comet Pear | Lv 9 | 75 s | 24 / 58 | Pear-shaped fruit with a swept-back leaf tail | Its harvest adds one extra item to the crate. |
+| Comet Pear | Lv 9 | 75 s | 24 / 46 | Pear-shaped fruit with a swept-back leaf tail | Its harvest adds one extra item to the crate. |
 
 Owner change (2026-10-23): the eight-seed roster keeps the five named starting species and adds Clockvine, Dewbell and Comet Pear; the earlier Star Melon proposal is cut.
 
@@ -132,7 +132,7 @@ No natural mutations before Level 2, so the first minute stays about planting an
 | Crystal | ×6 | Plant on pond-side plot-0 or plot-2 immediately after harvesting a Glowing fruit from that plot. 30% when the rule holds. | 0.3% | Guaranteed after 40 rule-qualifying Matures without one |
 | Rainbow | ×10 | Harvest Golden, Glowing and Crystal in one swipe; the next seed planted on any of those plots is Rainbow. Deterministic. | — | The rule is deterministic |
 | Frozen | ×5 | A Dewbell neighbour is growing when this plant becomes Mature. | 0.2% | Rule always grants it |
-| Electric | ×7 | A Sprinkler waters this plant twice before it becomes Mature. | 0.1% | Rule always grants it |
+| Electric | ×7 | Sprinkler II waters this plant twice before it becomes Mature. | 0.1% | Rule always grants it |
 | Twin | ×4 | Plant a seed beside a mature Clockvine; the new plant gets Twin at Mature. | 0.2% | Rule always grants it |
 
 Rules:
@@ -214,6 +214,7 @@ A small glass jar on a shelf beside the island. Drag harvested specimens from a 
 - **Discovery card:** printed seed-packet card with the plant render, mutation name, rarity stamp and "Found on day 3". Share via Web Share API with a PNG; download fallback.
 - **Garden photo:** hides UI, frames the island with a slow orbit, captures a PNG.
 - **Daily challenge:** one shared seed per day (date-hashed, no server): "Grow the most valuable plant using 4 plots". Local best only.
+- **Stall offer:** the active Sunny Sprout order pays 50% extra for Sunny Sprouts; show the offer on its order card before sale.
 - **Accessibility:** reduced motion, colour-blind-safe mutation tells (each mutation also has a shape cue), haptics toggle, text scale.
 
 ## 10. Audio
@@ -271,7 +272,7 @@ Guaranteed rules apply whenever their conditions hold; natural rolls remain rare
 | Trait | Rule | Value | Look and reveal colour |
 |---|---|---:|---|
 | Frozen | A growing Dewbell neighbour is present at Mature. | ×5 | Pale ice material, 3 small facets; Pool blue |
-| Electric | Sprinkler waters the plant twice before Mature. | ×7 | Marigold vein lines pulse once per second; coin gold |
+| Electric | Sprinkler II waters the plant twice before Mature. | ×7 | Marigold vein lines pulse once per second; coin gold |
 | Twin | Plant beside mature Clockvine. | ×4 | Two fruits grow as a mirrored pair; violet |
 
 ### Pacing targets

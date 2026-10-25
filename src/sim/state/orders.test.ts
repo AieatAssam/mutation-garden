@@ -14,9 +14,17 @@ describe('fixed garden orders', () => {
     expect(result.events.filter((event) => event.type === 'OrderCompleted')).toEqual([
       { type: 'OrderCompleted', title: 'Sell 3 Sunny Sprouts', coins: 6, xp: 10 },
     ]);
-    expect(result.state).toMatchObject({ coins: state.coins + 10, xp: 10, order: { index: 1, progress: 0 } });
+    expect(result.state).toMatchObject({ coins: state.coins + 12, xp: 10, order: { index: 1, progress: 0 } });
     expect(getSnapshot(result.state).order).toEqual({ title: 'Water 4 times', progress: 0, target: 4, rewardCoins: 4, rewardXp: 10 });
     expect(step(result.state, [], 2_400).events).not.toContainEqual(expect.objectContaining({ type: 'OrderCompleted' }));
+  });
+
+  it('shows the current bonus price and pays it before advancing the order', () => {
+    const state = { ...withOrder(createInitialState(10, 0), 0), crate: [sunny], sellingSince: 0 };
+    expect(getSnapshot(state).order).toMatchObject({ bonusSpeciesId: 'sunny-sprout', bonusPercent: 50 });
+    const result = step(state, [], 1_200);
+    expect(result.events).toContainEqual({ type: 'FruitSold', value: 3, speciesId: 'sunny-sprout', mutations: [] });
+    expect(result.state.coins).toBe(state.coins + 3);
   });
 
   it('counts each accepted Watered event, including two waters on each of two plants', () => {

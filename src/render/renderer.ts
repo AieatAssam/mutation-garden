@@ -5,6 +5,7 @@ import {
   ColorManagement,
   DirectionalLight,
   Group,
+  AnimationMixer,
   Mesh,
   MeshBasicMaterial,
   HemisphereLight,
@@ -17,13 +18,14 @@ import {
   Vector3,
   WebGLRenderer,
 } from 'three';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { createMaterialLibrary } from './materials';
 import { palette } from './palette';
 import { createGarden } from './garden';
-import { GARDEN_MODEL_URL, loadScenery, type Scenery } from './scenery';
+import { GARDEN_MODEL_URL, loadScenery, paletteColor, type Scenery } from './scenery';
 import { createGardenCamera, nudgeGardenCamera, panGardenCamera, resizeGardenCamera, setGardenCameraExpanded, zoomGardenCamera } from './camera';
 import { createGardenPicker, type PickResult } from './picking';
-import type { GardenSnapshot, PlotId, SimEvent, SpeciesId } from '../sim';
+import type { GardenSnapshot, PlotId, SimEvent, SpeciesId, ShopItemId } from '../sim';
 import { createParticles } from './motion/particles';
 import { createAmbient, type Ambient } from './ambient';
 import { createPlotPulse } from './plot-pulse';
@@ -77,6 +79,7 @@ export function islandDropY(elapsedMs: number): number {
 
 export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptions): Renderer {
   const clock = options.now ?? (() => performance.now());
+  let lastAutomationFrame: number | null = null;
   ColorManagement.enabled = true;
   const gl = new WebGLRenderer({ canvas, antialias: true, alpha: true });
   gl.outputColorSpace = SRGBColorSpace;
@@ -144,10 +147,43 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     console.error('Plant models failed to load', error);
     plants.setModels(null);
   });
+  const automationObjects = new Map<string, Group>();
+  const automationMixers = new Map<string, AnimationMixer>();
+  const automationLoaded = new GLTFLoader().loadAsync(`${import.meta.env.BASE_URL}models/automation.glb`).then(({ scene: source, animations }) => {
+    source.updateMatrixWorld(true);
+    const positions: Record<string, [number, number, number]> = {
+      sprinkler: [0, 0.65, 2.8], 'bee-hive': [2.0, 0.65, -1.8], 'seed-hopper': [-2.0, 0.65, 2.1],
+      'harvest-helper': [0, 0.65, -2.8], 'delivery-cart': [2.8, 0.65, 0.4],
+    };
+    for (const name of Object.keys(positions)) {
+      const authored = source.getObjectByName(name);
+      if (!authored) continue;
+      const prop = new Group(); prop.name = `automation-${name}`;
+      const mesh = authored.clone(true);
+      mesh.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        const sourceMaterial = Array.isArray(object.material) ? object.material[0] : object.material;
+        const color = paletteColor(sourceMaterial?.name ?? 'environment.grass.2');
+        object.material = materials.toon(color);
+      });
+      prop.add(mesh);
+      prop.position.set(...positions[name]!);
+      prop.scale.setScalar(0.8);
+      prop.visible = false;
+      const idle = animations.find(({ name: clipName }) => clipName === `${name.replace('-', '_')}_idle`);
+      if (idle) {
+        const mixer = new AnimationMixer(prop);
+        mixer.clipAction(idle).play();
+        automationMixers.set(name, mixer);
+      }
+      automationObjects.set(name, prop);
+      garden.add(prop);
+    }
+  }).catch(() => { /* Old builds do not include automation.glb. */ });
   // Compile every shader, plant morph variants included, before reporting ready, so the first
   // frames with the island and first plants do not stall the main thread while the player taps
   // (slow GPUs and CI software rendering).
-  const ready = Promise.all([sceneryLoaded, plantsLoaded]).then(async () => {
+  const ready = Promise.all([sceneryLoaded, plantsLoaded, automationLoaded]).then(async () => {
     if (disposed) return;
     const warm = new Group();
     const rigs = plantModels ? options.species.map(({ id }) => createAuthoredRig(id, plantModels!, materials)) : [];
@@ -245,6 +281,9 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
 
   function playEvents(events: readonly SimEvent[], reducedMotion: boolean): void {
     const now = clock();
+    const automationDelta = Math.max(0, Math.min(0.05, (now - (lastAutomationFrame ?? now)) / 1000));
+    lastAutomationFrame = now;
+    if (!currentReducedMotion) for (const mixer of automationMixers.values()) mixer.update(automationDelta);
     for (const event of events) {
       if (event.type === 'FruitSold') {
         const stall = scenery?.stall;
@@ -294,13 +333,22 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
           if (plants.getTop(event.plotId, top)) {
             if (event.firstDiscovery && !reducedMotion) plants.shiver(event.plotId, currentSnapshot?.nowMs ?? 0, 300);
             const trait = event.mutations[0];
+            if (trait === 'frozen') {
+              particles.burst({ origin: top, count: 4, colors: [palette.mutations.crystal.body, palette.mutations.crystal.edge],
+                speed: 0.18, up: -0.05, gravity: 0.8, lifeMs: 700, size: 0.08 }, now, reducedMotion);
+              break;
+            }
             const colors = trait === 'giant' ? [palette.ui.coin.emboss, palette.ink['paper-white']]
               : trait === 'golden' ? palette.plants[event.speciesId].fruit.slice(0, 2)
                 : trait === 'crystal' ? [palette.mutations.crystal.body, palette.mutations.crystal.edge]
+                    : trait === 'electric' ? [palette.ui.coin.face, palette.ui.coin.emboss]
+                      : trait === 'twin' ? palette.plants.twistroot.fruit.slice(0, 2)
                   : trait === 'rainbow' ? palette.mutations.rainbow
                     : [palette.environment.water[0], palette.environment.water[1]];
-            particles.burst({ origin: top, count: event.firstDiscovery ? 16 : 7, colors,
-              speed: 0.8, up: 1.1, gravity: 2, lifeMs: event.firstDiscovery ? 1000 : 500, size: 0.1 }, now, reducedMotion);
+            particles.burst({ origin: top, count: trait === 'electric' ? 2 : event.firstDiscovery ? 16 : 7, colors,
+              speed: trait === 'electric' ? 1.5 : 0.8, up: trait === 'electric' ? 0.2 : 1.1,
+              gravity: trait === 'electric' ? 0 : 2, lifeMs: trait === 'electric' ? 350 : event.firstDiscovery ? 1000 : 500,
+              size: trait === 'electric' ? 0.06 : 0.1 }, now, reducedMotion);
           }
           break;
         }
@@ -317,6 +365,28 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     }
     const now = clock();
     const snapshot = currentSnapshot;
+    for (const [id, object] of automationObjects) {
+      const owned = snapshot?.owned ?? [];
+      object.visible = owned.includes(id as ShopItemId)
+        || id === 'sprinkler' && owned.includes('sprinkler-2')
+        || id === 'sprinkler' && owned.includes('sprinkler-3')
+        || id === 'bee-hive' && owned.includes('bee-hive-2')
+        || id === 'bee-hive' && owned.includes('bee-hive-3')
+        || id === 'seed-hopper' && owned.includes('seed-hopper-2')
+        || id === 'seed-hopper' && owned.includes('seed-hopper-3')
+        || id === 'harvest-helper' && owned.includes('harvest-helper-2')
+        || id === 'harvest-helper' && owned.includes('harvest-helper-3')
+        || id === 'delivery-cart' && owned.includes('delivery-cart-2')
+        || id === 'delivery-cart' && owned.includes('delivery-cart-3');
+      if (!currentReducedMotion) {
+        const cartTier = owned.includes('delivery-cart-3') ? 3 : owned.includes('delivery-cart-2') ? 2 : 1;
+        if (id === 'delivery-cart') object.position.x = 2.8 + Math.sin(now / (2_400 / cartTier)) * 0.2;
+        if (id === 'harvest-helper') {
+          const helperTier = owned.includes('harvest-helper-3') ? 3 : owned.includes('harvest-helper-2') ? 2 : 1;
+          object.position.x = Math.sin(now / (3_000 / helperTier)) * 0.2;
+        }
+      }
+    }
     const stall = scenery?.stall;
     stallRing.visible = Boolean(stall && snapshot?.selling && snapshot.nextSaleTime !== null);
     if (stall && snapshot && stallRing.visible) {
@@ -462,6 +532,8 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       disposed = true;
       picker.dispose();
       plants.dispose();
+      for (const object of automationObjects.values()) object.removeFromParent();
+      automationObjects.clear();
       plantModels?.dispose();
       statusResources.dispose();
       particles.dispose();

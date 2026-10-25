@@ -6,6 +6,9 @@ export const MUTATIONS: Readonly<Record<TraitId, { value: number; naturalChance:
   glowing: { value: 3, naturalChance: 0.01, ruleChance: 1, guarantee: null },
   crystal: { value: 6, naturalChance: 0.003, ruleChance: 0.3, guarantee: 40 },
   rainbow: { value: 10, naturalChance: 0, ruleChance: 1, guarantee: null },
+  frozen: { value: 5, naturalChance: 0.002, ruleChance: 1, guarantee: null },
+  electric: { value: 7, naturalChance: 0.001, ruleChance: 1, guarantee: null },
+  twin: { value: 4, naturalChance: 0.002, ruleChance: 1, guarantee: null },
 };
 
 /** Stable Murmur-style finalizer, used to derive a trait roll without advancing state. */

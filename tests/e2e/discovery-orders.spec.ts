@@ -78,7 +78,7 @@ test('Journal shows discoveries, recipes and live odds; closes by button or Esca
       .evaluateAll((elements) => elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)));
     expect(Math.min(...fontSizes)).toBeGreaterThanOrEqual(13);
   }
-  await expect(dialog.getByText('Not found')).toHaveCount(14);
+  await expect(dialog.getByText('Not found')).toHaveCount(14 + (Object.keys(MUTATIONS).length - 5) * 3);
   await expect(dialog.getByText('Harvest Glowing fruit from plot 0 or 2, then replant there.')).toHaveCount(0);
   const giantRecipe = dialog.getByRole('heading', { name: 'Giant ×2' }).locator('xpath=..');
   await expect(giantRecipe).toContainText(`${Number((MUTATIONS.giant.naturalChance * 100).toFixed(1))}% natural chance`);
@@ -90,8 +90,9 @@ test('Journal shows discoveries, recipes and live odds; closes by button or Esca
   await activate(page, dialog.getByRole('button', { name: 'Pairs' }), mobile);
   await expect(dialog.locator('.discovery-journal__recipes')).toBeHidden();
   await expect(dialog.locator('.discovery-journal__pairs')).toBeVisible();
-  await expect(dialog.getByText('Unknown pair')).toHaveCount(10);
-  await expect(dialog.locator('.discovery-journal__pairs .discovery-journal__silhouette')).toHaveCount(20);
+  const pairCount = Object.keys(MUTATIONS).length * (Object.keys(MUTATIONS).length - 1) / 2;
+  await expect(dialog.getByText('Unknown pair')).toHaveCount(pairCount);
+  await expect(dialog.locator('.discovery-journal__pairs .discovery-journal__silhouette')).toHaveCount(pairCount * 2);
   await page.screenshot({ path: `/tmp/mutation-engagement-${mobile ? 'phone' : 'desktop'}-pairs.png`, scale: 'css' });
   await activate(page, dialog.getByRole('button', { name: 'Catalogue' }), mobile);
   await expect(dialog.getByText('Sell 3 Sunny Sprouts', { exact: true })).toBeVisible();
@@ -127,7 +128,7 @@ test('selling the first order pays once and keeps the next order through reload'
   await activate(page, journal, mobile);
   const dialog = page.getByRole('dialog', { name: 'Discoveries' });
   await expect(dialog.getByText('Sell 3 Sunny Sprouts', { exact: true })).toBeVisible();
-  await expect(dialog.getByText('0 of 3 · 6 coins · 10 XP')).toBeVisible();
+  await expect(dialog.getByText('0 of 3 · 6 coins · 10 XP · Sunny Sprout +50%')).toBeVisible();
   await page.keyboard.press('Escape');
 
   await activate(page, page.getByRole('button', { name: 'Sell', exact: true }), mobile);

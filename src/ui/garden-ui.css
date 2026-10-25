@@ -182,6 +182,9 @@
   display: flex;
   gap: 8px;
 }
+.garden-ui--photo-mode > :not(.garden-ui__toggles) { visibility: hidden; }
+.garden-ui--photo-mode .garden-ui__toggles > :not(.garden-ui__photo-toggle) { display: none; }
+:root.garden-large-text { font-size: 112.5%; }
 
 .garden-ui__toggle {
   display: grid;

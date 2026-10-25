@@ -4,7 +4,7 @@ import { harvest } from '../plants/harvest';
 import { water } from '../plants/water';
 import { collectGrowthEvents } from '../plants/growth';
 import { evaluateMature } from '../plants/mutate';
-import { applySpeciesHooks } from '../plants/species-hooks';
+import { applyHarvestAutomation, applySpeciesHooks, applyWateringAutomation } from '../plants/species-hooks';
 import { buy, waterAll } from '../plants/shop';
 import { levelForXp, saleIntervalMs, SPECIES } from '../content/species';
 import { nextOrder, orderEventCount, ORDER_DECK } from '../content/orders';
@@ -30,12 +30,19 @@ export function step(
   const cropHooks = applySpeciesHooks(nextState, effectiveNowMs);
   nextState = cropHooks.state;
   events.push(...cropHooks.events);
+  const wateringAutomation = applyWateringAutomation(nextState, effectiveNowMs);
+  nextState = wateringAutomation.state;
+  events.push(...wateringAutomation.events);
   if (nextState.sellingSince !== null && nextState.crate.length) {
     const sales = Math.min(nextState.crate.length, Math.floor((effectiveNowMs - nextState.sellingSince) / saleIntervalMs(nextState.owned)));
     if (sales) {
       const crate = nextState.crate.slice(sales);
       const sold = nextState.crate.slice(0, sales);
-      const value = (fruit: typeof sold[number]) => Math.floor(fruit.value * (nextState.owned.includes('fresh-produce') ? 1.1 : 1));
+      const orderOffer = ORDER_DECK[nextState.order.index];
+      const value = (fruit: typeof sold[number]) => Math.floor(fruit.value
+        * (nextState.owned.includes('fresh-produce') ? 1.1 : 1)
+        * (orderOffer && 'bonusSpeciesId' in orderOffer && orderOffer.bonusSpeciesId === fruit.speciesId
+          ? 1 + ('bonusPercent' in orderOffer ? (orderOffer.bonusPercent ?? 0) / 100 : 0) : 1));
       const coins = nextState.coins + sold.reduce((sum, fruit) => sum + value(fruit), 0);
       const xp = nextState.xp + sold.reduce((sum, fruit) => sum + fruit.xp, 0);
       for (const fruit of sold) events.push({ type: 'FruitSold', value: value(fruit), speciesId: fruit.speciesId, mutations: fruit.mutations });
@@ -66,6 +73,14 @@ export function step(
             : waterAll(nextState, effectiveNowMs);
     nextState = result.state;
     events.push(...result.events);
+  }
+
+  const recentlyHarvested = events.filter((event) => event.type === 'Harvested').map(({ plotId }) => plotId);
+  const harvestAutomation = applyHarvestAutomation(nextState, effectiveNowMs, recentlyHarvested);
+  nextState = harvestAutomation.state;
+  events.push(...harvestAutomation.events);
+  if (nextState.owned.includes('delivery-cart') && nextState.crate.length && nextState.sellingSince === null) {
+    nextState = { ...nextState, sellingSince: effectiveNowMs };
   }
 
   const mutationResult = evaluateMature(nextState, effectiveNowMs);

@@ -73,6 +73,15 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       { id: 'rainbow', name: 'Rainbow', multiplier: MUTATIONS.rainbow.value, naturalChance: MUTATIONS.rainbow.naturalChance,
         rule: 'Harvest Golden, Glowing and Crystal together, then replant one of those plots.',
         prerequisites: ['golden', 'glowing', 'crystal'], prerequisite: 'Find Golden, Glowing and Crystal first.' },
+      { id: 'frozen', name: 'Frozen', multiplier: MUTATIONS.frozen.value, naturalChance: MUTATIONS.frozen.naturalChance,
+        rule: 'Keep a growing Dewbell beside this plant when it reaches Mature.', hintLevel: 13,
+        prerequisite: 'Unlock Dewbell at Level 13 for the guaranteed recipe.' },
+      { id: 'electric', name: 'Electric', multiplier: MUTATIONS.electric.value, naturalChance: MUTATIONS.electric.naturalChance,
+        rule: 'Let Sprinkler II water this plant twice before it reaches Mature.', hintLevel: 7,
+        prerequisite: 'Unlock Sprinkler II at Level 7 for the guaranteed recipe.' },
+      { id: 'twin', name: 'Twin', multiplier: MUTATIONS.twin.value, naturalChance: MUTATIONS.twin.naturalChance,
+        rule: 'Plant beside a mature Clockvine.', hintLevel: 11,
+        prerequisite: 'Unlock Clockvine at Level 11 for the guaranteed recipe.' },
     ],
     selectedId: selectedSpeciesId,
     coins,
@@ -82,6 +91,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     },
     onToggleSound: () => changeSettings({ ...settings, sound: !settings.sound }),
     onToggleMusic: () => changeSettings({ ...settings, music: !settings.music }),
+    onToggleHaptics: () => changeSettings({ ...settings, haptics: !settings.haptics }),
+    onToggleLargeText: () => changeSettings({ ...settings, largeText: !settings.largeText }),
     onHarvestAll: () => harvestAll(),
     onSell: () => uiCommand({ type: 'StartSelling' }),
     onBuy: (item) => uiCommand({ type: 'Buy', item }),
@@ -94,6 +105,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   });
   let harvestAll = () => {};
   let settings: Settings = DEFAULT_SETTINGS;
+  let settingsChangedBeforeLoad = false;
   let notice = '';
   let noticeTimer = 0;
   // Input waits for the save to load, so a tap made while IndexedDB opens is not replaced by restore().
@@ -106,11 +118,14 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     gardenUI.update({
       selectedId: selectedSpeciesId,
       coins,
+      bonusSeeds: snapshot.bonusSeeds ?? 0,
       level: snapshot.level,
       levelProgress: (snapshot.xp - snapshot.levelStartXp) / span,
       hint: notice || hintFor(snapshot, selectedSpeciesId),
       sound: settings.sound,
       music: settings.music,
+      haptics: settings.haptics,
+      largeText: settings.largeText,
       reducedMotion,
       ripeCount: snapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').length,
       owned: snapshot.owned ?? [],
@@ -134,7 +149,11 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     if (!text) { notices.resolve(notice); return; }
     notices.push({ text, persistent: ms === 0 || text.startsWith('Crate full.') });
   };
-  let changeSettings: (next: Settings) => void = (next) => { settings = next; };
+  let changeSettings: (next: Settings) => void = (next) => {
+    settings = next;
+    settingsChangedBeforeLoad = true;
+    refreshUI();
+  };
 
   let disposed = false;
   const disposeUI = () => {
@@ -195,6 +214,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
             gardenUI.levelUp(event.level, names, motion.matches);
           }
           if (event.type === 'Harvested') gardenUI.hideAway();
+          if (settings.haptics && (event.type === 'HarvestCompleted' || event.type === 'Mutated')) navigator.vibrate?.(event.type === 'Mutated' ? [12, 35, 18] : 12);
           if (event.type === 'OrderCompleted') showNotice(`Order complete. +${event.coins} coins, +${event.xp} XP.`);
           if (event.type === 'CommandRejected' && event.reason === 'insufficient-coins') gardenUI.noCoins(motion.matches);
           if (event.type === 'CommandRejected' && event.reason === 'crate-full') {
@@ -288,7 +308,9 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     // Saves (docs/architecture.md, Saves): load once, then write after changes, every 10 s and on hide.
     const savesReady = chooseBackend().then(async ({ backend, persistent }) => {
       const store = createSaveStore(backend, import.meta.env.MODE, () => Date.now());
-      settings = await store.loadSettings();
+      const storedSettings = await store.loadSettings();
+      if (!settingsChangedBeforeLoad) settings = storedSettings;
+      else void store.saveSettings(settings);
       sfx.setMuted(!settings.sound);
       sfx.setMusic(settings.music);
       changeSettings = (next) => {

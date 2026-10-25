@@ -190,16 +190,38 @@ export function createAuthoredRig(
   const glowingMaterial = new MeshStandardMaterial({ color: palette.mutations.glowing.core, emissive: palette.mutations.glowing.emissive, emissiveIntensity: 0.8, roughness: 0.8 });
   const crystalMaterial = new MeshPhysicalMaterial({ color: palette.mutations.crystal.body, transmission: 0.92, thickness: 0.6,
     ior: 1.45, roughness: 0.04, attenuationColor: new Color(palette.mutations.crystal.attenuation), attenuationDistance: 0.8, flatShading: true });
+  const frozenMaterial = new MeshPhysicalMaterial({ color: palette.mutations.crystal.body, metalness: 0.15, roughness: 0.28, flatShading: true });
+  const frozenUniforms: { value: number }[] = [];
+  frozenMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.frostProgress = { value: 1 };
+    frozenUniforms.push(shader.uniforms.frostProgress as { value: number });
+    shader.vertexShader = `varying vec3 vFrostPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvFrostPosition = transformed;');
+    shader.fragmentShader = `uniform float frostProgress;\nvarying vec3 vFrostPosition;\n${shader.fragmentShader}`.replace('#include <color_fragment>',
+      `#include <color_fragment>\nfloat frostEdge = 1.0 - smoothstep(0.0, 0.06, abs(vFrostPosition.y - frostProgress * 1.4));\nfloat frostFacet = step(0.72, fract((vFrostPosition.x * 3.1 + vFrostPosition.y * 2.7 + vFrostPosition.z * 2.3) * 3.0));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${new Color(palette.mutations.crystal.edge).r.toFixed(3)}, ${new Color(palette.mutations.crystal.edge).g.toFixed(3)}, ${new Color(palette.mutations.crystal.edge).b.toFixed(3)}), max(frostEdge * 0.7, frostFacet * step(vFrostPosition.y, frostProgress * 1.4) * 0.22));`);
+  };
+  frozenMaterial.customProgramCacheKey = () => 'frozen-facet-wipe-v1';
+  const electricMaterial = new MeshStandardMaterial({ color: palette.ui.coin.face, emissive: palette.ui.coin.face, emissiveIntensity: 0.45, roughness: 0.45 });
+  const twinMaterial = new MeshStandardMaterial({ color: palette.plants.twistroot.fruit[1], roughness: 0.65, flatShading: true });
+  const electricUniforms: { value: number }[] = [];
+  electricMaterial.onBeforeCompile = (shader) => {
+    shader.uniforms.electricPulse = { value: 0.45 };
+    electricUniforms.push(shader.uniforms.electricPulse as { value: number });
+    shader.vertexShader = `varying vec3 vElectricPosition;\n${shader.vertexShader}`.replace('#include <begin_vertex>', '#include <begin_vertex>\nvElectricPosition = transformed;');
+    shader.fragmentShader = `uniform float electricPulse;\nvarying vec3 vElectricPosition;\n${shader.fragmentShader}`.replace('#include <color_fragment>',
+      `#include <color_fragment>\nfloat veinA = 1.0 - smoothstep(0.018, 0.045, abs(vElectricPosition.x - 0.22 * sin(vElectricPosition.y * 6.0)));\nfloat veinB = 1.0 - smoothstep(0.018, 0.045, abs(vElectricPosition.x + 0.22 * sin(vElectricPosition.y * 6.0)));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(${new Color(palette.mutations.golden.highlight).r.toFixed(3)}, ${new Color(palette.mutations.golden.highlight).g.toFixed(3)}, ${new Color(palette.mutations.golden.highlight).b.toFixed(3)}), max(veinA, veinB) * electricPulse);`);
+  };
+  electricMaterial.customProgramCacheKey = () => 'electric-veins-v1';
   const crystalFresnel = new MeshStandardMaterial({ color: palette.mutations.crystal.deep, transparent: true, opacity: 0.72, metalness: 0.35, roughness: 0.22, side: DoubleSide });
   crystalFresnel.onBeforeCompile = (shader) => {
     shader.vertexShader = `varying vec3 vCrystalNormal;\n${shader.vertexShader}`.replace('#include <beginnormal_vertex>', '#include <beginnormal_vertex>\nvCrystalNormal = normalize(normalMatrix * objectNormal);');
     shader.fragmentShader = `varying vec3 vCrystalNormal;\n${shader.fragmentShader}`.replace('#include <color_fragment>', '#include <color_fragment>\nfloat crystalEdge = pow(1.0 - abs(normalize(vCrystalNormal).z), 2.0); diffuseColor.a = mix(0.55, 0.95, crystalEdge);');
   };
   crystalFresnel.customProgramCacheKey = () => 'crystal-fresnel-fallback-v1';
-  const traitIds = ['crystal', 'giant', 'glowing', 'golden', 'rainbow'] as const;
+  const traitIds = ['crystal', 'giant', 'glowing', 'golden', 'rainbow', 'frozen', 'electric', 'twin'] as const;
   const traitColor = (trait: typeof traitIds[number]) => trait === 'giant' ? palette.mutations.giant.tint
     : trait === 'golden' ? palette.mutations.golden.base : trait === 'glowing' ? palette.mutations.glowing.core
-      : trait === 'crystal' ? palette.mutations.crystal.body : palette.mutations.rainbow[0];
+      : trait === 'crystal' || trait === 'frozen' ? palette.mutations.crystal.body
+        : trait === 'electric' ? palette.ui.coin.face : trait === 'twin' ? palette.plants.twistroot.fruit[1] : palette.mutations.rainbow[0];
   const rainbowTimeUniforms: { value: number }[] = [];
   const goldenGleamUniforms: { value: number }[] = [];
   const glowingMaterials: MeshStandardMaterial[] = [glowingMaterial];
@@ -223,11 +245,11 @@ export function createAuthoredRig(
   const pairMaterials = new Map<string, MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial>();
   const pairFallbackMaterials = new Map<string, MeshStandardMaterial>();
   const pairBaseTraits = new Map<string, typeof traitIds[number]>();
-  const baseMaterials = { crystal: crystalMaterial, giant: fruitMaterial, glowing: glowingMaterial, golden: goldenMaterial, rainbow: rainbowMaterial };
-  const rank = { giant: 0, glowing: 1, golden: 2, crystal: 3, rainbow: 4 };
+  const baseMaterials = { crystal: crystalMaterial, giant: fruitMaterial, glowing: glowingMaterial, golden: goldenMaterial, rainbow: rainbowMaterial, frozen: frozenMaterial, electric: electricMaterial, twin: twinMaterial };
+  const rank = { giant: 0, glowing: 1, golden: 2, crystal: 3, frozen: 4, electric: 5, twin: 6, rainbow: 7 };
   for (const [index, first] of traitIds.entries()) for (const second of traitIds.slice(index + 1)) {
     const [baseTrait, accentTrait] = rank[first] > rank[second] ? [first, second] : [second, first];
-    const key = `${first}+${second}`;
+    const key = [first, second].sort().join('+');
     const createPairMaterial = (baseMaterial: MeshStandardMaterial | MeshPhysicalMaterial | MeshToonMaterial, suffix = '') => {
       const material = baseMaterial.clone();
       const baseCompile = baseMaterial.onBeforeCompile;
@@ -264,6 +286,12 @@ export function createAuthoredRig(
     body.add(mesh, hull);
     animated.push({ meshes: [mesh, hull], part, growth: 0, scale: 1 });
   }
+  const twinSource = animated.find(({ part }) => part.ripe)?.meshes[0];
+  const twinFruit = twinSource ? new Mesh(twinSource.geometry, twinMaterial) : null;
+  if (twinFruit) {
+    twinFruit.name = 'twin-fruit'; twinFruit.renderOrder = 3;
+    body.add(twinFruit);
+  }
   const byName = new Map(animated.map((entry) => [entry.part.name, entry]));
   const ride = new Vector3();
 
@@ -287,6 +315,12 @@ export function createAuthoredRig(
   let giantFrom = 1;
   let shiverStartMs = -Infinity;
   let shiverDurationMs = 0;
+  let lastFrozen = false;
+  let lastElectric = false;
+  let lastTwin = false;
+  let frozenStartMs = -Infinity;
+  let electricStartMs = -Infinity;
+  let twinStartMs = -Infinity;
 
   const blob = materials.blob();
   blob.name = 'blob';
@@ -305,11 +339,24 @@ export function createAuthoredRig(
       const glowing = plant.mutations?.includes('glowing') ?? false;
       const crystal = plant.mutations?.includes('crystal') ?? false;
       const rainbow = plant.mutations?.includes('rainbow') ?? false;
+      const frozen = plant.mutations?.includes('frozen') ?? false;
+      const electric = plant.mutations?.includes('electric') ?? false;
+      const twin = plant.mutations?.includes('twin') ?? false;
+      if (frozen && !lastFrozen) frozenStartMs = presentationNowMs;
+      if (electric && !lastElectric) electricStartMs = presentationNowMs;
+      if (twin && !lastTwin) twinStartMs = presentationNowMs;
+      lastFrozen = frozen; lastElectric = electric; lastTwin = twin;
       const mutations = plant.mutations ?? [];
       const pairKey = mutations.length === 2 ? [...mutations].sort().join('+') : '';
       const pair = pairMaterials.get(pairKey);
       const pairBase = pairBaseTraits.get(pairKey);
+      const frozenProgress = frozen ? reducedMotion ? 1 : clamp01((presentationNowMs - frozenStartMs) / 500) : 1;
+      for (const uniform of frozenUniforms) uniform.value = frozenProgress;
       for (const material of glowingMaterials) material.emissiveIntensity = glowing ? (reducedMotion ? 0.8 : 0.55 + 0.3 * Math.sin(presentationNowMs / 350)) : 0;
+      const electricAge = presentationNowMs - electricStartMs;
+      const electricArc = electric && !reducedMotion && electricAge < 510 && (electricAge < 350 || electricAge >= 80 && electricAge < 430)
+        ? Math.max(0, Math.sin((electricAge % 350) / 350 * Math.PI)) : 0;
+      for (const uniform of electricUniforms) uniform.value = reducedMotion ? 0.65 : electricArc || (electric ? 0.35 + 0.3 * Math.max(0, Math.sin(presentationNowMs * Math.PI * 2 / 1000)) : 0);
       const gleam = reducedMotion ? 0.5 : ((presentationNowMs % 3000) + 3000) % 3000 / 3000;
       for (const uniform of goldenGleamUniforms) uniform.value = gleam;
       for (const uniform of rainbowTimeUniforms) uniform.value = reducedMotion ? 0 : (((presentationNowMs % 3000) + 3000) % 3000) / 3000;
@@ -347,7 +394,7 @@ export function createAuthoredRig(
         if (transmitCrystal) crystalTransmissionUsed += 1;
         if (part.ripe) {
           meshes[0]!.material = pair ? pairBase === 'crystal' && !transmitCrystal ? pairFallbackMaterials.get(pairKey)! : pair
-            : (rainbow ? rainbowMaterial : crystal ? transmitCrystal ? crystalMaterial : crystalFresnel : golden ? goldenMaterial : glowing ? glowingMaterial : fruitMaterial);
+            : (twin ? twinMaterial : electric ? electricMaterial : frozen ? frozenMaterial : rainbow ? rainbowMaterial : crystal ? transmitCrystal ? crystalMaterial : crystalFresnel : golden ? goldenMaterial : glowing ? glowingMaterial : fruitMaterial);
           if (pairBase === 'giant') (meshes[0]!.material as MeshToonMaterial).color.copy(fruitMaterial.color);
           if (pairBase === 'glowing') (meshes[0]!.material as MeshStandardMaterial).emissiveIntensity = glowingMaterial.emissiveIntensity;
         }
@@ -359,10 +406,22 @@ export function createAuthoredRig(
           mesh.rotation.z = flutter;
           if (part.morph) mesh.morphTargetInfluences![0] = growth;
           mesh.visible = size > 0.001 && (!part.morph || growth > 0 || part.growStart === 0)
-            && !((golden || crystal || rainbow) && part.ripe && index === 1);
+            && !((golden || crystal || rainbow || frozen || electric || twin) && part.ripe && index === 1);
           mesh.scale.setScalar(Math.max(0.001, size));
           mesh.position.copy(part.origin).add(ride);
         }
+      }
+      if (twinFruit && twinSource) {
+        twinFruit.visible = twin && (plant.stage === 'Mature' || ripe);
+        twinFruit.material = pair ? pair as MeshStandardMaterial : twinMaterial;
+        twinFruit.position.copy(twinSource.position);
+        twinFruit.position.x += 0.32;
+        twinFruit.scale.copy(twinSource.scale);
+        twinFruit.scale.x *= -1;
+        const twinAge = presentationNowMs - twinStartMs;
+        const twinPop = reducedMotion ? 1 : smooth(clamp01((twinAge - 100) / 180));
+        twinFruit.scale.multiplyScalar(twinPop);
+        if (twinSource.morphTargetInfluences && twinFruit.morphTargetInfluences) twinFruit.morphTargetInfluences.splice(0, twinFruit.morphTargetInfluences.length, ...twinSource.morphTargetInfluences);
       }
 
       if (lastStage !== null && lastStage !== plant.stage) popStartMs = presentationNowMs;
@@ -438,7 +497,7 @@ export function createAuthoredRig(
       if (disposed) return;
       disposed = true;
       fruitMaterial.dispose();
-      goldenMaterial.dispose();
+      goldenMaterial.dispose(); frozenMaterial.dispose(); electricMaterial.dispose(); twinMaterial.dispose();
       glowingMaterial.dispose();
       crystalMaterial.dispose(); crystalFresnel.dispose(); rainbowMaterial.dispose();
       for (const material of pairMaterials.values()) material.dispose();

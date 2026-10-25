@@ -23,12 +23,21 @@ export interface OfflineAdvance {
 export function advanceOffline(state: GardenState, savedAt: number, nowMs: number): OfflineAdvance {
   const elapsedMs = Math.min(OFFLINE_CAP_MS, Math.max(0, nowMs - savedAt));
   const targetMs = Math.max(state.lastNowMs, Math.min(nowMs, state.lastNowMs + elapsedMs));
-  const result = step(state, [], targetMs);
-  const { events } = result;
+  let advanced = state;
+  const events: import('../sim').SimEvent[] = [];
+  // Fixed wall-clock boundaries make one long absence equal any split of that absence.
+  for (let tick = (Math.floor(state.lastNowMs / 1_000) + 1) * 1_000; tick < targetMs; tick += 1_000) {
+    const result = step(advanced, [], tick);
+    advanced = result.state;
+    events.push(...result.events);
+  }
+  const result = targetMs > advanced.lastNowMs ? step(advanced, [], targetMs) : { state: advanced, events: [] };
+  advanced = result.state;
+  events.push(...result.events);
   const crateCounts = new Map<SpeciesId, number>();
-  for (const fruit of result.state.crate) crateCounts.set(fruit.speciesId, (crateCounts.get(fruit.speciesId) ?? 0) + 1);
+  for (const fruit of advanced.crate) crateCounts.set(fruit.speciesId, (crateCounts.get(fruit.speciesId) ?? 0) + 1);
   return {
-    state: result.state,
+    state: advanced,
     elapsedMs,
     plantsGrown: events.filter((event) => event.type === 'Harvestable').length,
     plotsWatered: new Set(events.filter((event) => event.type === 'Watered').map(({ plotId }) => plotId)).size,
@@ -38,7 +47,7 @@ export function advanceOffline(state: GardenState, savedAt: number, nowMs: numbe
       const count = crateCounts.get(id) ?? 0;
       return count ? [{ speciesId: id, count }] : [];
     }),
-    ripePlotIds: getSnapshot(result.state).plots.filter(({ plant }) => plant?.stage === 'Harvestable').map(({ id }) => id),
+    ripePlotIds: getSnapshot(advanced).plots.filter(({ plant }) => plant?.stage === 'Harvestable').map(({ id }) => id),
     events,
   };
 }

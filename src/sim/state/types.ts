@@ -178,7 +178,7 @@ export type SimEvent =
     }
   | { readonly type: 'LuckyHarvest'; readonly plotId: PlotId }
   | { readonly type: 'Watered'; readonly plotId: PlotId }
-  | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean; readonly bonusCoins: number; readonly bonusXp: number }
+  | { readonly type: 'Mutated'; readonly plotId: PlotId; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[]; readonly firstDiscovery: boolean; readonly firstTraitDiscoveries: readonly TraitId[]; readonly firstPairDiscoveries: readonly (readonly [TraitId, TraitId])[]; readonly bonusCoinsByTrait: Readonly<Partial<Record<TraitId, number>>>; readonly bonusCoins: number; readonly bonusXp: number }
   | { readonly type: 'Bought'; readonly item: ShopItemId }
   | { readonly type: 'FruitSold'; readonly value: number; readonly speciesId: SpeciesId; readonly mutations: readonly TraitId[] }
   | { readonly type: 'OrderCompleted'; readonly title: string; readonly coins: number; readonly xp: number }

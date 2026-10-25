@@ -29,3 +29,33 @@ test('first Giant reveal swallows the skip tap and harvest pays the mutation val
   const harvest = await expectHarvestPaid(page, () => harvestAll.click());
   expect(harvest.payouts.some((payout) => payout >= 20)).toBe(true);
 });
+
+test('known Golden on a new species uses the inline label and keeps its first-find reward', async ({ page }) => {
+  const now = Date.now();
+  await startWithSave(page, 0, {
+    plot0SpeciesId: 'bubble-berry',
+    twistrootPlantedAt: now - 25_000,
+    extraSunnyPlots: [
+      { plotId: 'plot-1', plantedAt: now - 25_000 },
+      { plotId: 'plot-2', plantedAt: now - 25_000 },
+    ],
+    discoveries: ['sunny-sprout:golden'],
+    rewardsPaid: [],
+    savedAt: now,
+  });
+  await page.goto('./');
+
+  await expect(page.getByText('New mutation: Golden!')).toHaveCount(0);
+  await expect(page.getByText('Golden Bubble Berry +240')).toBeVisible({ timeout: 8_000 });
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('252');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  await expect.poll(async () => (await page.evaluate(async () => {
+    const request = indexedDB.open('mutation-garden', 1);
+    return await new Promise<string[]>((resolve) => {
+      request.onsuccess = () => {
+        const get = request.result.transaction('saves').objectStore('saves').get('slot-0');
+        get.onsuccess = () => resolve(get.result.state.discoveries);
+      };
+    });
+  }))).toContain('trait:golden');
+});

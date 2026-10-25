@@ -320,8 +320,7 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
     }
     for (const { key, article } of labRecipeRows) article.hidden = !state.discoveries.includes(key);
     for (const { first, second, label, status } of pairRows) {
-      const found = state.discoveries.some((entry) => entry.endsWith(`:${first.id}`))
-        && state.discoveries.some((entry) => entry.endsWith(`:${second.id}`));
+      const found = state.discoveries.includes(`pair:${[first.id, second.id].sort().join('+')}`);
       label.replaceChildren();
       if (found) {
         label.removeAttribute('aria-label');

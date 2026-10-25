@@ -28,7 +28,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
   let detailTimer = 0;
   let active = false;
   let disposed = false;
-  const queue: { event: Extract<SimEvent, { type: 'Mutated' }>; reducedMotion: boolean }[] = [];
+  const queue: { event: Extract<SimEvent, { type: 'Mutated' }>; reducedMotion: boolean; title?: string }[] = [];
   const clear = () => {
     clearTimeout(timer);
     clearTimeout(labelTimer);
@@ -43,9 +43,9 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     active = false;
     clear();
     const pending = queue.shift();
-    if (!disposed && pending) display(pending.event, pending.reducedMotion);
+    if (!disposed && pending) display(pending.event, pending.reducedMotion, pending.title);
   };
-  const display = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
+  const display = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean, revealTitle?: string) => {
     active = true;
     const trait = TRAITS[event.mutations[0]!];
     if (!trait) { active = false; return; }
@@ -58,7 +58,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     panel.setAttribute('role', 'status');
     const title = document.createElement('div');
     title.className = 'mutation-reveal__title';
-    title.textContent = `New mutation: ${trait.name}!`;
+    title.textContent = revealTitle ?? `New mutation: ${trait.name}!`;
     layer.append(flash, panel);
     const details = document.createElement('div');
     details.className = 'mutation-reveal__details';
@@ -104,7 +104,7 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
         window.setTimeout(() => URL.revokeObjectURL(url), 1_000);
       }
     });
-    if (event.firstDiscovery) details.append(share);
+    if (event.firstDiscovery || event.firstPairDiscoveries.length > 0) details.append(share);
     labelTimer = window.setTimeout(() => {
       panel.append(title);
       if (!reducedMotion && trait.name !== 'Electric') {
@@ -119,22 +119,31 @@ export function createMutationReveal(container: HTMLElement, projectPlot: (plotI
     timer = window.setTimeout(next, 1_600 + readingTimeMs(`${title.textContent ?? ''} ${trait.line}`));
   };
   const show = (event: Extract<SimEvent, { type: 'Mutated' }>, reducedMotion: boolean) => {
-    const mutations = [...event.mutations].sort((a, b) => (a === 'giant' ? -1 : 0) - (b === 'giant' ? -1 : 0));
-    for (const [index, mutation] of mutations.entries()) {
-      const single = { ...event, mutations: [mutation], bonusCoins: index === 0 ? event.bonusCoins : 0, bonusXp: index === 0 ? event.bonusXp : 0 };
+    const fullReveals: { event: Extract<SimEvent, { type: 'Mutated' }>; title?: string }[] = [];
+    const species = SPECIES.find(({ id }) => id === event.speciesId)?.name ?? 'Plant';
+    for (const mutation of event.mutations) {
+      const bonusCoins = event.bonusCoinsByTrait[mutation] ?? 0;
+      const single = { ...event, mutations: [mutation], bonusCoins, bonusXp: bonusCoins };
       const trait = TRAITS[mutation];
       if (!trait) continue;
-      if (!event.firstDiscovery) {
+      if (event.firstTraitDiscoveries.includes(mutation)) fullReveals.push({ event: single });
+      else {
         const point = projectPlot(event.plotId);
         if (!point) continue;
         const label = document.createElement('span');
-        label.className = 'mutation-reveal__repeat'; label.textContent = trait.name;
+        label.className = 'mutation-reveal__repeat';
+        label.textContent = `${trait.name} ${species}${bonusCoins ? ` +${bonusCoins}` : ''}`;
         label.style.left = `${point.x}px`; label.style.top = `${point.y}px`;
-        layer.append(label); setTimeout(() => label.remove(), readingTimeMs(trait.name));
-      } else queue.push({ event: single, reducedMotion });
+        layer.append(label); setTimeout(() => label.remove(), readingTimeMs(label.textContent));
+      }
     }
+    for (const pair of event.firstPairDiscoveries) {
+      const pairEvent = { ...event, mutations: pair, firstTraitDiscoveries: [], bonusCoinsByTrait: {}, bonusCoins: 0, bonusXp: 0 };
+      fullReveals.push({ event: pairEvent, title: `New pair: ${pair.map((trait) => TRAITS[trait].name).join(' + ')}!` });
+    }
+    queue.push(...fullReveals.map(({ event: revealEvent, title }) => ({ event: revealEvent, reducedMotion, ...(title ? { title } : {}) })));
     const pending = !active ? queue.shift() : undefined;
-    if (pending && !disposed) display(pending.event, pending.reducedMotion);
+    if (pending && !disposed) display(pending.event, pending.reducedMotion, pending.title);
   };
   return { show, dispose() { disposed = true; queue.length = 0; clear(); layer.remove(); } };
 }

@@ -75,3 +75,16 @@ test('accessibility toggles expose haptics and large text state', async ({ page 
   await expect(largeText).toHaveAttribute('aria-pressed', 'true');
   await expect(page.locator('html')).toHaveClass(/garden-large-text/);
 });
+
+test('daily garden starts as a four-plot challenge and returns to the saved garden route', async ({ page }) => {
+  await page.goto('./?daily');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  await expect(page.getByRole('button', { name: /Exit daily garden/ })).toHaveAttribute('title', /back two beds are closed/);
+  await expect(page.locator('.garden-ui__hint')).toHaveText('Daily: sell the highest-value fruit. Back two beds are closed. Best sale: 0.');
+  const daily = page.getByRole('button', { name: /Exit daily garden/ });
+  await expect(daily).toHaveText('Exit daily');
+  if (page.viewportSize()?.width === 390) await expect(page.locator('.garden-ui__journal')).toHaveText('Journal');
+  await daily.click();
+  await expect(page).toHaveURL(/\/mutation-garden\/$/);
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+});

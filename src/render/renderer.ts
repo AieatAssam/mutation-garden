@@ -287,6 +287,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     for (const event of events) {
       if (event.type === 'FruitSold') {
         const stall = scenery?.stall;
+        scenery?.stepBuyers(now);
         if (stall) flights.sell(event.speciesId, new Vector3(2.75, 1.05, 0.75), stall.localToWorld(new Vector3(0, 0.69, 0.24)), now, reducedMotion);
         continue;
       }

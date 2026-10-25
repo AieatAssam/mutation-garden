@@ -318,6 +318,24 @@ for x in (-0.38, -0.13, 0.13, 0.38):
 stall_box('environment.stall.sign', (0.42, 0.07, 0.26), (0, -0.28, 1.28), 0.025)
 stall_box('environment.stall.wood.1', (0.48, 0.035, 0.035), (0, -0.33, 1.28), 0.01)
 
+# Small paper villagers form the buyer line. The renderer shuffles these optional named roots
+# when fruit sells; older garden.glb exports remain usable without them.
+for index, x in enumerate((-0.42, -0.14, 0.14, 0.42)):
+    buyer = link(bpy.data.objects.new(f'buyer-{index}', None))
+    buyer.parent = stall_root
+    buyer.location = (x, 0.48, 0)
+    buyer['keep'] = True
+    body = rounded_box('environment.cloud.lit', (0.17, 0.13, 0.25), (0, 0, 0.34), 0.06)
+    head = prim('uv_sphere', 'environment.cloud.lit', loc=(0, 0, 0.53), scale=(0.09, 0.08, 0.09), segments=12, ring_count=8)
+    bpy.ops.object.select_all(action='DESELECT')
+    body.select_set(True); head.select_set(True)
+    bpy.context.view_layer.objects.active = body
+    bpy.ops.object.join()
+    person = bpy.context.active_object
+    person.name = f'buyer-paper-{index}'
+    person.parent = buyer
+    person['keep'] = True
+
 # ---------------------------------------------------------------- pond
 
 PX, PY = -2.85, -1.0

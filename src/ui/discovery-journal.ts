@@ -132,7 +132,11 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
   const button = document.createElement('button');
   button.type = 'button';
   button.className = 'garden-ui__journal';
-  button.textContent = 'Journal';
+  const buttonLabel = document.createElement('span');
+  buttonLabel.textContent = 'Journal';
+  const buttonCount = document.createElement('span');
+  buttonCount.className = 'garden-ui__journal-count';
+  button.append(buttonLabel, buttonCount);
   button.setAttribute('aria-haspopup', 'dialog');
   button.setAttribute('aria-expanded', 'false');
 
@@ -249,7 +253,8 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
     const found = cells.filter(({ species, trait }) => state.discoveries.includes(`${species.id}:${trait.id}`)).length;
     const total = cells.length;
     progress.textContent = `${found} of ${total} entries found`;
-    button.textContent = `Journal ${found}/${total}`;
+    buttonCount.textContent = ` ${found}/${total}`;
+    button.setAttribute('aria-label', `Journal ${found} of ${total}`);
     if (state.order) {
       const { title: orderTitle, progress: done, target, rewardCoins, rewardXp, bonusSpeciesId, bonusPercent } = state.order;
       order.hidden = false;

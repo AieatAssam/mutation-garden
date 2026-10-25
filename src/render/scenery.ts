@@ -34,6 +34,9 @@ export interface Scenery extends Group {
   readonly clouds: readonly Group[];
   /** Authored stall subtree, available for sale animation and picking. */
   readonly stall: Group | null;
+  /** Authored buyer silhouettes; absent in older garden exports. */
+  readonly buyers: readonly Group[];
+  stepBuyers(nowMs: number): void;
   /** Creature shapes by name ("wing", "leaf"), vertex coloured, for the ambient layer to instance. */
   readonly creatures: ReadonlyMap<string, BufferGeometry>;
   setExpanded(expanded: boolean, nowMs: number, reducedMotion: boolean): void;
@@ -128,10 +131,12 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
 
   const cloudRoots: Object3D[] = [];
   let stallSource: Object3D | null = null;
+  const buyerSources: Object3D[] = [];
   const chunkRoots: Object3D[] = [];
   source.traverse((object) => {
     if (/^cloud-\d+$/.test(object.name)) cloudRoots.push(object);
     if (object.name === 'stall') stallSource = object;
+    if (/^buyer-\d+$/.test(object.name)) buyerSources.push(object);
     if (object.name === 'chunk-west') chunkRoots.push(object);
   });
   if (!stallSource && !warnedMissingStall) {
@@ -146,6 +151,10 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     for (let parent = object.parent; parent; parent = parent.parent) if (parent === stallSource) return true;
     return false;
   };
+  const inBuyer = (object: Object3D) => buyerSources.some((buyer) => {
+    for (let parent: Object3D | null = object; parent; parent = parent.parent) if (parent === buyer) return true;
+    return false;
+  });
   const inChunk = (object: Object3D) => { for (let parent = object.parent; parent; parent = parent.parent) if (chunkRoots.includes(parent)) return true; return false; };
 
   // Creatures: "creature-wing", "creature-wing-dot", ... merge into one shape per second word.
@@ -214,7 +223,7 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     const inverse = authoredStall.matrixWorld.clone().invert();
     const geometries: BufferGeometry[] = [];
     authoredStall.traverse((object) => {
-      if (!(object instanceof Mesh)) return;
+      if (!(object instanceof Mesh) || inBuyer(object)) return;
       const local = inverse.clone().multiply(object.matrixWorld);
       const hull = /^(?:stall-)?outline-(\d+)$/.exec(object.name);
       if (hull) {
@@ -232,6 +241,40 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     }
     root.add(stallGroup);
   }
+  const buyers: Group[] = [];
+  if (authoredStall) {
+    const inverseStall = authoredStall.matrixWorld.clone().invert();
+    for (const buyerSource of buyerSources) {
+      const buyer = new Group();
+      buyer.name = buyerSource.name;
+      inverseStall.clone().multiply(buyerSource.matrixWorld).decompose(buyer.position, buyer.quaternion, buyer.scale);
+      const inverseBuyer = buyerSource.matrixWorld.clone().invert();
+      buyerSource.traverse((object) => {
+        if (!(object instanceof Mesh)) return;
+        const matrix = inverseBuyer.clone().multiply(object.matrixWorld);
+        const hull = /^outline-(\d+)$/.exec(object.name);
+        if (hull) {
+          const mesh = hullOf(object, matrix, Number(hull[1]) / 1000);
+          mesh.name = object.name;
+          mesh.userData.role = 'scenery-outline';
+          buyer.add(mesh);
+        } else {
+          const geometry = vertexColored(object, matrix);
+          const mesh = new Mesh(geometry, materials.toon(new Color(1, 1, 1)));
+          (mesh.material as MeshToonMaterial).vertexColors = true;
+          mesh.renderOrder = 1;
+          buyer.add(mesh);
+          owned.push(geometry, mesh.material as MeshToonMaterial);
+        }
+      });
+      buyer.userData.startX = buyer.position.x;
+      buyers.push(buyer);
+      stall?.add(buyer);
+    }
+  }
+  let buyerStepAt = -Infinity;
+  let buyerStepDirection = 1;
+  (root as Scenery).stepBuyers = (nowMs) => { buyerStepAt = nowMs; buyerStepDirection *= -1; };
   let expandStart = -Infinity; let expanded = false; let expandReduced = false;
   (root as Scenery).setExpanded = (value, nowMs, reducedMotion) => {
     if (expanded === value) return;
@@ -277,7 +320,7 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
     clouds.push(cloud);
     root.add(cloud);
   }
-  Object.assign(root, { clouds, creatures, stall });
+  Object.assign(root, { clouds, creatures, stall, buyers });
 
   root.update = (nowMs, reducedMotion) => {
     windUniforms.windAmount.value = reducedMotion ? 0 : 1;
@@ -289,6 +332,11 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
       if (expandReduced) {
         if (printed) (printed.material as MeshToonMaterial).opacity = p;
       } else chunk.position.y = -3.5 * (1 - p) + 0.12 * Math.sin(p * Math.PI * 2) * (1 - p);
+    }
+    const buyerProgress = reducedMotion ? 1 : Math.min(1, Math.max(0, (nowMs - buyerStepAt) / 260));
+    for (const buyer of buyers) {
+      buyer.position.x = (buyer.userData.startX as number) + buyerStepDirection * 0.08 * Math.sin(Math.PI * buyerProgress);
+      buyer.rotation.z = buyerStepDirection * 0.12 * Math.sin(Math.PI * buyerProgress);
     }
     if (reducedMotion) return;
     // Seconds within a whole number of wind periods, so float precision holds over long sessions.

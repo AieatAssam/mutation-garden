@@ -40,4 +40,22 @@ describe('scenery', () => {
     scenery.dispose();
     library.dispose();
   });
+
+  it('keeps optional buyer roots separate and shuffles them after a sale', () => {
+    const library = createMaterialLibrary();
+    const source = new Group();
+    const stall = new Group(); stall.name = 'stall'; source.add(stall);
+    const buyer = new Group(); buyer.name = 'buyer-0'; buyer.position.x = 0.4; stall.add(buyer);
+    buyer.add(authored('buyer-paper', 'environment.cloud.lit'));
+    const scenery = buildScenery(source, library);
+    expect(scenery.buyers).toHaveLength(1);
+    const before = scenery.buyers[0]!.position.x;
+    scenery.stepBuyers(100);
+    scenery.update(230, false);
+    expect(scenery.buyers[0]!.position.x).not.toBe(before);
+    scenery.update(230, true);
+    expect(scenery.buyers[0]!.position.x).toBe(before);
+    scenery.dispose();
+    library.dispose();
+  });
 });

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, getSnapshot, mutationRoll, nextRandom, step } from '../index';
+import { createInitialState, getSnapshot, mutationRoll, nextRandom, step, type GardenState } from '../index';
 
 describe('M2 mutation rules', () => {
   it('keeps planting size draws on the garden RNG stream', () => {
@@ -74,7 +74,7 @@ describe('M2 mutation rules', () => {
     const blocked = step(state, [{ type: 'Plant', plotId: 'plot-3', seedId: 'bubble-berry' }], 0).state;
     expect(getSnapshot(blocked).nearMiss).toBeNull();
 
-    let full = { ...createInitialState(22, 0, { xp: 900 }), coins: 13 };
+    let full = { ...createInitialState(22, 0, { xp: 900 }), coins: 14 };
     full = step(full, [
       { type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' },
       { type: 'Plant', plotId: 'plot-1', seedId: 'twistroot' },
@@ -95,6 +95,54 @@ describe('M2 mutation rules', () => {
     ], 0).state;
     state = step(state, [], 30_001).state;
     expect(state.plots[1]?.plant?.mutations).toContain('glowing');
+  });
+
+  it('guarantees Frozen beside a growing Dewbell at maturity', () => {
+    const initial = createInitialState(110, 40_000, { xp: 10_300 });
+    const state = { ...initial, plots: initial.plots.map((plot) => plot.id === 'plot-0'
+      ? { ...plot, plant: { speciesId: 'dewbell' as const, plantedAt: 0, mutationSeed: 1 } }
+      : plot.id === 'plot-1' ? { ...plot, plant: { speciesId: 'sunny-sprout' as const, plantedAt: 33_000, mutationSeed: 2 } } : plot) };
+    expect(step(state, [], 40_000).state.plots[1]?.plant?.mutations).toContain('frozen');
+  });
+
+  it('guarantees Electric after two sprinkler waters before maturity', () => {
+    const initial = createInitialState(111, 0, { xp: 10_300 });
+    let state: GardenState = { ...initial, owned: ['sprinkler', 'sprinkler-2'],
+      plots: initial.plots.map((plot) => plot.id === 'plot-0'
+        ? { ...plot, plant: { speciesId: 'bubble-berry' as const, plantedAt: 0, mutationSeed: 3 } } : plot) };
+    for (let now = 1_000; now <= 20_000; now += 1_000) state = step(state, [], now).state;
+    const result = { state };
+    expect(result.state.plots[0]?.plant).toMatchObject({ sprinklerWaterCount: 2, mutations: expect.arrayContaining(['electric']) });
+  });
+
+  it('captures Twin eligibility beside mature Clockvine when planting', () => {
+    const initial = createInitialState(112, 60_000, { xp: 15_000 });
+    const state: GardenState = { ...initial, coins: 100, plots: initial.plots.map((plot) => plot.id === 'plot-0'
+      ? { ...plot, plant: { speciesId: 'clockvine', plantedAt: 0, mutationSeed: 4 } } : plot) };
+    const planted = step(state, [{ type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' }], 60_000).state;
+    expect(planted.plots[1]?.plant?.twinReady).toBe(true);
+    expect(step(planted, [], 68_000).state.plots[1]?.plant?.mutations).toContain('twin');
+  });
+
+  it('does not give Twin when Clockvine matures after planting', () => {
+    const initial = createInitialState(113, 0, { xp: 15_000 });
+    const state: GardenState = { ...initial, coins: 100, plots: initial.plots.map((plot) => plot.id === 'plot-0'
+      ? { ...plot, plant: { speciesId: 'clockvine', plantedAt: 0, mutationSeed: 4 } } : plot) };
+    const planted = step(state, [{ type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' }], 0).state;
+    expect(planted.plots[1]?.plant?.twinReady).toBeUndefined();
+    expect(step(planted, [], 8_000).state.plots[1]?.plant?.mutations).not.toContain('twin');
+  });
+
+  it('keeps Frozen deterministic across catch-up steps when Dewbell is growing at maturity', () => {
+    const initial = createInitialState(114, 10_000, { xp: 0 });
+    const state = { ...initial, plots: initial.plots.map((plot) => plot.id === 'plot-0'
+      ? { ...plot, plant: { speciesId: 'dewbell' as const, plantedAt: 0, mutationSeed: 1 } }
+      : plot.id === 'plot-1' ? { ...plot, plant: { speciesId: 'sunny-sprout' as const, plantedAt: 10_000, mutationSeed: 2 } } : plot) };
+    let ticked: GardenState = state;
+    for (let now = 11_000; now <= 100_000; now += 1_000) ticked = step(ticked, [], now).state;
+    const caughtUp = step(state, [], 100_000).state;
+    expect(caughtUp.plots[1]?.plant?.mutations).toEqual(ticked.plots[1]?.plant?.mutations);
+    expect(caughtUp.plots[1]?.plant?.mutations).toContain('frozen');
   });
 
   it('primes Crystal only from a Glowing harvest on pond-side plot 0 or 2', () => {

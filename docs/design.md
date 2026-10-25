@@ -214,6 +214,7 @@ A small glass jar on a shelf beside the island. Drag harvested specimens from a 
 - **Discovery card:** printed seed-packet card with the plant render, mutation name, rarity stamp and "Found on day 3". Share via Web Share API with a PNG; download fallback.
 - **Garden photo:** hides UI, frames the island with a slow orbit, captures a PNG.
 - **Daily challenge:** one shared seed per day (date-hashed, no server): "Grow the most valuable plant using 4 plots". Local best only.
+- **Stall offer:** the active Sunny Sprout order pays 50% extra for Sunny Sprouts; show the offer on its order card before sale.
 - **Accessibility:** reduced motion, colour-blind-safe mutation tells (each mutation also has a shape cue), haptics toggle, text scale.
 
 ## 10. Audio

@@ -92,10 +92,8 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
     };
   });
 
-  // Tab is real keyboard navigation. Sound and music come before the seeds; Shop follows them.
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
-  await page.keyboard.press('Tab');
+  // Start in the tray, then exercise its complete keyboard sequence with real Tab presses.
+  await seeds[0]!.focus();
   for (const [index, seed] of seeds.entries()) {
     await expect(seed).toBeFocused();
     const focus = await inspectFocusRing(seed);

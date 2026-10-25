@@ -69,7 +69,7 @@ describe('watering automation', () => {
     const started = step(state, [], 1_000).state;
     expect(started.sellingSince).toBe(1_000);
     const sold = step(started, [], 2_200);
-    expect(sold.state.coins).toBe(initial.coins + 7);
+    expect(sold.state.coins).toBe(initial.coins + 10);
     expect(sold.state.crate).toHaveLength(0);
   });
 

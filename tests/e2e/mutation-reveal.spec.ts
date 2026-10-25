@@ -12,6 +12,11 @@ test('first Giant reveal swallows the skip tap and harvest pays the mutation val
   await expect(reveal).toBeVisible({ timeout: 8_000 });
   await expect(coins).toHaveText(String(Number(beforeRevealTap) + 200));
   await expect(page.getByText('+200 coins · +200 XP first-find bonus')).toBeVisible();
+  const share = page.getByRole('button', { name: 'Save discovery card' });
+  await expect(share).toBeVisible();
+  const downloadPromise = page.waitForEvent('download');
+  await share.click();
+  expect((await downloadPromise).suggestedFilename()).toBe('twistroot-giant.png');
   await page.mouse.click(10, 10);
   await expect(reveal).toHaveCount(0);
   await expect(coins).toHaveText(String(Number(beforeRevealTap) + 200));

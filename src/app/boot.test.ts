@@ -192,7 +192,7 @@ describe('boot animation wiring', () => {
     expect(createGardenUI).toHaveBeenCalledWith(uiRoot, expect.objectContaining({
       species: [
         expect.objectContaining({ id: 'sunny-sprout', name: 'Sunny Sprout', cost: 1, unlockLevel: 1 }),
-        expect.objectContaining({ id: 'bubble-berry', name: 'Bubble Berry', cost: 4, unlockLevel: 2 }),
+        expect.objectContaining({ id: 'bubble-berry', name: 'Bubble Berry', cost: 5, unlockLevel: 2 }),
         expect.objectContaining({ id: 'twistroot', name: 'Twistroot', cost: 5, unlockLevel: 3 }),
         expect.objectContaining({ id: 'puffcap', name: 'Puffcap', cost: 6, unlockLevel: 4 }),
         expect.objectContaining({ id: 'lantern-pod', name: 'Lantern Pod', cost: 12, unlockLevel: 6 }),

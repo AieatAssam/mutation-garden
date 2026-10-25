@@ -56,16 +56,18 @@ export function harvest(
     const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1) * mutationMultiplier;
     const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
     const mutations = plot.plant.mutations ?? [];
+    const bonusSeed = species.id === 'lantern-pod' && isDusk(effectiveNowMs);
     if (mutations.includes('glowing')) crystalReadyPlots.add(plotId);
     for (const trait of mutations) harvestedTraits.add(trait);
     const fruit = { speciesId: species.id, size, mutations, value: coins, xp: Math.floor(species.baseValue * mutationMultiplier) };
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
     nextState = { ...nextState, crate: [...nextState.crate, fruit, ...(yieldCount === 2 ? [fruit] : [])], plots };
+    if (bonusSeed) nextState = { ...nextState, bonusSeeds: nextState.bonusSeeds + 1 };
     count += 1;
     harvestedPlotIds.add(plotId);
     events.push({ type: 'Harvested', plotId, speciesId: species.id, coins: 0, size, fresh, lucky: false,
-      ...(mutations.length ? { mutations } : {}) });
+      ...(mutations.length ? { mutations } : {}), ...(bonusSeed ? { bonusSeed: true as const } : {}) });
   }
   if (harvestedTraits.has('golden') && harvestedTraits.has('glowing') && harvestedTraits.has('crystal')) {
     for (const plotId of harvestedPlotIds) {
@@ -83,6 +85,13 @@ export function harvest(
     events.push({ type: 'LevelUp', level, unlocked: SPECIES.filter((entry) => entry.unlockLevel === level).map(({ id }) => id) });
   }
   return { state: nextState, events };
+}
+
+function isDusk(nowMs: number): boolean {
+  const dayMs = 86_400_000;
+  const hourMs = 3_600_000;
+  const utcTime = nowMs % dayMs;
+  return utcTime >= 18 * hourMs && utcTime < 20 * hourMs;
 }
 
 function rejection(

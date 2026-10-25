@@ -38,7 +38,11 @@ export function step(
     if (sales) {
       const crate = nextState.crate.slice(sales);
       const sold = nextState.crate.slice(0, sales);
-      const value = (fruit: typeof sold[number]) => Math.floor(fruit.value * (nextState.owned.includes('fresh-produce') ? 1.1 : 1));
+      const orderOffer = ORDER_DECK[nextState.order.index];
+      const value = (fruit: typeof sold[number]) => Math.floor(fruit.value
+        * (nextState.owned.includes('fresh-produce') ? 1.1 : 1)
+        * (orderOffer && 'bonusSpeciesId' in orderOffer && orderOffer.bonusSpeciesId === fruit.speciesId
+          ? 1 + ('bonusPercent' in orderOffer ? (orderOffer.bonusPercent ?? 0) / 100 : 0) : 1));
       const coins = nextState.coins + sold.reduce((sum, fruit) => sum + value(fruit), 0);
       const xp = nextState.xp + sold.reduce((sum, fruit) => sum + fruit.xp, 0);
       for (const fruit of sold) events.push({ type: 'FruitSold', value: value(fruit), speciesId: fruit.speciesId, mutations: fruit.mutations });

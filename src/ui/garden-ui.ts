@@ -20,6 +20,8 @@ export interface GardenUIOptions {
   readonly onSelect: (speciesId: SpeciesId) => void;
   readonly onToggleSound?: () => void;
   readonly onToggleMusic?: () => void;
+  readonly onToggleHaptics?: () => void;
+  readonly onToggleLargeText?: () => void;
   readonly onHarvestAll?: () => void;
   readonly onSell?: () => void;
   readonly onBuy?: (item: ShopItemId) => void;
@@ -32,6 +34,7 @@ export interface GardenUIOptions {
 export interface GardenUIUpdate {
   readonly selectedId: SpeciesId;
   readonly coins: number;
+  readonly bonusSeeds?: number;
   readonly level?: number;
   /** 0..1 progress through the current level. */
   readonly levelProgress?: number;
@@ -39,6 +42,8 @@ export interface GardenUIUpdate {
   readonly hint?: string;
   readonly sound?: boolean;
   readonly music?: boolean;
+  readonly haptics?: boolean;
+  readonly largeText?: boolean;
   readonly reducedMotion?: boolean;
   /** Ripe plants right now; two or more show the Harvest all button. */
   readonly ripeCount?: number;
@@ -158,6 +163,15 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   };
   const soundButton = toggle('Sound', ['M4 9h4l5-4v14l-5-4H4Z', 'M16.5 8.5a5 5 0 0 1 0 7', 'M19 6a8.5 8.5 0 0 1 0 12'], options.onToggleSound);
   const musicButton = toggle('Music', ['M9 18V6l10-2v12', 'M9 18a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z', 'M19 16a3 3 0 1 1-3-3 3 3 0 0 1 3 3Z'], options.onToggleMusic);
+  const hapticsButton = toggle('Haptics', ['M8 4v16 M12 2v20 M16 4v16'], options.onToggleHaptics);
+  const largeTextButton = toggle('Large text', ['M3 6h18 M12 6v14 M7 20h10'], options.onToggleLargeText);
+  const photoButton = toggle('Photo mode', ['M4 7h3l2-2h6l2 2h3v12H4Z', 'M12 10a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7Z']);
+  photoButton.classList.add('garden-ui__photo-toggle');
+  photoButton.addEventListener('click', () => {
+    const active = overlay.classList.toggle('garden-ui--photo-mode');
+    photoButton.setAttribute('aria-pressed', String(active));
+    photoButton.setAttribute('aria-label', active ? 'Exit photo mode' : 'Photo mode');
+  });
   const shopButton = document.createElement('button');
   shopButton.type = 'button'; shopButton.className = 'garden-ui__shop'; shopButton.setAttribute('aria-label', 'Shop');
   shopButton.innerHTML = '<span aria-hidden="true">▣</span> Shop';
@@ -348,8 +362,11 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     harvestAll.textContent = `Harvest all ${ripe}`;
     soundButton.setAttribute('aria-pressed', String(state.sound ?? true));
     musicButton.setAttribute('aria-pressed', String(state.music ?? true));
+    hapticsButton.setAttribute('aria-pressed', String(state.haptics ?? false));
+    largeTextButton.setAttribute('aria-pressed', String(state.largeText ?? false));
+    document.documentElement.classList.toggle('garden-large-text', state.largeText ?? false);
     const owned = state.owned ?? [];
-    trayLabel.textContent = state.fertiliser ? `Seeds · Fertiliser x${state.fertiliser}` : 'Seeds';
+    trayLabel.textContent = state.fertiliser ? `Seeds · Fertiliser x${state.fertiliser}` : state.bonusSeeds ? `Seeds · Lantern Pod x${state.bonusSeeds} free` : 'Seeds';
     bigCan.hidden = !owned.includes('big-can');
     bigCan.textContent = `Water all${state.fertiliser ? ` · Fertiliser x${state.fertiliser}` : ''}`;
     for (const { item, row, action } of shopRows) {
@@ -374,13 +391,14 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       seed.button.setAttribute('aria-pressed', String(selected));
       seed.button.classList.toggle('is-selected', selected);
       // Unlocked but unaffordable: still selectable, but the price reads as out of reach.
-      seed.button.classList.toggle('is-short', !locked && state.coins < seed.species.cost);
+      const bonusLantern = seed.species.id === 'lantern-pod' && (state.bonusSeeds ?? 0) > 0;
+      seed.button.classList.toggle('is-short', !locked && !bonusLantern && state.coins < seed.species.cost);
       if (seed.locked !== locked) {
         seed.button.setAttribute('aria-disabled', String(locked));
         seed.button.classList.toggle('is-locked', locked);
-        seed.detail.textContent = locked ? `Level ${seed.species.unlockLevel}` : `${seed.species.cost} ${seed.species.cost === 1 ? 'coin' : 'coins'}`;
         seed.locked = locked;
       }
+      seed.detail.textContent = locked ? `Level ${seed.species.unlockLevel}` : bonusLantern ? '1 free seed' : `${seed.species.cost} ${seed.species.cost === 1 ? 'coin' : 'coins'}`;
     }
   };
   update(options);

@@ -50,3 +50,28 @@ test('production garden boots with its HUD clear of the garden', async ({ page }
 
   expect(errors).toEqual([]);
 });
+
+test('photo mode hides the HUD and can be exited from its camera control', async ({ page }) => {
+  await page.goto('http://localhost:4173/mutation-garden/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  const coins = page.getByRole('status', { name: 'Coins' });
+  await page.getByRole('button', { name: 'Photo mode' }).click();
+  await expect(coins).toBeHidden();
+  const exit = page.getByRole('button', { name: 'Exit photo mode' });
+  await expect(exit).toHaveAttribute('aria-pressed', 'true');
+  await exit.click();
+  await expect(coins).toBeVisible();
+});
+
+test('accessibility toggles expose haptics and large text state', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('./');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+  const haptics = page.getByRole('button', { name: 'Haptics' });
+  const largeText = page.getByRole('button', { name: 'Large text' });
+  await haptics.click();
+  await expect(haptics).toHaveAttribute('aria-pressed', 'true');
+  await largeText.click();
+  await expect(largeText).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('html')).toHaveClass(/garden-large-text/);
+});

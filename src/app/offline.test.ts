@@ -28,8 +28,8 @@ describe('offline catch-up', () => {
       sellingSince: 0,
     };
     const first = advanceOffline(queued, 0, 10_000);
-    expect(first.coinsSold).toBe(4);
-    expect(first.state.coins).toBe(initial.coins + 4);
+    expect(first.coinsSold).toBe(6);
+    expect(first.state.coins).toBe(initial.coins + 6);
     expect(first.state.crate).toEqual([]);
     expect(first.crateContents).toEqual([]);
 

@@ -28,6 +28,8 @@ export interface JournalOrder {
   readonly target: number;
   readonly rewardCoins: number;
   readonly rewardXp: number;
+  readonly bonusSpeciesId?: SpeciesId;
+  readonly bonusPercent?: number;
 }
 
 export interface DiscoveryJournalOptions {
@@ -249,13 +251,14 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
     progress.textContent = `${found} of ${total} entries found`;
     button.textContent = `Journal ${found}/${total}`;
     if (state.order) {
-      const { title: orderTitle, progress: done, target, rewardCoins, rewardXp } = state.order;
+      const { title: orderTitle, progress: done, target, rewardCoins, rewardXp, bonusSpeciesId, bonusPercent } = state.order;
       order.hidden = false;
       order.replaceChildren();
       const label = document.createElement('strong');
       label.textContent = orderTitle;
       const detail = document.createElement('span');
-      detail.textContent = `${done} of ${target} · ${rewardCoins} coins · ${rewardXp} XP`;
+      const bonus = bonusSpeciesId ? ` · ${options.species.find(({ id }) => id === bonusSpeciesId)?.name ?? bonusSpeciesId} +${bonusPercent ?? 0}%` : '';
+      detail.textContent = `${done} of ${target} · ${rewardCoins} coins · ${rewardXp} XP${bonus}`;
       order.append(label, detail);
     } else {
       order.hidden = true;

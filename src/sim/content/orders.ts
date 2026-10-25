@@ -8,7 +8,7 @@ export interface OrderDefinition extends Omit<OrderSnapshot, 'progress'> {
 }
 
 export const ORDER_DECK = [
-  { title: 'Sell 3 Sunny Sprouts', target: 3, rewardCoins: 6, rewardXp: 10, unlockLevel: 1, event: 'FruitSold', speciesId: 'sunny-sprout' },
+  { title: 'Sell 3 Sunny Sprouts', target: 3, rewardCoins: 6, rewardXp: 10, unlockLevel: 1, event: 'FruitSold', speciesId: 'sunny-sprout', bonusSpeciesId: 'sunny-sprout', bonusPercent: 50 },
   { title: 'Water 4 times', target: 4, rewardCoins: 4, rewardXp: 10, unlockLevel: 1, event: 'Watered' },
   { title: 'Harvest 3 together', target: 3, rewardCoins: 6, rewardXp: 10, unlockLevel: 1, event: 'HarvestCompleted' },
   { title: 'Sell 2 Bubble Berries', target: 2, rewardCoins: 8, rewardXp: 12, unlockLevel: 2, event: 'FruitSold', speciesId: 'bubble-berry' },
@@ -28,7 +28,10 @@ export function nextOrder(orderIndex: number, level: number): OrderProgress {
 export function getOrderSnapshot(order: OrderProgress): OrderSnapshot {
   const definition = ORDER_DECK[order.index]!;
   const { title, target, rewardCoins, rewardXp } = definition;
-  return { title, progress: order.progress, target, rewardCoins, rewardXp };
+  const bonusSpeciesId = 'bonusSpeciesId' in definition ? definition.bonusSpeciesId : undefined;
+  const bonusPercent = 'bonusPercent' in definition ? definition.bonusPercent : undefined;
+  return { title, progress: order.progress, target, rewardCoins, rewardXp,
+    ...(bonusSpeciesId && bonusPercent !== undefined ? { bonusSpeciesId, bonusPercent } : {}) };
 }
 
 /** Return the amount of this step's event that advances the active order. */

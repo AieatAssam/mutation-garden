@@ -6,7 +6,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0,
-  ...(process.env.CI ? { workers: 2 } : {}),
+  // One worker on CI: two software-rendered Chromium instances ran the runner out of memory and crashed
+  // the browser ("Failed to find browser context").
+  ...(process.env.CI ? { workers: 1 } : {}),
   reporter: process.env.CI ? [['github'], ['list']] : 'list',
   use: {
     baseURL: 'http://localhost:4173/mutation-garden/',

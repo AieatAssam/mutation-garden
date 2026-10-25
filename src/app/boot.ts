@@ -54,6 +54,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     uiRoot.style.setProperty(name, value);
   }
   document.body.append(uiRoot);
+  // Set once saves load; the shop's Start over calls it.
+  let resetGarden: () => Promise<void> = async () => {};
   const gardenUI = createGardenUI(uiRoot, {
     species: SPECIES
       .map(({ id, name, seedCost, unlockLevel }) => ({ id, name, cost: seedCost, unlockLevel, color: palette.plants[id].fruit[1] })),
@@ -83,6 +85,10 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     onHarvestAll: () => harvestAll(),
     onSell: () => uiCommand({ type: 'StartSelling' }),
     onBuy: (item) => uiCommand({ type: 'Buy', item }),
+    onReset: () => {
+      if (!window.confirm('Start over? Your garden, coins and discoveries will be lost.')) return;
+      void resetGarden();
+    },
     onWaterAll: () => uiCommand({ type: 'WaterAll' }),
     onDismissHint: () => { if (!notices.current?.persistent) notices.close(); },
   });
@@ -162,6 +168,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       coinTarget: () => uiRoot.querySelector<HTMLElement>('.garden-ui__coins'),
     });
     const mutationReveal = createMutationReveal(uiRoot, r.projectPlot);
+    let cancelActiveGesture = () => {};
     // Audio may only start from a user gesture (autoplay rules).
     const unlockAudio = () => sfx.unlock();
     window.addEventListener('pointerdown', unlockAudio, { capture: true });
@@ -201,6 +208,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         sfx.onEvents(events);
         for (const event of events.filter((item) => item.type === 'Mutated')
           .sort((a, b) => Number(b.mutations.includes('giant')) - Number(a.mutations.includes('giant')))) {
+          if (event.firstDiscovery) cancelActiveGesture();
           mutationReveal.show(event, motion.matches);
           if (event.firstDiscovery && !motion.matches) {
             uiRoot.querySelector('.garden-ui__journal')?.animate([
@@ -243,6 +251,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         }
       }
     });
+    cancelActiveGesture = input.cancelGesture;
     harvestAll = () => {
       const ripe = latestSnapshot.plots.filter(({ plant }) => plant?.stage === 'Harvestable').map(({ id }) => id);
       const command = commandForSwipeHarvest(latestSnapshot, ripe);
@@ -329,6 +338,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       } else if (!persistent) {
         showNotice('This browser cannot save. Progress lasts until you close the page.');
       }
+      resetGarden = async () => {
+        stopped = true;
+        clearTimeout(pending);
+        await store.reset();
+        window.location.reload();
+      };
       saveNow = () => {
         clearTimeout(pending);
         if (stopped) return;

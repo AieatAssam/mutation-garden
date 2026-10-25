@@ -42,7 +42,7 @@ describe('first-minute hints', () => {
     expect(getSnapshot(mature).plots[0]?.plant?.mutations).toBeDefined();
     expect(hintFor(getSnapshot(mature), 'sunny-sprout')).toBe('Tap a growing plant to water it.');
     const lateWater = step(mature, [{ type: 'Water', plotId: 'plot-0' }], 7_000);
-    expect(lateWater.events).toContainEqual({ type: 'Watered', plotId: 'plot-0' });
+    expect(lateWater.events).not.toContainEqual({ type: 'Watered', plotId: 'plot-0' });
     expect(getSnapshot(lateWater.state).plots[0]?.plant?.mutations).toEqual(getSnapshot(mature).plots[0]?.plant?.mutations);
   });
 

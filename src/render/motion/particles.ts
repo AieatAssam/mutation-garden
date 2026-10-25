@@ -1,6 +1,7 @@
 import { Color, IcosahedronGeometry, InstancedMesh, MeshBasicMaterial, Object3D, Vector3 } from 'three';
 
 export interface ParticleBurst {
+  readonly key?: string;
   readonly origin: Vector3;
   readonly count: number;
   /** Palette colours, picked in turn. */
@@ -21,6 +22,7 @@ interface Particle {
   bornMs: number;
   lifeMs: number;
   size: number;
+  key?: string;
   spin: number;
 }
 
@@ -28,6 +30,7 @@ export interface Particles {
   /** One instanced mesh for every effect: one draw call (motion.md 3). */
   readonly mesh: InstancedMesh;
   burst(burst: ParticleBurst, nowMs: number, reducedMotion: boolean): void;
+  remove(key: string): void;
   update(nowMs: number): void;
   readonly liveCount: number;
   dispose(): void;
@@ -76,11 +79,27 @@ export function createParticles(capacity = PARTICLE_CAPACITY): Particles {
           bornMs: nowMs,
           lifeMs: burst.lifeMs,
           size: burst.size * (0.7 + random() * 0.6),
+          ...(burst.key === undefined ? {} : { key: burst.key }),
           spin: random() * 6,
         });
         colors.push(new Color(burst.colors[index % burst.colors.length]!));
       }
       lastNow = nowMs;
+    },
+    remove(key) {
+      let write = 0;
+      for (let index = 0; index < live.length; index += 1) {
+        const particle = live[index]!;
+        if (particle.key === key) continue;
+        live[write] = particle;
+        colors[write] = colors[index]!;
+        write += 1;
+      }
+      live.length = write;
+      colors.length = write;
+      mesh.count = write;
+      mesh.instanceMatrix.needsUpdate = true;
+      if (mesh.instanceColor) mesh.instanceColor.needsUpdate = true;
     },
     update(nowMs) {
       const dt = Math.min(0.05, Math.max(0, (nowMs - lastNow) / 1000));

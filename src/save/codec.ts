@@ -1,4 +1,4 @@
-import { levelForXp, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
+import { crateCapacity, levelForXp, ORDER_DECK, SIM_SCHEMA_VERSION, SPECIES } from '../sim';
 import type { GardenState, TraitId } from '../sim';
 
 /** The stored and exported save format (docs/architecture.md, Saves). Keep it stable. */
@@ -48,10 +48,12 @@ export const MIGRATIONS: Readonly<Record<number, (state: Record<string, unknown>
   3: (state) => ({ ...state, schema: 4, crate: [], sellingSince: null }),
   4: (state) => ({ ...state, schema: 5, order: { index: 0, progress: 0 } }),
   5: (state) => ({ ...state, schema: 6, crystalReadyPlots: [], rainbowPlots: [] }),
+  6: (state) => ({ ...state, schema: 7 }),
 };
 
 const SPECIES_IDS = new Set<string>(SPECIES.map(({ id }) => id));
 const SIZES = new Set(['small', 'regular', 'big']);
+const SHOP_ITEM_IDS = new Set(['plot-6', 'plot-7', 'big-can', 'lucky-charm', 'quick-counter-1', 'quick-counter-2', 'quick-counter-3', 'crate-1', 'crate-2', 'second-counter', 'fresh-produce']);
 const isCount = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
 /** Structural check of a migrated state; anything unexpected is rejected rather than half-loaded. */
@@ -69,10 +71,12 @@ export function validateState(value: unknown): value is GardenState {
       && isCount(item.value) && isCount(item.xp) && Array.isArray(item.mutations)
       && new Set(item.mutations).size === item.mutations.length && item.mutations.every((trait) => traits.includes(trait as TraitId));
   };
-  if (!Array.isArray(state.crate) || state.crate.length > 12 || !state.crate.every(validFruit)
+  if (!Array.isArray(state.owned) || !state.owned.every((item) => SHOP_ITEM_IDS.has(item as string))
+    || new Set(state.owned).size !== state.owned.length) return false;
+  if (!Array.isArray(state.crate) || state.crate.length > crateCapacity(state.owned as GardenState['owned']) || !state.crate.every(validFruit)
     || !(state.sellingSince === null || (isCount(state.sellingSince) && state.sellingSince <= (state.lastNowMs as number)))) return false;
   if (!Number.isInteger(state.mutationRngState) || (state.mutationRngState as number) < 0 || (state.mutationRngState as number) > 0xffff_ffff) return false;
-  if (!isCount(state.plantCount) || !isCount(state.fertiliser) || !Array.isArray(state.owned) || !state.owned.every((item) => ['plot-6', 'plot-7', 'big-can', 'lucky-charm'].includes(item as string)) || new Set(state.owned).size !== state.owned.length || typeof state.scriptedGiantUsed !== 'boolean' || typeof state.scriptedGoldenUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string') || !Array.isArray(state.crystalReadyPlots) || !state.crystalReadyPlots.every((id) => typeof id === 'string') || new Set(state.crystalReadyPlots).size !== state.crystalReadyPlots.length || !Array.isArray(state.rainbowPlots) || !state.rainbowPlots.every((id) => typeof id === 'string') || new Set(state.rainbowPlots).size !== state.rainbowPlots.length) return false;
+  if (!isCount(state.plantCount) || !isCount(state.fertiliser) || typeof state.scriptedGiantUsed !== 'boolean' || typeof state.scriptedGoldenUsed !== 'boolean' || !Array.isArray(state.discoveries) || !state.discoveries.every((item) => typeof item === 'string') || !Array.isArray(state.rewardsPaid) || !state.rewardsPaid.every((item) => typeof item === 'string') || !Array.isArray(state.crystalReadyPlots) || !state.crystalReadyPlots.every((id) => typeof id === 'string') || new Set(state.crystalReadyPlots).size !== state.crystalReadyPlots.length || !Array.isArray(state.rainbowPlots) || !state.rainbowPlots.every((id) => typeof id === 'string') || new Set(state.rainbowPlots).size !== state.rainbowPlots.length) return false;
   if (!state.order || typeof state.order !== 'object' || Array.isArray(state.order)) return false;
   const order = state.order as Record<string, unknown>;
   if (Object.keys(order).sort().join(',') !== 'index,progress' || !isCount(order.index) || !isCount(order.progress) || order.index >= ORDER_DECK.length) return false;
@@ -88,7 +92,7 @@ export function validateState(value: unknown): value is GardenState {
     if (typeof id !== 'string') return false;
     if (plant === null) return true;
     if (!plant || typeof plant !== 'object') return false;
-    const { speciesId, plantedAt, size, boostMs, mutationSeed, waterCount, mutations, scriptedGiant, rainbow } = plant as Record<string, unknown>;
+    const { speciesId, plantedAt, size, boostMs, clockBoostMs, mutationSeed, waterCount, mutations, scriptedGiant, rainbow } = plant as Record<string, unknown>;
     return typeof speciesId === 'string' && SPECIES_IDS.has(speciesId) && isCount(plantedAt)
       && Number.isInteger(mutationSeed) && (mutationSeed as number) >= 0 && (mutationSeed as number) <= 0xffff_ffff
       && (waterCount === undefined || isCount(waterCount))
@@ -96,8 +100,13 @@ export function validateState(value: unknown): value is GardenState {
       && (mutations === undefined || (Array.isArray(mutations) && mutations.length <= traits.length && new Set(mutations).size === mutations.length && mutations.every((trait) => traits.includes(trait as TraitId))))
       && (scriptedGiant === undefined || typeof scriptedGiant === 'boolean')
       && (rainbow === undefined || typeof rainbow === 'boolean')
+      && ((plant as Record<string, unknown>).dewUsed === undefined || typeof (plant as Record<string, unknown>).dewUsed === 'boolean')
+      && ((plant as Record<string, unknown>).clockBoostedBy === undefined || (Array.isArray((plant as Record<string, unknown>).clockBoostedBy)
+        && new Set((plant as Record<string, unknown>).clockBoostedBy as unknown[]).size === ((plant as Record<string, unknown>).clockBoostedBy as unknown[]).length
+        && ((plant as Record<string, unknown>).clockBoostedBy as unknown[]).every((id) => typeof id === 'string')))
       && (size === undefined || (typeof size === 'string' && SIZES.has(size)))
-      && (boostMs === undefined || isCount(boostMs));
+      && (boostMs === undefined || isCount(boostMs))
+      && (clockBoostMs === undefined || isCount(clockBoostMs));
   });
 }
 

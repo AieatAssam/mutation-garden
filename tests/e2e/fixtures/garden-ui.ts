@@ -28,9 +28,13 @@ for (const [property, value] of Object.entries(uiColors)) {
 createGardenUI(root, {
   species: [
     { id: 'sunny-sprout', name: 'Sunny Sprout', cost: 1, unlockLevel: 1 },
-    { id: 'bubble-berry', name: 'Bubble Berry', cost: 3, unlockLevel: 1 },
+    { id: 'bubble-berry', name: 'Bubble Berry', cost: 4, unlockLevel: 1 },
     { id: 'twistroot', name: 'Twistroot', cost: 5, unlockLevel: 1 },
     { id: 'puffcap', name: 'Puffcap', cost: 6, unlockLevel: 4 },
+    { id: 'lantern-pod', name: 'Lantern Pod', cost: 12, unlockLevel: 6 },
+    { id: 'comet-pear', name: 'Comet Pear', cost: 24, unlockLevel: 9 },
+    { id: 'clockvine', name: 'Clockvine', cost: 20, unlockLevel: 11 },
+    { id: 'dewbell', name: 'Dewbell', cost: 34, unlockLevel: 13 },
   ],
   selectedId: 'sunny-sprout',
   coins: 12,

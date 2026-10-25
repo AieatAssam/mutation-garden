@@ -3,6 +3,7 @@ import {
   createInitialState,
   getSnapshot,
   SPECIES,
+  xpForLevel,
   step,
   type Command,
   type GardenState,
@@ -11,7 +12,8 @@ import {
 const seed = 0x1234_5678;
 
 function plantOne(speciesId: (typeof SPECIES)[number]['id'], plotId = 'plot-0') {
-  const initial = { ...createInitialState(seed, 0, { xp: 2_500 }), plantCount: 2 };
+  const species = SPECIES.find(({ id }) => id === speciesId)!;
+  const initial = { ...createInitialState(seed, 0, { xp: xpForLevel(species.unlockLevel) }), coins: species.seedCost, plantCount: 2 };
   const command: Command = { type: 'Plant', plotId, seedId: speciesId };
   const planted = step(initial, [command], 0);
   return { state: planted.state, plantedAt: 0 };
@@ -130,6 +132,7 @@ describe('timestamp-derived plant growth', () => {
       crate: [],
       crateCount: 0,
       crateCapacity: 12,
+      saleIntervalMs: 1_200,
       discoveries: [],
       rewardsPaid: [],
       order: { title: 'Sell 3 Sunny Sprouts', progress: 0, target: 3, rewardCoins: 6, rewardXp: 10 },

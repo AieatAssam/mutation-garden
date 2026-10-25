@@ -1,4 +1,4 @@
-"""Build the three starter plants and export public/models/plants.glb.
+"""Build the eight garden species and export public/models/plants.glb.
 
 Run inside Blender (5.x). Deterministic. Conventions (ADR 0009):
 - One empty per species, named by species id, at the plot anchor (soil top).
@@ -318,6 +318,79 @@ spots = bmesh.new()
 for x, y, z, r in ((-.27, -.20, 1.15, .09), (.23, -.26, 1.18, .075), (.02, .20, 1.22, .08), (-.42, .02, 1.12, .06), (.42, .03, 1.11, .06)):
     merge(spots, fruit_sphere(r, (x, y, z), 16, 10))
 part('puffcap_spots', spots, f'{P}.accent.spots', root, (0, 0, .55), (.35, 1.0), attach='puffcap_stem', ripe=True, fly=True)
+
+# ---------------------------------------------------------------- Lantern Pod: three hanging lanterns
+root = species_root('lantern-pod', 6.6)
+P = 'plants.lantern-pod'
+stem = part('lantern-pod_stem', tube(curve_points((0, 0, 0), (0, 0, .55), (0, 0, .92), 12),
+                                    [.075 - .02 * i / 11 for i in range(12)], 10, cap_top=False),
+            f'{P}.stem.1', root, (0, 0, 0), (0, .65))
+morph(stem, lambda co: Vector((co.x * .65, co.y * .65, co.z * .12)))
+lanterns = bmesh.new()
+for x, y, z, radius in ((-.31, 0, .52, .22), (.31, 0, .52, .22), (0, 0, .34, .25)):
+    merge(lanterns, tube(curve_points((0, 0, .88), (x * .55, y, z + .18), (x, y, z + radius), 7),
+                         [.025, .023, .021, .019, .017, .015, .012], 7))
+    merge(lanterns, fruit_sphere(radius, (x, y, z), 24, 16, squash=1.25))
+part('lantern-pod_lanterns', lanterns, f'{P}.fruit.1', root, (0, 0, .35), (.35, 1.0), ripe=True, fly=True)
+part('lantern-pod_glow', fruit_sphere(.055, (0, -.22, .37), 16, 10), f'{P}.accent.glow', root,
+     (0, 0, .35), (.35, 1.0), fly=True)
+
+# ---------------------------------------------------------------- Comet Pear: pear fruit with swept leaf streamers
+root = species_root('comet-pear', 8.8)
+P = 'plants.comet-pear'
+stem = part('comet-pear_stem', tube(curve_points((0, 0, 0), (0, 0, .48), (.02, 0, .82), 10),
+                                   [.07 - .02 * i / 9 for i in range(10)], 10, cap_top=False),
+            f'{P}.stem.1', root, (0, 0, 0), (0, .7))
+morph(stem, lambda co: Vector((co.x * .7, co.y * .7, co.z * .13)))
+pear = fruit_sphere(.39, (0, 0, .53), 40, 28, squash=1.35, dimple=.1)
+for v in pear.verts:
+    factor = .75 + .3 * max(-1, min(1, (v.co.z - .53) / .53))
+    v.co.x *= factor
+    v.co.y *= factor
+part('comet-pear_fruit', pear, f'{P}.fruit.1', root, (0, 0, .48), (.4, 1.0), attach='comet-pear_stem', ripe=True, fly=True)
+tail = bmesh.new()
+for side, height in ((-1, .28), (1, .48)):
+    merge(tail, place(leaf(.88, .14, cup=.35, droop=-.02, tip=.7, thickness=.024, rounded=True),
+                      Matrix.Translation((-.08, side * .06, height)) @ Matrix.Rotation(math.radians(180), 4, 'Z')
+                      @ Matrix.Rotation(math.radians(14 * side), 4, 'Y')))
+part('comet-pear_tail', tail, f'{P}.accent.tail', root, (0, 0, .1), (.18, 1.0), fly=True)
+
+# ---------------------------------------------------------------- Clockvine: a seed framed by two clock-hand tendrils
+root = species_root('clockvine', 11.0)
+P = 'plants.clockvine'
+stem = part('clockvine_stem', tube(curve_points((0, 0, 0), (0, 0, .36), (0, 0, .72), 10),
+                                  [.07 - .018 * i / 9 for i in range(10)], 10, cap_top=False),
+            f'{P}.stem.1', root, (0, 0, 0), (0, .7))
+morph(stem, lambda co: Vector((co.x * .6, co.y * .6, co.z * .12)))
+part('clockvine_seed', fruit_sphere(.27, (0, 0, .65), 28, 18, squash=.9), f'{P}.fruit.1', root,
+     (0, 0, .48), (.4, 1.0), attach='clockvine_stem', ripe=True, fly=True)
+hands = bmesh.new()
+for side, end in ((-1, (-.47, 0, .96)), (1, (.46, 0, .74))):
+    points = curve_points((0, 0, .58), (side * .42, 0, .55), end, 12)
+    merge(hands, tube(points, [.035 - .014 * i / 11 for i in range(12)], 8))
+    merge(hands, place(leaf(.31, .1, cup=.25, droop=0, rounded=True),
+                       Matrix.Translation(end) @ Matrix.Rotation(math.radians(180 if side < 0 else 0), 4, 'Z')))
+part('clockvine_hands', hands, f'{P}.accent.dial', root, (0, 0, .48), (.3, 1.0), attach='clockvine_stem')
+
+# ---------------------------------------------------------------- Dewbell: a downward bell with a single dew bead
+root = species_root('dewbell', 13.2)
+P = 'plants.dewbell'
+stem = part('dewbell_stem', tube(curve_points((0, 0, 0), (0, 0, .58), (0, 0, 1.0), 12),
+                                 [.08 - .02 * i / 11 for i in range(12)], 10, cap_top=False),
+            f'{P}.stem.1', root, (0, 0, 0), (0, .66))
+morph(stem, lambda co: Vector((co.x * .65, co.y * .65, co.z * .12)))
+bell = bmesh.new()
+bmesh.ops.create_cone(bell, cap_ends=False, segments=32, radius1=.1, radius2=.32, depth=.45)
+for v in bell.verts: v.co.z = 1.0 - v.co.z
+part('dewbell_bell', bell, f'{P}.fruit.1', root, (0, 0, .66), (.35, 1.0), attach='dewbell_stem', ripe=True, fly=True)
+part('dewbell_drop', fruit_sphere(.12, (0, 0, .63), 24, 16), f'{P}.accent.dew', root,
+     (0, 0, .66), (.65, 1.0), attach='dewbell_stem', fly=True)
+leaves = bmesh.new()
+for side in (-1, 1):
+    merge(leaves, place(leaf(.55, .17, cup=.45, droop=.28, rounded=True),
+                        Matrix.Translation((0, 0, .18)) @ Matrix.Rotation(math.radians(90 * side), 4, 'Z')
+                        @ Matrix.Rotation(math.radians(-18), 4, 'Y')))
+part('dewbell_leaves', leaves, f'{P}.leaf.1', root, (0, 0, .16), (.08, .72))
 
 print('objects', len(bpy.data.objects),
       'tris', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == 'MESH'))

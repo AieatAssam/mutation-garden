@@ -26,6 +26,22 @@ describe('save codec', () => {
     expect(decodeSave('nonsense')).toMatchObject({ ok: false });
   });
 
+  it('round-trips an expanded crate without accepting capacity the save does not own', () => {
+    const fruit = { speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 2, xp: 2 };
+    const state = { ...garden(), owned: ['crate-1', 'crate-2'] as const, crate: Array.from({ length: 24 }, () => fruit) };
+    expect(decodeSave(encodeSave(state, 1_000, 'test'))).toMatchObject({ ok: true, state });
+    const invalid = { ...state, owned: [], crate: Array.from({ length: 13 }, () => fruit) };
+    expect(decodeSave(encodeSave(invalid, 1_000, 'test'))).toMatchObject({ ok: false, reason: 'invalid state' });
+  });
+
+  it('round-trips one-shot Clockvine and Dewbell state', () => {
+    const state = garden();
+    const planted = { ...state, plots: state.plots.map((plot, index) => index === 0
+      ? { ...plot, plant: { speciesId: 'clockvine' as const, plantedAt: 1_000, mutationSeed: 9, boostMs: 2_000, clockBoostMs: 2_000, clockBoostedBy: ['plot-1'], dewUsed: true } }
+      : plot) };
+    expect(decodeSave(encodeSave(planted, 5_000, 'test'))).toMatchObject({ ok: true, state: planted });
+  });
+
   it('loads the committed schema-1 fixture (every future migration must keep this passing)', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-1.json', 'utf8'));
     const result = decodeSave(fixture);
@@ -62,7 +78,7 @@ describe('save codec', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-2.json', 'utf8'));
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
-    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 6, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
+    if (decoded.ok) expect(decoded.state).toMatchObject({ schema: 7, owned: [], fertiliser: 0, plantCount: 1, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
   });
 
   it('migrates the M2 schema 3 fixture with mutations to an empty, idle crate', () => {
@@ -70,7 +86,7 @@ describe('save codec', () => {
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
-      expect(decoded.state).toMatchObject({ schema: 6, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
+      expect(decoded.state).toMatchObject({ schema: 7, crate: [], sellingSince: null, order: { index: 0, progress: 0 }, crystalReadyPlots: [], rainbowPlots: [] });
       expect(decoded.state.plots[0]?.plant).toMatchObject({ mutations: ['golden'] });
     }
   });
@@ -81,7 +97,7 @@ describe('save codec', () => {
     const decoded = decodeSave(fixture);
     expect(decoded.ok).toBe(true);
     if (decoded.ok) {
-      expect(decoded.state).toMatchObject({ schema: 6, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser, crystalReadyPlots: [], rainbowPlots: [] });
+      expect(decoded.state).toMatchObject({ schema: 7, order: { index: 0, progress: 0 }, crate: original.crate, sellingSince: original.sellingSince, owned: original.owned, fertiliser: original.fertiliser, crystalReadyPlots: [], rainbowPlots: [] });
       const { crystalReadyPlots: _crystal, rainbowPlots: _rainbow, ...migrated } = decoded.state;
       void _crystal; void _rainbow;
       expect({ ...migrated, schema: 4, order: undefined }).toEqual({ ...original, order: undefined });
@@ -91,7 +107,14 @@ describe('save codec', () => {
   it('migrates a schema 5 fixture with the new one-shot plot flags empty', () => {
     const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-5.json', 'utf8'));
     const decoded = decodeSave(fixture);
-    expect(decoded).toMatchObject({ ok: true, state: { schema: 6, crystalReadyPlots: [], rainbowPlots: [] } });
+    expect(decoded).toMatchObject({ ok: true, state: { schema: 7, crystalReadyPlots: [], rainbowPlots: [] } });
+  });
+
+  it('migrates schema 6 without changing plant fields', () => {
+    const fixture = JSON.parse(readFileSync('tests/fixtures/saves/schema-6.json', 'utf8'));
+    const decoded = decodeSave(fixture);
+    expect(decoded).toMatchObject({ ok: true, state: { schema: 7 } });
+    if (decoded.ok) expect(decoded.state.plots[0]?.plant).toMatchObject({ speciesId: 'twistroot', plantedAt: 10_000 });
   });
 
   it('does not replay an order reward after saving and resuming', () => {

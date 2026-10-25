@@ -1,4 +1,4 @@
-import { SHOP_PRICES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
+import { SHOP_PRICES, SELLING_UPGRADES, type ShopItemId, type SpeciesId, type TraitId } from '../sim';
 import './garden-ui.css';
 import { readingTimeMs } from './notice-queue';
 import { createDiscoveryJournal, type JournalOrder, type JournalTraitDescriptor } from './discovery-journal';
@@ -53,12 +53,21 @@ export interface GardenUIUpdate {
   readonly order?: JournalOrder;
 }
 
+export interface AwaySummary {
+  readonly plantsGrown: number;
+  readonly plotsWatered: number;
+  readonly fruitHarvested: number;
+  readonly coinsSold: number;
+  readonly crateContents: string;
+  readonly ripeCount: number;
+}
+
 export interface GardenUI {
   update(update: GardenUIUpdate): void;
   /** Stamps the new level and names what it unlocked (motion.md 4.7). */
   levelUp(level: number, unlocked: readonly string[], reducedMotion: boolean): void;
   /** "While you were away" card with a one-tap harvest of everything ripe. */
-  showAway(ripeCount: number, onHarvestAll: () => void): void;
+  showAway(summary: AwaySummary, onHarvestAll: () => void): void;
   hideAway(): void;
   /** Nudges the coin chip when a seed costs more than the player has. */
   noCoins(reducedMotion: boolean): void;
@@ -157,12 +166,13 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const shopHead = document.createElement('header'); shopHead.innerHTML = '<strong>Shop</strong>';
   const close = document.createElement('button'); close.type = 'button'; close.className = 'garden-ui__shop-close'; close.textContent = 'Close';
   shopHead.append(close); sheet.append(shopHead);
-  const shopItems: readonly { id: ShopItemId; title: string; desc: string; price: number; level: number }[] = [
+  const shopItems: readonly { id: ShopItemId; title: string; desc: string; price: number; level: number; requires?: ShopItemId }[] = [
     { id: 'plot-6', title: 'Plot 7', desc: 'Grow the island west.', price: SHOP_PRICES['plot-6'], level: 3 },
     { id: 'plot-7', title: 'Plot 8', desc: 'Add another garden bed.', price: SHOP_PRICES['plot-7'], level: 4 },
     { id: 'big-can', title: 'Big can', desc: 'Tap once to water every growing plant.', price: SHOP_PRICES['big-can'], level: 3 },
     { id: 'fertiliser', title: 'Fertiliser', desc: 'Next seed grows 40% faster.', price: SHOP_PRICES.fertiliser, level: 1 },
     { id: 'lucky-charm', title: 'Lucky charm', desc: '+3% natural mutation chance.', price: SHOP_PRICES['lucky-charm'], level: 5 },
+    ...SELLING_UPGRADES,
   ];
   const shopRows = shopItems.map((item) => {
     const row = document.createElement('article'); row.className = 'garden-ui__shop-row';
@@ -174,7 +184,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const bigCan = document.createElement('button'); bigCan.type = 'button'; bigCan.className = 'garden-ui__water-all'; bigCan.textContent = 'Water all'; bigCan.hidden = true;
   bigCan.addEventListener('click', () => options.onWaterAll?.());
   close.addEventListener('click', () => { shop.hidden = true; });
-  shopButton.addEventListener('click', () => { journal.close(); shop.hidden = false; });
+  shopButton.addEventListener('click', () => { journal.close(); sheet.scrollTop = 0; shop.hidden = false; });
   shop.addEventListener('click', (event) => { if (event.target === shop) shop.hidden = true; });
   const reset = document.createElement('button'); reset.type = 'button'; reset.className = 'garden-ui__reset';
   reset.textContent = 'Start over';
@@ -206,6 +216,8 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   const trayLabel = document.createElement('span');
   trayLabel.className = 'garden-ui__tray-label';
   trayLabel.textContent = 'Seeds';
+  const seedScroll = document.createElement('div');
+  seedScroll.className = 'garden-ui__seeds';
   const seedButtons = options.species.map((species) => {
     const button = document.createElement('button');
     button.className = 'garden-ui__seed';
@@ -229,10 +241,14 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     button.addEventListener('click', () => {
       if (button.getAttribute('aria-disabled') !== 'true') options.onSelect(species.id);
     });
-    seedTray.append(button);
+    button.addEventListener('focus', () => {
+      if (button.matches(':focus-visible')) button.scrollIntoView({ block: 'nearest', inline: 'center' });
+    });
+    seedScroll.append(button);
     return { species, button, detail: detailText, locked: null as boolean | null };
   });
   seedTray.prepend(trayLabel);
+  seedTray.append(seedScroll);
   const journal = createDiscoveryJournal(overlay, {
     species: options.species,
     traits: options.journalTraits ?? [],
@@ -247,19 +263,31 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
 
   const away = document.createElement('div');
   away.className = 'garden-ui__away';
+  away.setAttribute('role', 'status');
+  away.setAttribute('aria-label', 'While you were away');
+  away.setAttribute('aria-live', 'polite');
   away.hidden = true;
   const awayText = document.createElement('p');
   const awayButton = document.createElement('button');
   awayButton.type = 'button';
   awayButton.className = 'garden-ui__away-button';
   awayButton.textContent = 'Harvest all';
-  away.append(awayText, awayButton);
+  const awayClose = document.createElement('button');
+  awayClose.type = 'button';
+  awayClose.className = 'garden-ui__away-close';
+  awayClose.setAttribute('aria-label', 'Close return summary');
+  awayClose.textContent = '×';
+  const awayActions = document.createElement('div');
+  awayActions.className = 'garden-ui__away-actions';
+  awayActions.append(awayButton, awayClose);
+  away.append(awayText, awayActions);
   away.addEventListener('click', (event) => { if (event.target === away) away.hidden = true; });
   let onAwayHarvest: (() => void) | null = null;
   awayButton.addEventListener('click', () => {
     onAwayHarvest?.();
     away.hidden = true;
   });
+  awayClose.addEventListener('click', () => { away.hidden = true; });
 
   overlay.append(coinStatus, crateAmount, levelBadge, toggles, hint, stamp, away, seedTray);
   seedTray.append(harvestAll, sell);
@@ -325,11 +353,12 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     bigCan.textContent = `Water all${state.fertiliser ? ` · Fertiliser x${state.fertiliser}` : ''}`;
     for (const { item, row, action } of shopRows) {
       const has = owned.includes(item.id);
-      const locked = level < item.level;
+      const locked = level < item.level || Boolean(item.requires && !owned.includes(item.requires));
       const affordable = state.coins >= item.price;
       row.classList.toggle('is-muted', locked || !affordable);
       action.disabled = (has && item.id !== 'fertiliser') || locked || !affordable;
-      action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? `Level ${item.level}` : `Buy · ${item.price}`;
+      const requiredTitle = shopItems.find(({ id }) => id === item.requires)?.title;
+      action.textContent = has && item.id !== 'fertiliser' ? 'Owned' : item.id === 'fertiliser' && (state.fertiliser ?? 0) > 0 ? 'Add one' : locked ? item.requires && !owned.includes(item.requires) ? `Requires ${requiredTitle}` : `Level ${item.level}` : `Buy · ${item.price}`;
     }
     journal.update({
       discoveries: state.discoveries ?? [],
@@ -385,9 +414,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       clearTimeout(stampTimer);
       stampTimer = window.setTimeout(() => { stamp.hidden = true; }, readingTimeMs(stamp.textContent ?? ''));
     },
-    showAway(ripeCount, onHarvestAll) {
-      awayText.textContent = `${ripeCount} ${ripeCount === 1 ? 'plant' : 'plants'} ripened while you were away.`;
+    showAway(summary, onHarvestAll) {
+      awayText.textContent = `While you were away\nPlants grown: ${summary.plantsGrown} · Plots watered: ${summary.plotsWatered}\nFruit harvested: ${summary.fruitHarvested} · Coins sold: ${summary.coinsSold}\nCrate: ${summary.crateContents || 'empty'}`;
       onAwayHarvest = onHarvestAll;
+      awayButton.hidden = summary.ripeCount === 0;
       away.hidden = false;
     },
     noCoins(reducedMotion) {

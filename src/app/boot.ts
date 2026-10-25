@@ -1,8 +1,8 @@
 // Boot: wires the sim loop to rendering, input, UI rewards and sound.
 import { createRenderer } from '../render/renderer';
 import { palette } from '../render/palette';
-import { createInitialState, getSnapshot, MUTATIONS, SPECIES, step } from '../sim';
-import type { Command, GardenSnapshot, GardenState, SimEvent, SpeciesId } from '../sim';
+import { createInitialState, getSnapshot, MUTATIONS, SPECIES } from '../sim';
+import type { Command, GardenSnapshot, SimEvent, SpeciesId } from '../sim';
 import { chooseBackend, createSaveStore, DEFAULT_SETTINGS, StaleSaveError, type Settings } from '../save/store';
 import { hintFor, mutationOpportunitiesFor } from './hints';
 import { createPointerInput } from '../input/pointer';
@@ -13,6 +13,7 @@ import { createNoticeQueue, readingTimeMs } from '../ui/notice-queue';
 import { createSfx } from '../audio/sfx';
 import { createPageLifecycle } from './lifecycle';
 import { createFixedStepLoop } from './loop';
+import { advanceOffline, capClockOffset } from './offline';
 import {
   commandForPlotActivation,
   commandForSwipeHarvest,
@@ -23,6 +24,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
   document.body.style.background = palette.environment['sky-day'].horizon;
   // Each new garden gets its own seed, so yield sizes (and later mutations) differ between players.
   const initialState = createInitialState(crypto.getRandomValues(new Uint32Array(1))[0]!, Date.now());
+  let clockOffsetMs = 0;
+  const simulationNowMs = () => Math.max(0, Date.now() - clockOffsetMs);
   let selectedSpeciesId: SpeciesId = 'sunny-sprout';
   let coins = initialState.coins;
   let latestSnapshot: GardenSnapshot = getSnapshot(initialState);
@@ -173,7 +176,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     uiCommand = act;
     const loop = createFixedStepLoop({
       initialState,
-      nowMs: () => Date.now(),
+      nowMs: simulationNowMs,
       requestFrame: (callback) => window.requestAnimationFrame(callback),
       cancelFrame: (handle) => window.cancelAnimationFrame(handle),
       onRender: (frame) => {
@@ -254,6 +257,7 @@ export function boot(canvas: HTMLCanvasElement): () => void {
       const command = commandForSwipeHarvest(latestSnapshot, ripe);
       if (command && acceptPlotActivation(command, Date.now())) act(command);
     };
+    let resumedAway: ReturnType<typeof advanceOffline> | null = null;
     const lifecycle = createPageLifecycle({
       loop,
       isHidden: () => document.hidden,
@@ -270,6 +274,16 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         return () => window.removeEventListener('pageshow', listener);
       },
       cancelGesture: input.cancelGesture,
+      beforeResume: () => {
+        const state = loop.getState();
+        const wallNowMs = Date.now();
+        clockOffsetMs = capClockOffset(clockOffsetMs, state.lastNowMs, wallNowMs);
+        resumedAway = advanceOffline(state, state.lastNowMs, Math.max(0, wallNowMs - clockOffsetMs));
+      },
+      afterResume: () => {
+        if (resumedAway) showAwaySummary(resumedAway);
+        resumedAway = null;
+      },
     });
     // Saves (docs/architecture.md, Saves): load once, then write after changes, every 10 s and on hide.
     const savesReady = chooseBackend().then(async ({ backend, persistent }) => {
@@ -290,22 +304,40 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         showNotice('This save is from a newer version. Reload the page to update. Progress here will not be saved.');
         return;
       }
+      let pending = 0;
+      let failures = 0;
+      let stopped = false;
       if (loaded.kind !== 'empty' && loaded.state) {
-        loop.restore(loaded.state);
-        latestSnapshot = getSnapshot(loaded.state);
-        // Unlocks and coins show now, not on the next frame, so "ready" means the HUD matches the save.
+        const loadedAt = Date.now();
+        const offline = advanceOffline(loaded.state, loaded.savedAt, loadedAt);
+        clockOffsetMs = Math.max(0, loadedAt - offline.state.lastNowMs);
+        loop.restore(offline.state);
+        latestSnapshot = getSnapshot(offline.state);
         coins = latestSnapshot.coins;
+        if (offline.elapsedMs > 0) {
+          try {
+            await store.save(offline.state, loadedAt);
+          } catch (error) {
+            if (error instanceof StaleSaveError) {
+              stopped = true;
+              showNotice('This garden was opened in another tab. Reload to keep playing here.', 0);
+            } else {
+              failures = 3;
+              showNotice('Progress is not saving. Free some storage space, then reload.', 0);
+            }
+          }
+        }
+        loop.reportEvents?.(offline.events.filter((event) =>
+          event.type === 'Mutated' || event.type === 'LevelUp' || event.type === 'OrderCompleted'));
+        // Present the advanced garden after loading and attempting to persist it.
         refreshUI();
-        showAwaySummary(loaded.state, loaded.savedAt);
+        showAwaySummary(offline);
       }
       if (loaded.kind === 'recovered') {
         showNotice(loaded.state ? 'Your last save was damaged. The backup was loaded.' : 'Your save could not be read. It was kept aside.');
       } else if (!persistent) {
         showNotice('This browser cannot save. Progress lasts until you close the page.');
       }
-      let pending = 0;
-      let failures = 0;
-      let stopped = false;
       resetGarden = async () => {
         stopped = true;
         clearTimeout(pending);
@@ -349,12 +381,18 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     const onPageHide = () => saveNow();
     document.addEventListener('visibilitychange', onHide);
     window.addEventListener('pagehide', onPageHide);
-    function showAwaySummary(state: GardenState, savedAt: number): void {
-      const now = step(state, [], Math.max(state.lastNowMs, Date.now()));
-      const ripe = getSnapshot(now.state).plots.filter((plot) => plot.plant?.stage === 'Harvestable').map(({ id }) => id);
-      if (ripe.length === 0 || Date.now() - savedAt < 30_000) return;
-      gardenUI.showAway(ripe.length, () => {
-        const command = commandForSwipeHarvest(latestSnapshot, ripe);
+    function showAwaySummary(offline: ReturnType<typeof advanceOffline>): void {
+      if (offline.elapsedMs < 30_000) return;
+      gardenUI.showAway({
+        plantsGrown: offline.plantsGrown,
+        plotsWatered: offline.plotsWatered,
+        fruitHarvested: offline.fruitHarvested,
+        coinsSold: offline.coinsSold,
+        crateContents: offline.crateContents.map(({ speciesId, count }) =>
+          `${SPECIES.find(({ id }) => id === speciesId)!.name} × ${count}`).join(', '),
+        ripeCount: offline.ripePlotIds.length,
+      }, () => {
+        const command = commandForSwipeHarvest(latestSnapshot, offline.ripePlotIds);
         if (command && acceptPlotActivation(command, Date.now())) act(command);
       });
     }

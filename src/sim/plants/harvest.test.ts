@@ -149,7 +149,7 @@ describe('Harvest commands', () => {
       type: 'Plant', plotId: 'plot-0', seedId: 'bubble-berry',
     }], startTime);
 
-    expect(result.state.coins).toBe(state.coins - 3);
+    expect(result.state.coins).toBe(state.coins - 4);
     expect(result.state.plots[0]?.plant).toMatchObject({ speciesId: 'bubble-berry', plantedAt: startTime });
     expect(result.state.plots[0]?.plant?.mutationSeed).toEqual(expect.any(Number));
     expect(result.events).toEqual([

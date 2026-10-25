@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createInitialState, SHOP_PRICES, step } from '../index';
+import { createInitialState, getSnapshot, SHOP_PRICES, step } from '../index';
 
 describe('shop purchases', () => {
   it('validates level, price, ownership and adds plots only after payment', () => {
@@ -30,5 +30,21 @@ describe('shop purchases', () => {
     state = step(state, [{ type: 'Plant', plotId: 'plot-0', seedId: 'sunny-sprout' }], 0).state;
     const watered = step(state, [{ type: 'WaterAll' }], 4_000);
     expect(watered.events).toContainEqual({ type: 'Watered', plotId: 'plot-0' });
+  });
+
+  it('applies selling upgrade gates, capacity, speed and sale bonus', () => {
+    let state = { ...createInitialState(3, 0, { xp: 10_500 }), coins: 10_000 };
+    expect(step(state, [{ type: 'Buy', item: 'quick-counter-2' }], 0).events).toContainEqual(expect.objectContaining({ reason: 'locked' }));
+    expect(step(state, [{ type: 'Buy', item: 'quick-counter-3' }], 0).events).toContainEqual(expect.objectContaining({ reason: 'locked' }));
+    state = step(state, [{ type: 'Buy', item: 'crate-1' }, { type: 'Buy', item: 'crate-2' },
+      { type: 'Buy', item: 'quick-counter-1' }, { type: 'Buy', item: 'quick-counter-2' },
+      { type: 'Buy', item: 'quick-counter-3' }, { type: 'Buy', item: 'second-counter' },
+      { type: 'Buy', item: 'fresh-produce' }], 0).state;
+    expect(getSnapshot(state)).toMatchObject({ crateCapacity: 24, saleIntervalMs: 300 });
+    state = { ...state, crate: [{ speciesId: 'sunny-sprout', size: 'regular', mutations: [], value: 10, xp: 10 }] };
+    state = step(state, [{ type: 'StartSelling' }], 0).state;
+    const sold = step(state, [], 400);
+    expect(sold.state.coins).toBe(state.coins + 11);
+    expect(sold.events).toContainEqual({ type: 'FruitSold', value: 11, speciesId: 'sunny-sprout', mutations: [] });
   });
 });

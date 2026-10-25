@@ -18,6 +18,8 @@ function createHarness(initialState: GardenState = createInitialState(1, 0)) {
   const eventBatches: (readonly SimEvent[])[] = [];
   const nowMs = vi.fn(() => 10_000);
   const cancelGesture = vi.fn();
+  const beforeResume = vi.fn();
+  const afterResume = vi.fn();
   const listeners = {
     visibility: new Set<() => void>(),
     pagehide: new Set<() => void>(),
@@ -42,6 +44,8 @@ function createHarness(initialState: GardenState = createInitialState(1, 0)) {
     subscribePageHide: subscribe('pagehide'),
     subscribePageShow: subscribe('pageshow'),
     cancelGesture,
+    beforeResume,
+    afterResume,
   });
 
   const emit = (key: keyof typeof listeners) => {
@@ -70,6 +74,8 @@ function createHarness(initialState: GardenState = createInitialState(1, 0)) {
     requestFrame,
     cancelFrame,
     cancelGesture,
+    beforeResume,
+    afterResume,
     renderFrames,
     eventBatches,
   };
@@ -129,6 +135,8 @@ describe('page lifecycle', () => {
     h.emit('pageshow');
 
     expect(h.nowMs).toHaveBeenCalledTimes(1);
+    expect(h.beforeResume).toHaveBeenCalledTimes(1);
+    expect(h.afterResume).toHaveBeenCalledTimes(1);
     expect(h.requestFrame).toHaveBeenCalledTimes(3);
     expect(h.frames.size).toBe(1);
     expect(h.eventBatches).toEqual([[
@@ -179,5 +187,6 @@ describe('page lifecycle', () => {
     h.emit('pageshow');
     expect(h.requestFrame).toHaveBeenCalledTimes(2);
     expect(h.nowMs).toHaveBeenCalledTimes(1);
+    expect(h.afterResume).toHaveBeenCalledTimes(1);
   });
 });

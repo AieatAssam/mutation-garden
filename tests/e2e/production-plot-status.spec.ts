@@ -21,18 +21,19 @@ test.beforeEach(async ({ page }, info) => startWithSave(page, xpForLevel(3), {
 type Point = { x: number; y: number };
 type Box = { x: number; y: number; width: number; height: number };
 type SpeciesId = (typeof SPECIES)[number]['id'];
-const speciesPlot: Record<SpeciesId, number> = { 'sunny-sprout': 0, 'bubble-berry': 2, twistroot: 4, puffcap: 5 };
+const speciesPlot: Record<SpeciesId, number> = { 'sunny-sprout': 0, 'bubble-berry': 2, twistroot: 4, puffcap: 5, 'lantern-pod': 1, 'comet-pear': 3, clockvine: 0, dewbell: 2 };
 const speciesStampWorldY: Record<SpeciesId, number> = {
   // Authored plant tops (tools/blender/build_plants.py) plus the 0.45 stamp lift.
   'sunny-sprout': 2.89,
   'bubble-berry': 2.30,
-  twistroot: 3.13, puffcap: 2.75,
+  twistroot: 3.13, puffcap: 2.75, 'lantern-pod': 2.7, 'comet-pear': 2.8, clockvine: 2.9, dewbell: 2.65,
 };
 
 const speciesLabels: Record<SpeciesId, string> = {
   'sunny-sprout': 'Sunny Sprout',
   'bubble-berry': 'Bubble Berry',
-  twistroot: 'Twistroot', puffcap: 'Puffcap',
+  twistroot: 'Twistroot', puffcap: 'Puffcap', 'lantern-pod': 'Lantern Pod', 'comet-pear': 'Comet Pear',
+  clockvine: 'Clockvine', dewbell: 'Dewbell',
 };
 
 function projectPlotPoint(
@@ -623,7 +624,7 @@ test('production status stamps stay visible and harvest their owning species', a
   await plant(page, 'sunny-sprout', plots[0]!, mobile);
   await plant(page, 'bubble-berry', plots[2]!, mobile);
   await plant(page, 'twistroot', plots[4]!, mobile);
-  await waitForCoins(page, 3);
+  await waitForCoins(page, 2);
   await advanceGameClock(page, 25_100);
   await attachGardenCapture(page, info, `${info.project.name}-ripe-before-stamp-check.png`);
   const renderedStamps = await waitForRenderedStamps(page, ['sunny-sprout', 'bubble-berry', 'twistroot']);
@@ -658,7 +659,7 @@ test('production stamp swipe cancellation and immediate repeat pay once without 
   await plant(page, 'sunny-sprout', plots[0]!, mobile);
   await plant(page, 'bubble-berry', plots[2]!, mobile);
   await plant(page, 'twistroot', plots[4]!, mobile);
-  await waitForCoins(page, 3);
+  await waitForCoins(page, 2);
   await advanceGameClock(page, 25_100);
   await attachGardenCapture(page, info, `${info.project.name}-camera-ripe-before-stamp-check.png`);
   const renderedStamps = await waitForRenderedStamps(page, ['sunny-sprout', 'bubble-berry', 'twistroot']);
@@ -673,7 +674,7 @@ test('production stamp swipe cancellation and immediate repeat pay once without 
     .toBe(beforeCancel);
   await resumeFrames(page);
   await waitForSimulationOpportunity(page);
-  await waitForCoins(page, 3);
+  await waitForCoins(page, 2);
 
   frames = await freezeFrames(page);
   const beforeRepeat = await stageSignature(page);
@@ -701,7 +702,7 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
   await plant(page, 'sunny-sprout', plots[0]!, mobile);
   await plant(page, 'bubble-berry', plots[2]!, mobile);
   await plant(page, 'twistroot', plots[4]!, mobile);
-  await waitForCoins(page, 3);
+  await waitForCoins(page, 2);
   await advanceGameClock(page, 25_100);
   await attachGardenCapture(page, info, `${info.project.name}-camera-ripe-before-stamp-check.png`);
   await waitForRenderedStamps(page, ['sunny-sprout', 'bubble-berry', 'twistroot']);
@@ -743,7 +744,7 @@ test('production camera pan, zoom and resize keep fresh fruit picks playable', a
     await page.mouse.move(panOrigin.x + panDrag.x, panOrigin.y + panDrag.y, { steps: 4 });
     await page.mouse.up();
   }
-  await waitForCoins(page, 3);
+  await waitForCoins(page, 2);
   expect(await stageSignature(page), 'empty-ground pan changes the rendered camera while app frames are frozen')
     .not.toBe(cameraBeforePan);
   const stampAfterPan = await readStamp(page, 'sunny-sprout', camera);
@@ -844,7 +845,7 @@ test('six ripe plants stay under the production renderer draw-call budget', asyn
   await attachGardenCapture(page, info, `${info.project.name}-before-planting.png`);
   const speciesAtPlot = ['sunny-sprout', 'sunny-sprout', 'twistroot', 'sunny-sprout', 'sunny-sprout', 'bubble-berry'] as const;
   for (const [index, plot] of plots.entries()) await plant(page, speciesAtPlot[index]!, plot, mobile);
-  await waitForCoins(page, 28);
+  await waitForCoins(page, 27);
   await advanceGameClock(page, 30_100);
   const stamps = [];
   for (const [plotId, speciesId] of speciesAtPlot.entries()) {

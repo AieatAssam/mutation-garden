@@ -106,7 +106,7 @@ The brief excludes dozens of species. We ship eight across the game, each with o
 | Species | Unlock | Grow | Seed / value | Silhouette | Hook |
 |---|---|---|---|---|---|
 | Sunny Sprout | Start | 8 s | 1 / 2 | Lollipop | Fast filler. Two adjacent Sunnies give "full sun" to neighbours (Golden rule). |
-| Bubble Berry | Lv 2 | 15 s | 3 / 6 | Low dome of berries | Berries bounce out on harvest (Rapier). Yields 4–6 berries; each one is a coin. |
+| Bubble Berry | Lv 2 | 15 s | 4 / 6 | Low dome of berries | Berries bounce out on harvest (Rapier). Yields 4–6 berries; each one is a coin. |
 | Twistroot | Lv 3 | 25 s | 5 / 10 | Corkscrew root | Pulled up with a stretchy tug on harvest. Twist count = value. |
 | Puffcap | Lv 4 | 30 s | 6 / 14 | Fat mushroom | Plants next to Puffcap always become Glowing. |
 | Lantern Pod | Lv 6 | 45 s | 12 / 28 | Three hanging lantern pods | A harvest after dusk grants one bonus seed (once per plant). |

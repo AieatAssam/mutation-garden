@@ -7,6 +7,8 @@ export interface PageLifecycleOptions {
   readonly subscribePageHide: (listener: () => void) => () => void;
   readonly subscribePageShow: (listener: () => void) => () => void;
   readonly cancelGesture: () => void;
+  readonly beforeResume?: () => void;
+  readonly afterResume?: () => void;
 }
 
 export interface PageLifecycle {
@@ -30,7 +32,9 @@ export function createPageLifecycle(options: PageLifecycleOptions): PageLifecycl
 
   const resume = () => {
     if (!suspended || pageHidden || options.isHidden()) return;
+    options.beforeResume?.();
     options.loop.catchUp();
+    options.afterResume?.();
     suspended = false;
     options.loop.start();
   };

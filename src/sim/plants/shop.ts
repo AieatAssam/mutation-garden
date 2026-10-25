@@ -1,16 +1,20 @@
-import { levelForXp, SHOP_PRICES } from '../content/species';
+import { levelForXp, SHOP_PRICES, SELLING_UPGRADES } from '../content/species';
 import type { Command, GardenState, ShopItemId, SimEvent, StepResult } from '../state/types';
 import { water } from './water';
 
-const ITEMS: Readonly<Record<ShopItemId, { price: number; level: number }>> = {
-  'plot-6': { price: SHOP_PRICES['plot-6'], level: 3 }, 'plot-7': { price: SHOP_PRICES['plot-7'], level: 4 },
+const ITEMS: Readonly<Record<ShopItemId, { price: number; level: number; requires?: ShopItemId }>> = {
+  'plot-6': { price: SHOP_PRICES['plot-6'], level: 3 }, 'plot-7': { price: SHOP_PRICES['plot-7'], level: 4, requires: 'plot-6' },
   'big-can': { price: SHOP_PRICES['big-can'], level: 3 }, fertiliser: { price: SHOP_PRICES.fertiliser, level: 1 }, 'lucky-charm': { price: SHOP_PRICES['lucky-charm'], level: 5 },
+  ...Object.fromEntries(SELLING_UPGRADES.map((upgrade) => [upgrade.id, {
+    price: upgrade.price, level: upgrade.level, ...('requires' in upgrade ? { requires: upgrade.requires } : {}),
+  }])) as Record<(typeof SELLING_UPGRADES)[number]['id'], { price: number; level: number; requires?: ShopItemId }>,
 };
 
 export function buy(state: GardenState, command: Extract<Command, { type: 'Buy' }>): StepResult {
   const item = ITEMS[command.item];
   if (!item) return reject(state, command.item, 'locked');
   if (levelForXp(state.xp) < item.level) return reject(state, command.item, 'locked');
+  if (item.requires && !state.owned.includes(item.requires)) return reject(state, command.item, 'locked');
   if (command.item !== 'fertiliser' && state.owned.includes(command.item)) return reject(state, command.item, 'owned');
   if (command.item === 'plot-7' && !state.owned.includes('plot-6')) return reject(state, command.item, 'locked');
   if (state.coins < item.price) return reject(state, command.item, 'insufficient-coins');

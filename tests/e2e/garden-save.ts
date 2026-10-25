@@ -8,9 +8,10 @@ import { encodeSave } from '../../src/save/codec';
  * keep whatever the spec did.
  */
 export async function startWithSave(page: Page, xp = xpForLevel(3), options: {
-  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; crateCount?: number; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number; schema?: number; discoveries?: readonly string[]; rewardsPaid?: readonly string[]; order?: { index: number; progress: number };
+  scriptedGiantUsed?: boolean; scriptedGoldenUsed?: boolean; plantCount?: number; twistrootPlantedAt?: number; twistrootWaterCount?: number; extraRipeSunny?: boolean; extraRipeSunnyAt?: number; crateCount?: number; sellingSince?: number | null; savedAt?: number; coins?: number; seed?: number; mutationRngState?: number; schema?: number; discoveries?: readonly string[]; rewardsPaid?: readonly string[]; order?: { index: number; progress: number };
 } = {}): Promise<void> {
-  const initial = createInitialState(options.seed ?? 20261022, 0, { xp });
+  const savedAt = options.savedAt ?? Date.now();
+  const initial = createInitialState(options.seed ?? 20261022, savedAt, { xp });
   const plots = initial.plots.map((plot) => {
     if (options.twistrootPlantedAt !== undefined && plot.id === 'plot-0') return { ...plot,
       plant: { speciesId: 'twistroot' as const, plantedAt: options.twistrootPlantedAt, size: 'regular' as const,
@@ -21,7 +22,7 @@ export async function startWithSave(page: Page, xp = xpForLevel(3), options: {
     return plot;
   });
   const crate = Array.from({ length: options.crateCount ?? 0 }, () => ({ speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 1, xp: 1 }));
-  const envelope = { ...encodeSave({ ...initial, coins: options.coins ?? initial.coins, plots, crate, mutationRngState: options.mutationRngState ?? 2, plantCount: options.plantCount ?? 100, scriptedGiantUsed: options.scriptedGiantUsed ?? true, scriptedGoldenUsed: options.scriptedGoldenUsed ?? true, discoveries: options.discoveries ?? initial.discoveries, rewardsPaid: options.rewardsPaid ?? initial.rewardsPaid, ...(options.order === undefined ? {} : { order: options.order }) }, options.savedAt ?? 0, 'e2e'), ...(options.schema ? { schema: options.schema } : {}) };
+  const envelope = { ...encodeSave({ ...initial, coins: options.coins ?? initial.coins, plots, crate, mutationRngState: options.mutationRngState ?? 2, plantCount: options.plantCount ?? 100, scriptedGiantUsed: options.scriptedGiantUsed ?? true, scriptedGoldenUsed: options.scriptedGoldenUsed ?? true, discoveries: options.discoveries ?? initial.discoveries, rewardsPaid: options.rewardsPaid ?? initial.rewardsPaid, ...(options.sellingSince === undefined ? {} : { sellingSince: options.sellingSince }), ...(options.order === undefined ? {} : { order: options.order }) }, savedAt, 'e2e'), ...(options.schema ? { schema: options.schema } : {}) };
   await page.addInitScript((save) => {
     const injected = 'mutation-garden-e2e-save-injected';
     if (sessionStorage.getItem(injected)) return;

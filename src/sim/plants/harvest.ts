@@ -1,4 +1,4 @@
-import { CRATE_CAPACITY, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
+import { crateCapacity, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
 import { MUTATIONS } from '../content/mutations';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
@@ -46,7 +46,8 @@ export function harvest(
       events.push(rejection(plotId, 'not-harvestable'));
       continue;
     }
-    if (nextState.crate.length >= CRATE_CAPACITY) { events.push(rejection(plotId, 'crate-full')); continue; }
+    const yieldCount = species.id === 'comet-pear' ? 2 : 1;
+    if (nextState.crate.length + yieldCount > crateCapacity(nextState.owned)) { events.push(rejection(plotId, 'crate-full')); continue; }
 
     const size = plot.plant.size ?? 'regular';
     const ripeAt = growthStart(plot.plant) + species.growthDurationMs;
@@ -60,7 +61,7 @@ export function harvest(
     const fruit = { speciesId: species.id, size, mutations, value: coins, xp: Math.floor(species.baseValue * mutationMultiplier) };
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
-    nextState = { ...nextState, crate: [...nextState.crate, fruit], plots };
+    nextState = { ...nextState, crate: [...nextState.crate, fruit, ...(yieldCount === 2 ? [fruit] : [])], plots };
     count += 1;
     harvestedPlotIds.add(plotId);
     events.push({ type: 'Harvested', plotId, speciesId: species.id, coins: 0, size, fresh, lucky: false,

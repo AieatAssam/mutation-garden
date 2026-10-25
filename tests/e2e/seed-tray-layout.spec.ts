@@ -12,7 +12,7 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
   await page.evaluate(async () => { await document.fonts.ready; });
 
   const tray = page.getByRole('navigation', { name: 'Seeds' });
-  const seedNames = ['Sunny Sprout', 'Bubble Berry', 'Twistroot', 'Puffcap'];
+  const seedNames = ['Sunny Sprout', 'Bubble Berry', 'Twistroot', 'Puffcap', 'Lantern Pod', 'Comet Pear', 'Clockvine', 'Dewbell'];
   const seeds = seedNames.map((name) => tray.getByRole('button', { name }));
   await expect(tray).toBeVisible();
   await expect(tray.locator('.garden-ui__seed')).toHaveCount(seedNames.length);
@@ -33,6 +33,7 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
         bottom: Number.parseFloat(trayStyle.bottom),
       },
       label: rect(trayElement.querySelector('.garden-ui__tray-label')!),
+      seeds: rect(trayElement.querySelector('.garden-ui__seeds')!),
       buttons: [...trayElement.querySelectorAll<HTMLElement>('.garden-ui__seed')].map((button) => ({
         ...rect(button),
         text: button.querySelector('.garden-ui__seed-name')?.textContent?.trim(),
@@ -59,14 +60,10 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
   expect(layout.label.right).toBeLessThanOrEqual(viewport.width);
   expect(layout.label.top).toBeGreaterThanOrEqual(0);
   expect(layout.label.bottom).toBeLessThanOrEqual(viewport.height);
-  expect(layout.buttons.map(button => button.text)).toEqual(['Sunny Sprout', 'Bubble Berry', 'Twistroot', 'Puffcap']);
+  expect(layout.buttons.map(button => button.text)).toEqual(seedNames);
   for (const [index, button] of layout.buttons.entries()) {
     expect(button.width, `seed ${button.text} width`).toBeGreaterThanOrEqual(48);
     expect(button.height, `seed ${button.text} height`).toBeGreaterThanOrEqual(48);
-    expect(button.left, `seed ${button.text} left safe area`).toBeGreaterThanOrEqual(layout.safe.left);
-    expect(button.right, `seed ${button.text} right safe area`).toBeLessThanOrEqual(viewport.width - layout.safe.right);
-    expect(button.top, `seed ${button.text} top viewport`).toBeGreaterThanOrEqual(0);
-    expect(button.bottom, `seed ${button.text} bottom safe area`).toBeLessThanOrEqual(viewport.height - layout.safe.bottom);
     expect(button.textWidth, `seed ${button.text} label fits`).toBeLessThanOrEqual(button.clientWidth);
     expect(layout.clippingAncestors[index], `seed ${button.text} has no clipping ancestor`).toEqual([]);
     await expect(seeds[index]!).toBeVisible();
@@ -109,6 +106,10 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
     expect(focus.top, `seed ${index} focus ring top viewport`).toBeGreaterThanOrEqual(0);
     expect(focus.right, `seed ${index} focus ring right safe area`).toBeLessThanOrEqual(viewport.width - layout.safe.right);
     expect(focus.bottom, `seed ${index} focus ring bottom safe area`).toBeLessThanOrEqual(viewport.height - layout.safe.bottom);
+    expect(focus.left, `seed ${index} focus ring stays in the scroll viewport`).toBeGreaterThan(layout.seeds.left);
+    expect(focus.right, `seed ${index} focus ring stays in the scroll viewport`).toBeLessThan(layout.seeds.right);
+    expect(focus.top, `seed ${index} focus ring stays in the scroll viewport`).toBeGreaterThan(layout.seeds.top);
+    expect(focus.bottom, `seed ${index} focus ring stays in the scroll viewport`).toBeLessThan(layout.seeds.bottom);
     if (index === 0) {
       expect(focus.left, 'first seed focus ring has 12px left clearance').toBeGreaterThanOrEqual(12);
       expect(focus.right, 'first seed focus ring has 12px right clearance').toBeLessThanOrEqual(viewport.width - 12);

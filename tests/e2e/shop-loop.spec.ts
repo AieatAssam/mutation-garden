@@ -13,7 +13,7 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
     return mutationRoll(mutationSeed, 'golden') >= 0.01 && mutationRoll(mutationSeed, 'glowing') >= 0.01;
   })!;
   await startWithSave(page, xpForLevel(3), {
-    coins: SHOP_PRICES['plot-6'] + 3, mutationRngState, plantCount: 100,
+    coins: SHOP_PRICES['plot-6'] + 4, mutationRngState, plantCount: 100,
   });
   await page.goto('./');
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
@@ -21,6 +21,10 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
   if (mobile) await shopButton.tap(); else await shopButton.click();
   const plot7 = page.locator('.garden-ui__shop-row').filter({ hasText: 'Plot 7' });
   await expect(plot7).toBeVisible();
+  const quickCounter1 = page.locator('.garden-ui__shop-row').filter({ has: page.getByText('Quick Counter I', { exact: true }) });
+  const quickCounter2 = page.locator('.garden-ui__shop-row').filter({ has: page.getByText('Quick Counter II', { exact: true }) });
+  await expect(quickCounter1).toContainText('Level 4 · 45 coins');
+  await expect(quickCounter2.getByRole('button')).toHaveText('Requires Quick Counter I');
   const buyPlot7 = plot7.getByRole('button', { name: `Buy · ${SHOP_PRICES['plot-6']}` });
   if (mobile) await buyPlot7.tap(); else await buyPlot7.click();
   await expect(page.getByRole('button', { name: 'Shop' })).toBeVisible();

@@ -26,6 +26,7 @@ export interface FixedStepLoop {
   /** Replaces the state (a loaded save) and drops queued commands. */
   restore(state: GardenState): void;
   catchUp(): void;
+  reportEvents?(events: readonly SimEvent[]): void;
   start(): void;
   stop(): void;
 }
@@ -108,6 +109,9 @@ export function createFixedStepLoop(options: FixedStepLoopOptions): FixedStepLoo
       accumulatorMs = 0;
       lastFrameTimestampMs = null;
       options.onRender({ previous, current, alpha: 0 });
+    },
+    reportEvents(events) {
+      if (events.length) options.onEvents?.(events, current.nowMs);
     },
     start() {
       if (running) return;

@@ -142,6 +142,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     plants.setModels(models);
   }, (error: unknown) => {
     console.error('Plant models failed to load', error);
+    plants.setModels(null);
   });
   // Compile every shader, plant morph variants included, before reporting ready, so the first
   // frames with the island and first plants do not stall the main thread while the player taps
@@ -149,9 +150,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
   const ready = Promise.all([sceneryLoaded, plantsLoaded]).then(async () => {
     if (disposed) return;
     const warm = new Group();
-    const rigs = plantModels
-      ? (['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap'] as const).map((species) => createAuthoredRig(species, plantModels!, materials))
-      : [];
+    const rigs = plantModels ? options.species.map(({ id }) => createAuthoredRig(id, plantModels!, materials)) : [];
     for (const rig of rigs) {
       rig.update({ speciesId: rig.root.name as SpeciesId, plantedAt: 0, stage: 'Harvestable', progress: 1,
         mutations: rig.root.name === 'sunny-sprout' ? ['golden'] : rig.root.name === 'puffcap' ? ['glowing'] : [] }, 0, true);
@@ -323,7 +322,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
     if (stall && snapshot && stallRing.visible) {
       stallRing.position.copy(stall.localToWorld(new Vector3(0, 0.92, 0.24)));
       stallRing.quaternion.copy(camera.quaternion);
-      saleProgress.value = Math.max(0, Math.min(1, 1 - ((snapshot.nextSaleTime ?? snapshot.nowMs) - snapshot.nowMs) / 1_200));
+      saleProgress.value = Math.max(0, Math.min(1, 1 - ((snapshot.nextSaleTime ?? snapshot.nowMs) - snapshot.nowMs) / (snapshot.saleIntervalMs ?? 1_200)));
     }
     // Until the drop starts the island waits far above the view (still compiled, just off screen).
     garden.position.y = islandLanded || currentReducedMotion ? 0

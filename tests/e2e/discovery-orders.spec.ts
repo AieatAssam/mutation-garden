@@ -2,6 +2,7 @@ import { expect, test, type Page } from '@playwright/test';
 import { Vector3 } from 'three';
 import { createGardenCamera, resizeGardenCamera } from '../../src/render/camera';
 import { MUTATIONS } from '../../src/sim/content/mutations';
+import { SPECIES } from '../../src/sim/content/species';
 import { startWithSave } from './garden-save';
 
 async function openGarden(page: Page, mobile: boolean): Promise<void> {
@@ -68,9 +69,10 @@ test('Journal shows discoveries, recipes and live odds; closes by button or Esca
   await expect(dialog.locator('.discovery-journal__recipes')).toBeVisible();
   if (mobile) await expect.poll(() => dialog.locator('.discovery-journal__catalogue')
     .evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  await expect(dialog.locator('.discovery-journal__catalogue .discovery-journal__silhouette')).toHaveCount(19);
+  await expect(dialog.locator('.discovery-journal__catalogue .discovery-journal__silhouette'))
+    .toHaveCount(SPECIES.length * Object.keys(MUTATIONS).length - 1);
   expect(await dialog.locator('.discovery-journal__catalogue .discovery-journal__silhouette')
-    .evaluateAll((elements) => new Set(elements.map((element) => element.innerHTML)).size)).toBe(4);
+    .evaluateAll((elements) => new Set(elements.map((element) => element.innerHTML)).size)).toBe(SPECIES.length);
   if (mobile) {
     const fontSizes = await dialog.locator('.discovery-journal__catalogue th, .discovery-journal__species-name, .discovery-journal__entry strong, .discovery-journal__status')
       .evaluateAll((elements) => elements.map((element) => Number.parseFloat(getComputedStyle(element).fontSize)));

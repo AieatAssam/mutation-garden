@@ -37,9 +37,12 @@ export interface PlantModels {
   dispose(): void;
 }
 
-const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap'];
+const SPECIES: readonly SpeciesId[] = ['sunny-sprout', 'bubble-berry', 'twistroot', 'puffcap', 'lantern-pod', 'comet-pear', 'clockvine', 'dewbell'];
+const MODEL_FALLBACK: Partial<Record<SpeciesId, SpeciesId>> = {
+  'lantern-pod': 'bubble-berry', 'comet-pear': 'sunny-sprout', clockvine: 'twistroot', dewbell: 'puffcap',
+};
 /** Display size per species, tuned so each plant fills its bed at phone size. */
-export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4, puffcap: 1.25 };
+export const SPECIES_SCALE: Readonly<Record<SpeciesId, number>> = { 'sunny-sprout': 1.15, 'bubble-berry': 1.5, twistroot: 1.4, puffcap: 1.25, 'lantern-pod': 1.35, 'comet-pear': 1.25, clockvine: 1.35, dewbell: 1.25 };
 const RIPE_SWELL = 1.14;
 /** Harvested parts show their rolled yield size (design.md 4.3). */
 export const YIELD_SCALE = { small: 0.88, regular: 1, big: 1.2 } as const;
@@ -83,7 +86,7 @@ export function readPlantModels(scene: Object3D): PlantModels {
   const owned: BufferGeometry[] = [];
   scene.updateMatrixWorld(true);
   for (const species of SPECIES) {
-    const root = scene.getObjectByName(species);
+    const root = scene.getObjectByName(species) ?? scene.getObjectByName(MODEL_FALLBACK[species] ?? '');
     if (!root) throw new Error(`Plant model "${species}" is missing`);
     const list: PartTemplate[] = [];
     root.traverse((object) => {

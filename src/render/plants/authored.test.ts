@@ -65,6 +65,16 @@ describe('authored plants', () => {
     expect(() => readPlantModels(orphan)).toThrow(/rides missing part/);
   });
 
+  it('uses existing authored plants only for species missing from an older GLB', () => {
+    const models = readPlantModels(scene());
+    expect(models.parts.size).toBe(8);
+    expect(models.parts.get('lantern-pod')?.map(({ name }) => name)).toEqual(models.parts.get('bubble-berry')?.map(({ name }) => name));
+    expect(models.parts.get('comet-pear')?.map(({ name }) => name)).toEqual(models.parts.get('sunny-sprout')?.map(({ name }) => name));
+    expect(models.parts.get('clockvine')?.map(({ name }) => name)).toEqual(models.parts.get('twistroot')?.map(({ name }) => name));
+    expect(models.parts.get('dewbell')?.map(({ name }) => name)).toEqual(models.parts.get('puffcap')?.map(({ name }) => name));
+    models.dispose();
+  });
+
   it('keeps attached parts on their parent tip while both grow, and warms fruit when ripe', () => {
     const library = createMaterialLibrary();
     const models = readPlantModels(scene());

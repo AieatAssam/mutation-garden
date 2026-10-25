@@ -35,7 +35,7 @@ export const SPECIES = [
   {
     id: 'bubble-berry',
     name: 'Bubble Berry',
-    seedCost: 4,
+    seedCost: 5,
     baseValue: 6,
     growthDurationMs: 15000,
     unlockLevel: 2,
@@ -63,15 +63,15 @@ export const SPECIES = [
     ],
   },
   {
-    id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 14, growthDurationMs: 30_000, unlockLevel: 4,
+    id: 'puffcap', name: 'Puffcap', seedCost: 6, baseValue: 11, growthDurationMs: 30_000, unlockLevel: 4,
     stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 4_000 }, { stage: 'Growing', startsAtMs: 12_000 }, { stage: 'Mature', startsAtMs: 26_000 }, { stage: 'Harvestable', startsAtMs: 30_000 }],
   },
   {
-    id: 'lantern-pod', name: 'Lantern Pod', seedCost: 12, baseValue: 28, growthDurationMs: 45_000, unlockLevel: 6,
+    id: 'lantern-pod', name: 'Lantern Pod', seedCost: 12, baseValue: 35, growthDurationMs: 45_000, unlockLevel: 6,
     stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 4_000 }, { stage: 'Growing', startsAtMs: 18_000 }, { stage: 'Mature', startsAtMs: 38_000 }, { stage: 'Harvestable', startsAtMs: 45_000 }],
   },
   {
-    id: 'comet-pear', name: 'Comet Pear', seedCost: 24, baseValue: 58, growthDurationMs: 75_000, unlockLevel: 9,
+    id: 'comet-pear', name: 'Comet Pear', seedCost: 24, baseValue: 46, growthDurationMs: 75_000, unlockLevel: 9,
     stages: [{ stage: 'Seed', startsAtMs: 0 }, { stage: 'Sprout', startsAtMs: 7_500 }, { stage: 'Growing', startsAtMs: 30_000 }, { stage: 'Mature', startsAtMs: 60_000 }, { stage: 'Harvestable', startsAtMs: 75_000 }],
   },
   {

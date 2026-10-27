@@ -179,6 +179,15 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
   order.hidden = true;
   const catalogue = document.createElement('div');
   catalogue.className = 'discovery-journal__catalogue';
+  const scrollHint = document.createElement('p');
+  scrollHint.className = 'discovery-journal__scroll-hint';
+  const mobileScrollHint = document.createElement('span');
+  mobileScrollHint.className = 'discovery-journal__scroll-hint-mobile';
+  mobileScrollHint.textContent = 'Swipe sideways for traits; scroll down for species.';
+  const desktopScrollHint = document.createElement('span');
+  desktopScrollHint.className = 'discovery-journal__scroll-hint-desktop';
+  desktopScrollHint.textContent = 'Scroll down for more species.';
+  scrollHint.append(mobileScrollHint, desktopScrollHint);
   const table = document.createElement('table');
   const tableHead = document.createElement('thead');
   const headerRow = document.createElement('tr');
@@ -254,7 +263,7 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
     tableBody.append(row);
     return rows;
   }).flat();
-  dialog.append(head, order, progress, pageNav, catalogue, recipes, pairs);
+  dialog.append(head, order, progress, pageNav, scrollHint, catalogue, recipes, pairs);
   container.append(dialog);
 
   let state: DiscoveryJournalUpdate = { discoveries: [], level: 1 };
@@ -335,7 +344,7 @@ export function createDiscoveryJournal(container: HTMLElement, options: Discover
   };
   const setPage = (page: 'catalogue' | 'pairs') => {
     const showPairs = page === 'pairs';
-    catalogue.hidden = showPairs; recipes.hidden = showPairs; pairs.hidden = !showPairs;
+    catalogue.hidden = showPairs; recipes.hidden = showPairs; pairs.hidden = !showPairs; scrollHint.hidden = showPairs;
     cataloguePageButton.setAttribute('aria-pressed', String(!showPairs));
     pairsPageButton.setAttribute('aria-pressed', String(showPairs));
   };

@@ -89,12 +89,14 @@ test('Journal shows discoveries, recipes and live odds; closes by button or Esca
     .toContainText('30% when the rule holds · Guaranteed after 40 qualifying Matures without Crystal.');
   await activate(page, dialog.getByRole('button', { name: 'Pairs' }), mobile);
   await expect(dialog.locator('.discovery-journal__recipes')).toBeHidden();
+  await expect(dialog.locator('.discovery-journal__scroll-hint')).toBeHidden();
   await expect(dialog.locator('.discovery-journal__pairs')).toBeVisible();
   const pairCount = Object.keys(MUTATIONS).length * (Object.keys(MUTATIONS).length - 1) / 2;
   await expect(dialog.getByText('Unknown pair')).toHaveCount(pairCount);
   await expect(dialog.locator('.discovery-journal__pairs .discovery-journal__silhouette')).toHaveCount(pairCount * 2);
   await page.screenshot({ path: `/tmp/mutation-engagement-${mobile ? 'phone' : 'desktop'}-pairs.png`, scale: 'css' });
   await activate(page, dialog.getByRole('button', { name: 'Catalogue' }), mobile);
+  await expect(dialog.locator('.discovery-journal__scroll-hint')).toBeVisible();
   await expect(dialog.getByText('Sell 3 Sunny Sprouts', { exact: true })).toBeVisible();
   await page.screenshot({ path: `/tmp/mutation-engagement-${mobile ? 'phone' : 'desktop'}-journal.png`, scale: 'css' });
 

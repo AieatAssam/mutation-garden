@@ -320,13 +320,16 @@ stall_box('environment.stall.wood.1', (0.48, 0.035, 0.035), (0, -0.33, 1.28), 0.
 
 # Small paper villagers form the buyer line. The renderer shuffles these optional named roots
 # when fruit sells; older garden.glb exports remain usable without them.
-for index, x in enumerate((-0.42, -0.14, 0.14, 0.42)):
+for index, x in enumerate((-0.54, -0.18, 0.18, 0.54)):
     buyer = link(bpy.data.objects.new(f'buyer-{index}', None))
     buyer.parent = stall_root
-    buyer.location = (x, 0.48, 0)
+    buyer.location = (x, -0.58, 0)
     buyer['keep'] = True
-    body = rounded_box('environment.cloud.lit', (0.17, 0.13, 0.25), (0, 0, 0.34), 0.06)
-    head = prim('uv_sphere', 'environment.cloud.lit', loc=(0, 0, 0.53), scale=(0.09, 0.08, 0.09), segments=12, ring_count=8)
+    coat = ('environment.stall.awning.1', 'environment.water.2',
+            'plants.bubble-berry.fruit.2', 'environment.grass.2')[index]
+    body = rounded_box(coat, (0.22, 0.16, 0.30), (0, 0, 0.38), 0.07)
+    head = prim('uv_sphere', coat, loc=(0, 0, 0.62),
+                scale=(0.11, 0.10, 0.11), segments=12, ring_count=8)
     bpy.ops.object.select_all(action='DESELECT')
     body.select_set(True); head.select_set(True)
     bpy.context.view_layer.objects.active = body
@@ -335,6 +338,18 @@ for index, x in enumerate((-0.42, -0.14, 0.14, 0.42)):
     person.name = f'buyer-paper-{index}'
     person.parent = buyer
     person['keep'] = True
+    hull = person.copy()
+    hull.data = person.data.copy()
+    link(hull)
+    hull.name = f'outline-35-buyer-{index}'
+    hull.data.name = hull.name
+    hull.data.materials.clear()
+    hull.data.materials.append(mat('ink.press-ink'))
+    hull.parent = buyer
+    hull.location = person.location
+    hull.rotation_euler = person.rotation_euler
+    hull.scale = tuple(scale * 1.12 for scale in person.scale)
+    hull['keep'] = True
 
 # ---------------------------------------------------------------- pond
 
@@ -852,6 +867,9 @@ for name, objs in by_mat.items():
     j.data.materials.append(keep[0] if keep else mat(name))
     for p in j.data.polygons:
         p.material_index = 0
+
+buyers = [o for o in bpy.data.objects if o.name.startswith('buyer-') and o.parent == stall_root]
+assert len(buyers) == 4 and all(sum(child.type == 'MESH' for child in buyer.children) == 2 for buyer in buyers)
 
 print('meshes', len([o for o in bpy.data.objects if o.type == 'MESH']),
       'tris', sum(sum(len(p.vertices) - 2 for p in o.data.polygons) for o in bpy.data.objects if o.type == 'MESH'))

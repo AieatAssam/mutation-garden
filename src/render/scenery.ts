@@ -254,7 +254,7 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
       buyerSource.traverse((object) => {
         if (!(object instanceof Mesh)) return;
         const matrix = inverseBuyer.clone().multiply(object.matrixWorld);
-        const hull = /^outline-(\d+)$/.exec(object.name);
+        const hull = /^outline-(\d+)(?:-buyer-\d+)?$/.exec(object.name);
         if (hull) {
           const mesh = hullOf(object, matrix, Number(hull[1]) / 1000);
           mesh.name = object.name;

@@ -50,8 +50,8 @@ bpy.ops.export_scene.gltf(filepath="public/models/lab.glb", export_format="GLB",
 bpy.ops.object.select_all(action="SELECT")
 bpy.ops.object.delete(use_global=False)
 
-def plant_part(root, name, material_name, color, location, scale, ripe=False, fly=False):
-    bpy.ops.mesh.primitive_uv_sphere_add(segments=24, ring_count=16, location=location)
+def plant_part(root, name, material_name, color, location, scale, ripe=False, fly=False, segments=24, rings=16):
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=segments, ring_count=rings, location=location)
     part = bpy.context.object
     part.name = name
     part.parent = root
@@ -72,11 +72,11 @@ def lab_plant(name, fruit_color, leaf_color, shape):
     root = bpy.data.objects.new(name, None)
     bpy.context.collection.objects.link(root)
     if shape == "fig":
-        plant_part(root, f"{name}_fruit", f"plants.{name}.fruit.1", fruit_color, (0, 0, 0.72), (0.3, 0.32, 0.38), True, True)
-        plant_part(root, f"{name}_facet", f"plants.{name}.accent.facet", (1.0, 0.9, 0.68), (0, -0.26, 0.75), (0.07, 0.035, 0.28))
+        plant_part(root, f"{name}_fruit", f"plants.{name}.fruit.1", fruit_color, (0, 0, 0.72), (0.3, 0.32, 0.38), True, True, 8, 4)
+        plant_part(root, f"{name}_facet", f"plants.{name}.accent.facet", (1.0, 0.9, 0.68), (0, -0.26, 0.75), (0.07, 0.035, 0.28), fly=True)
     else:
-        for index, angle in enumerate(range(0, 360, 60)):
-            bpy.ops.mesh.primitive_cone_add(vertices=6, radius1=0.12, radius2=0.0, depth=0.45,
+        for index, angle in enumerate(range(0, 360, 45)):
+            bpy.ops.mesh.primitive_cone_add(vertices=6, radius1=0.16, radius2=0.0, depth=0.9,
                                              location=(0, 0, 0.82))
             ray = bpy.context.object
             ray.name = f"{name}_ray_{index}"

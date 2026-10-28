@@ -9,7 +9,7 @@ From brief section 14. Work on one milestone at a time, in order. A milestone is
 | M3 Economy loop | [M3.md](M3.md) | Done |
 | M4 Automation | [M4.md](M4.md) | Done |
 | M5 More mutations and polish | [M5.md](M5.md) | Done; real-device checks skipped by owner (2026-10-28) |
-| M6 Mutation Laboratory | [M6.md](M6.md) | Implemented; local and remote CI green; Blender rebuild review pending |
+| M6 Mutation Laboratory | [M6.md](M6.md) | Done |
 
 In each doc, the objective, scope and acceptance criteria marked "(brief)" are verbatim from docs/brief.md. Anything else is ours, added to make the brief testable. Owner-approved conflicts carry an "Owner change (2026-10-23)" note.
 

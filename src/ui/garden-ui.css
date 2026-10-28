@@ -636,12 +636,15 @@
 }
 
 @media (max-aspect-ratio: 1/1) {
+  .garden-ui__toggles { max-width:152px; flex-wrap:wrap; justify-content:flex-end; gap:4px; }
+  .garden-ui__tray-label { display:none; }
   .garden-ui__hint { top:calc(var(--garden-safe-top) + 116px); right:var(--garden-safe-right); left:var(--garden-safe-left); width:auto; max-width:none; text-align:center; transform:none; }
   .garden-ui__hint:not(.is-long) { padding:3px 8px; border-width:2px; font-size:14px; line-height:1.1; }
   .garden-ui__hint.is-long { padding:2px 8px; border-width:2px; font-size:13px; line-height:1; }
   .garden-ui__hint.is-daily { padding:4px 8px; border-width:2px; font-size:13px; }
-  .garden-ui__card { top:calc(var(--garden-safe-top) + 62px); left:var(--garden-safe-left); transform:none; }
-  .garden-ui__crate-amount { top:calc(var(--garden-safe-top) + 62px); right:var(--garden-safe-right); left:auto; }
+  .garden-ui__card { top:calc(var(--garden-safe-top) + 66px); left:var(--garden-safe-left); transform:none; }
+  .garden-ui__crate-amount { top:calc(var(--garden-safe-top) + 66px); right:auto; left:calc(var(--garden-safe-left) + 116px); }
+  .garden-ui__hint,.garden-ui__hint.is-daily { top:calc(var(--garden-safe-top) + 124px); }
   .garden-ui__daily { width:86px; max-width:86px; box-sizing:border-box; padding-inline:5px; }
   .garden-ui__journal { width:94px; max-width:94px; box-sizing:border-box; overflow:hidden; padding-inline:6px; }
   .garden-ui__journal-count { display:none; }

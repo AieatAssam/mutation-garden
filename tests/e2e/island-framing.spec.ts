@@ -51,7 +51,8 @@ test('production garden balances the portrait island and keeps all six plots tap
   const seedLabel = page.locator('nav[aria-label="Seeds"] .garden-ui__tray-label');
   await expect(canvas).toBeVisible();
   await expect(coins).toHaveText('12');
-  await expect(seedLabel).toBeVisible();
+  if (mobile) await expect(seedLabel).toBeHidden();
+  else await expect(seedLabel).toBeVisible();
   await page.screenshot({
     path: mobile
       ? 'test-results/evidence/m1-07e1-framing-phone-390x844.png'
@@ -82,7 +83,7 @@ test('production garden balances the portrait island and keeps all six plots tap
   let trayGap = 0;
   if (mobile) {
     const coinBox = await coins.boundingBox();
-    const seedBox = await seedLabel.boundingBox();
+    const seedBox = await page.getByRole('navigation', { name: 'Seeds' }).boundingBox();
     expect(coinBox).not.toBeNull();
     expect(seedBox).not.toBeNull();
     skyGap = islandTop - (coinBox!.y + coinBox!.height);

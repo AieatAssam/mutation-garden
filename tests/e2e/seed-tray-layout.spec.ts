@@ -80,6 +80,43 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
   expect(layout.labelFontSize).toBeGreaterThanOrEqual(13);
   expect(layout.seeds.scrollWidth).toBeGreaterThan(layout.seeds.clientWidth);
 
+  if (testInfo.project.name === 'mobile-portrait') {
+    await expect(tray.locator('.garden-ui__tray-label')).toBeHidden();
+    await page.locator('.garden-ui__coin-amount').evaluate((element) => { element.textContent = '1200'; });
+    for (const width of [320, 390]) {
+      await page.setViewportSize({ width, height: 844 });
+      const topHud = await page.evaluate(() => {
+        const bounds = (element: Element) => {
+          const { left, top, right, bottom, width, height } = element.getBoundingClientRect();
+          return { left, top, right, bottom, width, height };
+        };
+        const hint = document.querySelector('.garden-ui__hint');
+        const toggles = [...document.querySelectorAll('.garden-ui__toggles .garden-ui__toggle')];
+        const boxes = [
+          document.querySelector('.garden-ui__coins')!,
+          document.querySelector('.garden-ui__card')!,
+          document.querySelector('.garden-ui__crate-amount')!,
+          ...toggles,
+          ...(hint && hint.getBoundingClientRect().width ? [hint] : []),
+        ].map(bounds);
+        return { boxes, toggles: toggles.map(bounds) };
+      });
+      for (const toggle of topHud.toggles) {
+        expect(toggle.width, `HUD toggle at ${width}px has 48px width`).toBeGreaterThanOrEqual(48);
+        expect(toggle.height, `HUD toggle at ${width}px has 48px height`).toBeGreaterThanOrEqual(48);
+      }
+      for (let first = 0; first < topHud.boxes.length; first += 1) {
+        for (let second = first + 1; second < topHud.boxes.length; second += 1) {
+          const a = topHud.boxes[first]!;
+          const b = topHud.boxes[second]!;
+          expect(a.right <= b.left || b.right <= a.left || a.bottom <= b.top || b.bottom <= a.top,
+            `top HUD controls do not overlap at ${width}px: ${JSON.stringify({ first: a, second: b })}`).toBe(true);
+        }
+      }
+    }
+    await page.setViewportSize(viewport);
+  }
+
   for (const [index, button] of layout.buttons.entries()) {
     expect(button.width, `seed ${button.text} width`).toBeGreaterThanOrEqual(48);
     expect(button.height, `seed ${button.text} height`).toBeGreaterThanOrEqual(48);

@@ -27,7 +27,8 @@ test('offers all eight seeds and shows later unlock levels', async ({ page }, te
   await expect(sunny).toBeVisible();
   await expect(bubble).toBeVisible();
   await expect(twistroot).toBeVisible();
-  await expect(trayLabel).toBeVisible();
+  if (testInfo.project.name === 'mobile-portrait') await expect(trayLabel).toBeHidden();
+  else await expect(trayLabel).toBeVisible();
   await expect(seeds.locator('[data-species-id]:visible')).toHaveCount(8);
   await expect(seeds.locator('[data-species-id="prism-fig"]')).toBeHidden();
   await expect(seeds.locator('[data-species-id="sunburst"]')).toBeHidden();
@@ -40,14 +41,16 @@ test('offers all eight seeds and shows later unlock levels', async ({ page }, te
   await expect(bubble).toHaveAttribute('aria-pressed', 'false');
   await expect(coins).toHaveText('12');
 
-  const trayBounds = await seeds.boundingBox();
-  const labelBounds = await trayLabel.boundingBox();
-  expect(trayBounds).not.toBeNull();
-  expect(labelBounds).not.toBeNull();
-  expect(labelBounds!.x).toBeGreaterThanOrEqual(trayBounds!.x);
-  expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(trayBounds!.x + trayBounds!.width);
-  expect(labelBounds!.y).toBeLessThanOrEqual(trayBounds!.y + 1);
-  expect(labelBounds!.y + labelBounds!.height).toBeGreaterThanOrEqual(trayBounds!.y);
+  if (testInfo.project.name === 'desktop') {
+    const trayBounds = await seeds.boundingBox();
+    const labelBounds = await trayLabel.boundingBox();
+    expect(trayBounds).not.toBeNull();
+    expect(labelBounds).not.toBeNull();
+    expect(labelBounds!.x).toBeGreaterThanOrEqual(trayBounds!.x);
+    expect(labelBounds!.x + labelBounds!.width).toBeLessThanOrEqual(trayBounds!.x + trayBounds!.width);
+    expect(labelBounds!.y).toBeLessThanOrEqual(trayBounds!.y + 1);
+    expect(labelBounds!.y + labelBounds!.height).toBeGreaterThanOrEqual(trayBounds!.y);
+  }
 
   for (const seed of [sunny, bubble, twistroot]) {
     const target = await seed.boundingBox();

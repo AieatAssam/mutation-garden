@@ -4,8 +4,8 @@ const MAX_PAN_DISTANCE = 2.5;
 /** Highest ready stamp above a plot (tallest big plant plus the stamp lift). */
 const STAMP_TOP_Y = 3.3;
 /**
- * Height of the top HUD that ready stamps stay below. Portrait: the coin/level/toggle row plus the
- * objective line under it. Landscape: the objective sits in that row (src/ui/garden-ui.css).
+ * Height of the top HUD that ready stamps stay below. Portrait: coin row, wrapped controls, status
+ * row and objective. Landscape: the objective sits in the top row (src/ui/garden-ui.css).
  */
 const topHudPx = (state: CameraPanState) => (state.viewportWidth < state.viewportHeight ? 150 : 70);
 const MIN_CAMERA_ZOOM = 1;

@@ -56,14 +56,18 @@ test('production garden boots with its HUD clear of the garden', async ({ page }
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const canvas = page.locator('#stage');
   const seedLabel = page.locator('nav[aria-label="Seeds"] .garden-ui__tray-label');
-  await expect(seedLabel).toBeVisible();
-  const canvasRect = await canvas.boundingBox();
-  const labelRect = await seedLabel.boundingBox();
-  expect(canvasRect).not.toBeNull();
-  expect(labelRect).not.toBeNull();
-  const islandBottomNdc = projectedGardenBottomNdc(canvasRect!.width, canvasRect!.height);
-  const islandBottomY = canvasRect!.y + (1 - islandBottomNdc) * canvasRect!.height / 2;
-  expect(islandBottomY).toBeLessThan(labelRect!.y - 16);
+  if (testInfo.project.name === 'mobile-portrait') {
+    await expect(seedLabel).toBeHidden();
+  } else {
+    await expect(seedLabel).toBeVisible();
+    const canvasRect = await canvas.boundingBox();
+    const labelRect = await seedLabel.boundingBox();
+    expect(canvasRect).not.toBeNull();
+    expect(labelRect).not.toBeNull();
+    const islandBottomNdc = projectedGardenBottomNdc(canvasRect!.width, canvasRect!.height);
+    const islandBottomY = canvasRect!.y + (1 - islandBottomNdc) * canvasRect!.height / 2;
+    expect(islandBottomY).toBeLessThan(labelRect!.y - 16);
+  }
 
   expect(errors).toEqual([]);
 });

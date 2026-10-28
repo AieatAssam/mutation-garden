@@ -191,7 +191,7 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
 
   if (testInfo.project.name === 'mobile-portrait') {
     await expect(page.locator('.garden-ui')).toHaveCSS('touch-action', 'pan-x pan-y');
-    await page.getByRole('button', { name: 'Shop' }).tap();
+    await page.getByRole('button', { name: 'Shop' }).click();
     await expect(page.locator('.garden-ui__shop-backdrop')).toBeVisible();
     const scale = await page.evaluate(() => visualViewport?.scale);
     const pinch = await page.context().newCDPSession(page);

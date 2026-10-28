@@ -67,6 +67,7 @@ test('ground swipes pan while plot and planted-plant swipes keep their down owne
   await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
   const canvas = page.locator('#stage');
   await expect(canvas).toBeVisible();
+  await expect(canvas).toHaveCSS('touch-action', 'none');
   const rect = await canvas.boundingBox();
   expect(rect).not.toBeNull();
 

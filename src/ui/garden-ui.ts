@@ -243,6 +243,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   trayLabel.textContent = 'Seeds';
   const seedScroll = document.createElement('div');
   seedScroll.className = 'garden-ui__seeds';
+  const seedScrollCue = document.createElement('span');
+  seedScrollCue.className = 'garden-ui__scroll-cue';
+  seedScrollCue.textContent = '↔';
+  seedScrollCue.setAttribute('aria-hidden', 'true');
   const seedButtons = options.species.map((species) => {
     const button = document.createElement('button');
     button.className = 'garden-ui__seed';
@@ -273,7 +277,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
     return { species, button, detail: detailText, locked: null as boolean | null };
   });
   seedTray.prepend(trayLabel);
-  seedTray.append(seedScroll);
+  seedTray.append(seedScroll, seedScrollCue);
   const journal = createDiscoveryJournal(overlay, {
     species: options.species,
     traits: options.journalTraits ?? [],
@@ -326,6 +330,10 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
   trayTools.append(dailyButton, journal.button, shopButton, labButton);
   seedTray.append(trayTools);
   container.append(overlay);
+  const updateSeedScrollCue = () => { seedScrollCue.classList.toggle('is-overflowing', seedScroll.scrollWidth > seedScroll.clientWidth); };
+  updateSeedScrollCue();
+  void document.fonts.ready.then(updateSeedScrollCue);
+  window.addEventListener('resize', updateSeedScrollCue);
 
   // The counter rolls toward the authoritative value with an overshoot ease (motion.md 7).
   let shownCoins = options.coins;
@@ -488,6 +496,7 @@ export function createGardenUI(container: HTMLElement, options: GardenUIOptions)
       disposed = true;
       if (rollFrame) cancelAnimationFrame(rollFrame);
       clearTimeout(stampTimer);
+      window.removeEventListener('resize', updateSeedScrollCue);
       journal.dispose();
       overlay.remove();
     },

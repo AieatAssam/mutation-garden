@@ -33,7 +33,18 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
         bottom: Number.parseFloat(trayStyle.bottom),
       },
       label: rect(trayElement.querySelector('.garden-ui__tray-label')!),
-      seeds: rect(trayElement.querySelector('.garden-ui__seeds')!),
+      tools: rect(trayElement.querySelector('.garden-ui__tray-tools')!),
+      labelFontSize: Number.parseFloat(getComputedStyle(trayElement.querySelector('.garden-ui__tray-label')!).fontSize),
+      cue: {
+        ...rect(trayElement.querySelector('.garden-ui__scroll-cue')!),
+        visibility: getComputedStyle(trayElement.querySelector('.garden-ui__scroll-cue')!).visibility,
+        ariaHidden: trayElement.querySelector('.garden-ui__scroll-cue')!.getAttribute('aria-hidden'),
+      },
+      seeds: {
+        ...rect(trayElement.querySelector('.garden-ui__seeds')!),
+        scrollWidth: (trayElement.querySelector('.garden-ui__seeds') as HTMLElement).scrollWidth,
+        clientWidth: (trayElement.querySelector('.garden-ui__seeds') as HTMLElement).clientWidth,
+      },
       buttons: [...trayElement.querySelectorAll<HTMLElement>('.garden-ui__seed')].map((button) => ({
         ...rect(button),
         text: button.querySelector('.garden-ui__seed-name')?.textContent?.trim(),
@@ -61,6 +72,14 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
   expect(layout.label.top).toBeGreaterThanOrEqual(0);
   expect(layout.label.bottom).toBeLessThanOrEqual(viewport.height);
   expect(layout.buttons.map(button => button.text)).toEqual(seedNames);
+  const cueToolsDisjoint = layout.cue.right <= layout.tools.left || layout.tools.right <= layout.cue.left || layout.cue.bottom <= layout.tools.top || layout.tools.bottom <= layout.cue.top;
+  expect(cueToolsDisjoint).toBe(true);
+  expect(layout.cue.left).toBeGreaterThanOrEqual(layout.seeds.right);
+  expect(layout.cue.ariaHidden).toBe('true');
+  expect(layout.cue.visibility).toBe(layout.seeds.scrollWidth > layout.seeds.clientWidth ? 'visible' : 'hidden');
+  expect(layout.labelFontSize).toBeGreaterThanOrEqual(13);
+  expect(layout.seeds.scrollWidth).toBeGreaterThan(layout.seeds.clientWidth);
+
   for (const [index, button] of layout.buttons.entries()) {
     expect(button.width, `seed ${button.text} width`).toBeGreaterThanOrEqual(48);
     expect(button.height, `seed ${button.text} height`).toBeGreaterThanOrEqual(48);
@@ -130,4 +149,68 @@ test('all seed controls and their focus rings fit the viewport safe areas', asyn
   if (testInfo.project.name === 'mobile-portrait') await seeds[1]!.tap();
   else await seeds[1]!.click();
   await expect(page.getByRole('list', { name: 'Selection events' }).getByRole('listitem')).toHaveText(['bubble-berry']);
+
+  const seedStripFits = await page.evaluate(() => {
+    const strip = document.querySelector<HTMLElement>('.garden-ui__seeds')!;
+    [...strip.querySelectorAll<HTMLElement>('.garden-ui__seed')].slice(1).forEach(seed => { seed.style.display = 'none'; });
+    window.dispatchEvent(new Event('resize'));
+    return strip.scrollWidth <= strip.clientWidth;
+  });
+  expect(seedStripFits).toBe(true);
+  await expect(tray.locator('.garden-ui__scroll-cue')).toHaveCSS('visibility', 'hidden');
+  const seedStripOverflows = await page.evaluate(() => {
+    const strip = document.querySelector<HTMLElement>('.garden-ui__seeds')!;
+    [...strip.querySelectorAll<HTMLElement>('.garden-ui__seed')].forEach(seed => { seed.style.display = ''; });
+    window.dispatchEvent(new Event('resize'));
+    return strip.scrollWidth > strip.clientWidth;
+  });
+  expect(seedStripOverflows).toBe(true);
+  await expect(tray.locator('.garden-ui__scroll-cue')).toHaveCSS('visibility', 'visible');
+
+  await page.locator('.garden-ui__seeds').evaluate((element: HTMLElement) => { element.scrollLeft = 0; });
+  await expect(page.locator('.garden-ui__seeds')).toHaveJSProperty('scrollLeft', 0);
+  const swipeStart = await page.locator('.garden-ui__seeds').evaluate(element => {
+    const first = element.querySelector('.garden-ui__seed')!.getBoundingClientRect();
+    const second = element.querySelectorAll('.garden-ui__seed')[1]!.getBoundingClientRect();
+    const strip = element.getBoundingClientRect();
+    return { x: (first.right + second.left) / 2, y: (strip.top + strip.bottom) / 2 };
+  });
+  const scrollBeforeSwipe = await page.locator('.garden-ui__seeds').evaluate(element => element.scrollLeft);
+  const touch = await page.context().newCDPSession(page);
+  try {
+    const { x, y } = swipeStart;
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ id: 1, x, y }] });
+    for (const delta of [36, 72, 108]) {
+      await touch.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ id: 1, x: x - delta, y }] });
+    }
+    await touch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  } finally {
+    await touch.detach();
+  }
+  await expect.poll(() => page.locator('.garden-ui__seeds').evaluate(element => element.scrollLeft)).toBeGreaterThan(scrollBeforeSwipe);
+
+  if (testInfo.project.name === 'mobile-portrait') {
+    await expect(page.locator('.garden-ui')).toHaveCSS('touch-action', 'pan-x pan-y');
+    await page.getByRole('button', { name: 'Shop' }).click();
+    await expect(page.locator('.garden-ui__shop-backdrop')).toBeVisible();
+    const scale = await page.evaluate(() => visualViewport?.scale);
+    const pinch = await page.context().newCDPSession(page);
+    try {
+      await pinch.send('Input.dispatchTouchEvent', {
+        type: 'touchStart',
+        touchPoints: [{ id: 1, x: 130, y: 150 }, { id: 2, x: 260, y: 150 }],
+      });
+      for (const delta of [10, 20, 30, 40, 50, 60]) {
+        await pinch.send('Input.dispatchTouchEvent', {
+          type: 'touchMove',
+          touchPoints: [{ id: 1, x: 130 - delta, y: 150 }, { id: 2, x: 260 + delta, y: 150 }],
+        });
+      }
+      await pinch.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    } finally {
+      await pinch.detach();
+    }
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => visualViewport?.scale)).toBe(scale);
+  }
 });

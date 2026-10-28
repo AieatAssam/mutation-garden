@@ -35,6 +35,7 @@ const waitUntil = (page: Page, timestampMs: number) => expect.poll(() => page.ev
 test('a new player is guided from planting through the first sale within 30 s', async ({ page }, info) => {
   const mobile = info.project.name === 'mobile-portrait';
   const tapPlot = await openGarden(page, mobile);
+  await expect(page.locator('body')).toHaveCSS('overscroll-behavior', 'none');
   const startedAt = await page.evaluate(() => Date.now());
   const hint = page.locator('.garden-ui__hint');
   const coins = page.getByRole('status', { name: 'Coins' });

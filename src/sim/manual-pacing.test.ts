@@ -40,12 +40,12 @@ describe('M4 automation economy pacing', () => {
     const sprinkler = rateFor(['sprinkler'], 'puffcap', 5, false);
     const helper = rateFor(['sprinkler', 'harvest-helper', 'seed-hopper'], 'lantern-pod', 7, true);
     const autoSell = rateFor(['sprinkler', 'harvest-helper', 'seed-hopper', 'delivery-cart'], 'comet-pear', 10, true);
-    expect(sprinkler).toBeGreaterThanOrEqual(18);
-    expect(sprinkler).toBeLessThanOrEqual(22);
-    expect(helper).toBeGreaterThanOrEqual(31);
-    expect(helper).toBeLessThanOrEqual(37);
-    expect(autoSell).toBeGreaterThanOrEqual(47);
-    expect(autoSell).toBeLessThanOrEqual(57);
+    expect(sprinkler).toBeGreaterThanOrEqual(28);
+    expect(sprinkler).toBeLessThanOrEqual(32);
+    expect(helper).toBeGreaterThanOrEqual(45);
+    expect(helper).toBeLessThanOrEqual(50);
+    expect(autoSell).toBeGreaterThanOrEqual(70);
+    expect(autoSell).toBeLessThanOrEqual(77);
     expect(helper).toBeGreaterThan(sprinkler);
     expect(autoSell).toBeGreaterThan(helper);
   });

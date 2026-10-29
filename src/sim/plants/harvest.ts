@@ -1,6 +1,7 @@
-import { crateCapacity, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
+import { COMBO_CAP, COMBO_STEP, crateCapacity, FRESH_BONUS, FRESH_WINDOW_MS, levelForXp, SPECIES, YIELD_SIZES } from '../content/species';
 import { getGrowthView } from './growth';
 import { MUTATIONS } from '../content/mutations';
+import { nextRandom } from '../state/rng';
 import { growthStart, type Command, type GardenState, type SimEvent, type StepResult } from '../state/types';
 
 type HarvestCommand = Extract<Command, { readonly type: 'Harvest' }>;
@@ -19,6 +20,7 @@ export function harvest(
   const harvestedPlotIds = new Set<string>();
   const events: SimEvent[] = [];
   const seenPlotIds = new Set<string>();
+  let harvestedFruitCount = 0;
 
   for (const plotId of command.plotIds) {
     if (seenPlotIds.has(plotId)) continue;
@@ -54,20 +56,47 @@ export function harvest(
     const fresh = effectiveNowMs - ripeAt <= FRESH_WINDOW_MS;
     const mutationMultiplier = (plot.plant.mutations ?? []).reduce((product, trait) => product * MUTATIONS[trait].value, 1);
     const multiplier = YIELD_SIZES.find((entry) => entry.size === size)!.multiplier * (fresh ? 1 + FRESH_BONUS : 1) * mutationMultiplier;
-    const coins = Math.max(1, Math.floor(species.baseValue * multiplier));
     const mutations = plot.plant.mutations ?? [];
+    const roll = nextRandom(nextState.rngState);
+    nextState = { ...nextState, rngState: roll.nextState };
+    const lucky = roll.value < 0.1;
+    const ordinaryValue = Math.max(1, Math.floor(species.baseValue * multiplier));
+    const coins = ordinaryValue * (lucky ? 3 : 1);
     const bonusSeed = species.id === 'lantern-pod' && isDusk(effectiveNowMs);
     if (mutations.includes('glowing')) crystalReadyPlots.add(plotId);
     for (const trait of mutations) harvestedTraits.add(trait);
-    const fruit = { speciesId: species.id, size, mutations, value: coins, xp: Math.floor(species.baseValue * mutationMultiplier) };
+    const xp = Math.floor(species.baseValue * mutationMultiplier);
+    const fruit = { speciesId: species.id, size, mutations, value: coins, xp };
     const plots = nextState.plots.slice();
     plots[plotIndex] = { ...plot, plant: null };
     nextState = { ...nextState, crate: [...nextState.crate, fruit, ...(yieldCount === 2 ? [fruit] : [])], plots };
     if (bonusSeed) nextState = { ...nextState, bonusSeeds: nextState.bonusSeeds + 1 };
     count += 1;
+    harvestedFruitCount += yieldCount;
     harvestedPlotIds.add(plotId);
-    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins: 0, size, fresh, lucky: false,
+    events.push({ type: 'Harvested', plotId, speciesId: species.id, coins: 0, size, fresh, lucky,
       ...(mutations.length ? { mutations } : {}), ...(bonusSeed ? { bonusSeed: true as const } : {}) });
+    if (lucky) events.push({ type: 'LuckyHarvest', plotId });
+  }
+  const comboRate = Math.min(COMBO_CAP, Math.max(0, count - 1) * COMBO_STEP);
+  let comboBonus = 0;
+  if (comboRate > 0) {
+    const firstFruitIndex = nextState.crate.length - harvestedFruitCount;
+    const crate = nextState.crate.slice();
+    let batchValue = 0;
+    for (let index = firstFruitIndex; index < crate.length; index += 1) {
+      batchValue += crate[index]!.value;
+    }
+    comboBonus = Math.max(count - 2, Math.floor(batchValue * comboRate));
+    let distributedBonus = 0;
+    for (let index = firstFruitIndex; index < crate.length; index += 1) {
+      const bonus = Math.floor(crate[index]!.value * comboRate);
+      crate[index] = { ...crate[index]!, value: crate[index]!.value + bonus };
+      distributedBonus += bonus;
+    }
+    const lastFruitIndex = crate.length - 1;
+    if (lastFruitIndex >= firstFruitIndex) crate[lastFruitIndex] = { ...crate[lastFruitIndex]!, value: crate[lastFruitIndex]!.value + comboBonus - distributedBonus };
+    nextState = { ...nextState, crate };
   }
   if (harvestedTraits.has('golden') && harvestedTraits.has('glowing') && harvestedTraits.has('crystal')) {
     for (const plotId of harvestedPlotIds) {
@@ -78,7 +107,7 @@ export function harvest(
     nextState = { ...nextState, crystalReadyPlots: [...crystalReadyPlots], rainbowPlots: [...rainbowPlots] };
   }
 
-  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: 0, comboBonus: 0 });
+  if (count > 0) events.push({ type: 'HarvestCompleted', count, coins: 0, comboBonus });
   const levelBefore = levelForXp(state.xp);
   const levelAfter = levelForXp(nextState.xp);
   for (let level = levelBefore + 1; level <= levelAfter; level += 1) {

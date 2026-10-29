@@ -176,7 +176,8 @@ describe('M2 mutation rules', () => {
     const harvest = step(state, [{ type: 'Harvest', plotIds: ['plot-0', 'plot-1', 'plot-2'] }], 30_000);
     expect(harvest.state.rainbowPlots).toEqual(['plot-0', 'plot-1', 'plot-2']);
     expect(harvest.state.crate.map(({ mutations: found }) => found)).toEqual([['golden'], ['glowing'], ['crystal']]);
-    expect(harvest.state.crate.map(({ value }) => value)).toEqual([8, 6, 12]);
+    expect(harvest.state.crate.map(({ value }) => value)).toEqual([11, 25, 17]);
+    expect(harvest.events).toContainEqual({ type: 'HarvestCompleted', count: 3, coins: 0, comboBonus: 15 });
     const planted = step(harvest.state, [{ type: 'Plant', plotId: 'plot-1', seedId: 'sunny-sprout' }], 30_000);
     expect(planted.state.plots[1]?.plant?.rainbow).toBe(true);
     expect(planted.state.rainbowPlots).toEqual(['plot-0', 'plot-2']);

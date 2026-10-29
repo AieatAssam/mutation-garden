@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { SPECIES } from '../content/species';
 import { createInitialState, getSnapshot, step, type Command, type GardenState, type PlantState, type SpeciesId } from '../index';
+import { nextRandom } from '../state/rng';
 
 const seed = 0x12345678;
 const startTime = 10_000;
@@ -128,7 +129,7 @@ describe('Harvest commands', () => {
       { type: 'Harvested', plotId: 'plot-1', speciesId: 'bubble-berry', coins: 0, size: 'regular', fresh: true, lucky: false },
       { type: 'CommandRejected', command: 'Harvest', plotId: 'bad-plot', reason: 'unknown-plot' },
       { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 0, size: 'regular', fresh: true, lucky: false },
-      { type: 'HarvestCompleted', count: 2, coins: 0, comboBonus: 0 },
+      { type: 'HarvestCompleted', count: 2, coins: 0, comboBonus: 1 },
     ]);
     expect(result.state.coins).toBe(state.coins);
     expect(result.state.plots.slice(0, 2).map(({ plant }) => plant)).toEqual([null, null]);
@@ -259,7 +260,7 @@ describe('Harvest commands', () => {
     ]);
   });
 
-  it('stores fresh-adjusted values for each harvested fruit', () => {
+  it('stores combo-adjusted fresh values while keeping harvest completion unpaid', () => {
     const state = stateWithPlants({
       'plot-0': plantAt('sunny-sprout', startTime - 8_000),
       'plot-1': plantAt('bubble-berry', startTime - 15_000),
@@ -268,7 +269,7 @@ describe('Harvest commands', () => {
     const result = step(state, [harvest('plot-0', 'plot-1', 'plot-2')], startTime);
 
     expect(result.events.filter((event) => event.type === 'HarvestCompleted')).toEqual([
-      { type: 'HarvestCompleted', count: 3, coins: 0, comboBonus: 0 },
+      { type: 'HarvestCompleted', count: 3, coins: 0, comboBonus: 8 },
     ]);
     expect(result.events.filter((event) => event.type === 'Harvested')).toEqual([
       { type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 0, size: 'regular', fresh: true, lucky: false },
@@ -276,7 +277,48 @@ describe('Harvest commands', () => {
       { type: 'Harvested', plotId: 'plot-2', speciesId: 'twistroot', coins: 0, size: 'regular', fresh: true, lucky: false },
     ]);
     expect(result.state.coins).toBe(state.coins);
-    expect(result.state.crate.map(({ value }) => value)).toEqual([2, 7, 12]);
+    expect(result.state.crate.map(({ value }) => value)).toEqual([2, 9, 18]);
+  });
+
+  it('caps a six-plant combo at 80% of batch value and replays deterministically', () => {
+    const plants = Object.fromEntries(Array.from({ length: 6 }, (_, index) => [`plot-${index}`, { ...plantAt('sunny-sprout', startTime - 8_000), mutations: [] as const }]));
+    const rngState = Array.from({ length: 100 }, (_, value) => value).find((candidate) =>
+      Array.from({ length: 6 }).every((_, index) => {
+        let rng = candidate;
+        for (let draw = 0; draw < index; draw += 1) rng = nextRandom(rng).nextState;
+        return nextRandom(rng).value >= 0.1;
+      }))!;
+    const state = { ...stateWithPlants(plants), xp: 0, rngState };
+    const command = harvest(...Object.keys(plants));
+    const result = step(state, [command], startTime);
+    const replay = step(state, [command], startTime);
+
+    expect(result.state.crate.reduce((sum, { value }) => sum + value, 0)).toBe(21);
+    expect(result.events).toContainEqual({ type: 'HarvestCompleted', count: 6, coins: 0, comboBonus: 9 });
+    expect(replay).toEqual(result);
+  });
+
+  it('rolls Lucky Harvest from garden RNG for successful plants and triples value without changing XP', () => {
+    const luckyRngState = Array.from({ length: 100 }, (_, value) => value).find((candidate) => nextRandom(candidate).value < 0.1 && nextRandom(nextRandom(candidate).nextState).value >= 0.1)!;
+    const unluckyRngState = Array.from({ length: 100 }, (_, value) => value).find((candidate) => nextRandom(candidate).value >= 0.1)!;
+    const state = { ...stateWithPlants({
+      'plot-0': plantAt('sunny-sprout', startTime - 8_000),
+      'plot-1': plantAt('bubble-berry', startTime - 15_000),
+    }), rngState: luckyRngState };
+    const result = step(state, [harvest('plot-0', 'plot-1')], startTime);
+
+    expect(result.state.crate.map(({ value, xp }) => ({ value, xp }))).toEqual([{ value: 7, xp: 2 }, { value: 8, xp: 6 }]);
+    expect(result.events).toContainEqual({ type: 'Harvested', plotId: 'plot-0', speciesId: 'sunny-sprout', coins: 0, size: 'regular', fresh: true, lucky: true });
+    expect(result.events).toContainEqual({ type: 'LuckyHarvest', plotId: 'plot-0' });
+    expect(result.events).toContainEqual({ type: 'Harvested', plotId: 'plot-1', speciesId: 'bubble-berry', coins: 0, size: 'regular', fresh: true, lucky: false });
+    expect(result.state.rngState).toBe(nextRandom(nextRandom(luckyRngState).nextState).nextState);
+
+    const singleLucky = step({ ...state, rngState: luckyRngState }, [harvest('plot-0')], startTime);
+    expect(singleLucky.state.crate[0]).toMatchObject({ value: 6, xp: 2 });
+
+    const unlucky = step({ ...state, rngState: unluckyRngState }, [harvest('plot-0')], startTime);
+    expect(unlucky.state.crate[0]).toMatchObject({ value: 2, xp: 2 });
+    expect(unlucky.events.some((event) => event.type === 'LuckyHarvest')).toBe(false);
   });
 
 

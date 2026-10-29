@@ -320,7 +320,7 @@ describe('boot animation wiring', () => {
 
   it('restores the full automation state when returning to an open tab', async () => {
     const showAway = vi.fn();
-    createGardenUI.mockReturnValue({ update: updateGardenUI, dispose: disposeGardenUI, showAway });
+    createGardenUI.mockReturnValue({ update: (options: unknown) => updateGardenUI(options), dispose: disposeGardenUI, showAway });
     let nowMs = 0;
     vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
     const initial = createInitialState(41, 0, { xp: 6_500 });
@@ -380,6 +380,72 @@ describe('boot animation wiring', () => {
     expect(reportEvents).toHaveBeenCalledTimes(2); // Load and tab resume.
     expect(showAway).toHaveBeenCalledWith(expect.objectContaining({ plotsWatered: expect.any(Number) }), expect.any(Function));
     expect(showAway.mock.calls.at(-1)![0].plotsWatered).toBeGreaterThan(0);
+    cleanup();
+  });
+
+  it('records fruit sold during a daily challenge tab resume', async () => {
+    const showAway = vi.fn();
+    const update = vi.fn((options: { dailyBest: number }) => updateGardenUI(options));
+    createGardenUI.mockReturnValue({ update, dispose: disposeGardenUI, showAway });
+    let nowMs = Date.UTC(2026, 9, 29);
+    vi.spyOn(Date, 'now').mockImplementation(() => nowMs);
+    const initial = createInitialState(41, nowMs);
+    const awayState = {
+      ...initial,
+      coins: 1_000,
+      crate: [{ speciesId: 'sunny-sprout' as const, size: 'regular' as const, mutations: [], value: 123, xp: 2 }],
+      sellingSince: nowMs,
+    };
+    const backend = saveModule.memoryBackend();
+    await saveModule.createSaveStore(backend, 'test', () => nowMs).save(awayState, nowMs);
+    vi.spyOn(saveModule, 'chooseBackend').mockResolvedValue({ backend, persistent: true });
+    const dailyScores = new Map<string, string>();
+    vi.stubGlobal('localStorage', {
+      getItem: (key: string) => dailyScores.get(key) ?? null,
+      setItem: (key: string, value: string) => dailyScores.set(key, value),
+    });
+
+    let state: GardenState = awayState;
+    const resumeEvents = vi.fn();
+    let onEvents: ((events: readonly import('../sim').SimEvent[], nowMs: number) => void) | undefined;
+    vi.spyOn(loopModule, 'createFixedStepLoop').mockImplementation((options) => {
+      onEvents = options.onEvents;
+      return {
+        enqueue: vi.fn(), catchUp: vi.fn(), getState: () => state,
+        restore: (next: GardenState) => { state = next; },
+        reportEvents: (events) => { resumeEvents(events); onEvents?.(events, nowMs); },
+        stop: vi.fn(), start: vi.fn(),
+      };
+    });
+
+    const visibility = new Map<string, () => void>();
+    const windowStub = {
+      innerWidth: 390, innerHeight: 844, addEventListener: vi.fn(), removeEventListener: vi.fn(),
+      requestAnimationFrame: vi.fn(() => 1), cancelAnimationFrame: vi.fn(),
+      matchMedia: vi.fn(() => ({ matches: false })),
+    };
+    const uiRoot = { dataset: {}, style: { setProperty: vi.fn() }, remove: vi.fn() };
+    const documentStub = {
+      body: { style: {}, dataset: {}, append: vi.fn() }, hidden: false,
+      addEventListener: vi.fn((type: string, listener: () => void) => visibility.set(type, listener)),
+      removeEventListener: vi.fn(), createElement: vi.fn(() => uiRoot),
+    };
+    vi.stubGlobal('window', windowStub as unknown as Window);
+    vi.stubGlobal('document', documentStub as unknown as Document);
+    vi.stubGlobal('location', { search: '?daily', href: 'http://localhost/?daily' } as Location);
+
+    const cleanup = boot({} as HTMLCanvasElement);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    documentStub.hidden = true;
+    visibility.get('visibilitychange')!();
+    nowMs += 60_000;
+    documentStub.hidden = false;
+    visibility.get('visibilitychange')!();
+
+    expect(update.mock.calls.map(([options]) => options.dailyBest)).toContain(184);
+    expect(dailyScores.get('mutation-garden:daily-best:2026-10-29')).toBe('184');
+    expect(resumeEvents.mock.calls[0]![0]).toContainEqual(expect.objectContaining({ type: 'FruitSold', value: 184 }));
     cleanup();
   });
 });

@@ -364,7 +364,8 @@ export function boot(canvas: HTMLCanvasElement): () => void {
           loop.restore(resumedAway.state);
           for (const command of suspendedCommands ?? []) loop.enqueue(command);
           loop.reportEvents?.(resumedAway.events.filter((event) =>
-            event.type === 'Mutated' || event.type === 'LevelUp' || event.type === 'OrderCompleted'));
+            event.type === 'Mutated' || event.type === 'LevelUp' || event.type === 'OrderCompleted'
+            || (dailyMode && event.type === 'FruitSold')));
         }
       },
       afterResume: () => {

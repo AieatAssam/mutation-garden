@@ -467,7 +467,7 @@ export function createRenderer(canvas: HTMLCanvasElement, options: RendererOptio
       snapshotAlpha = Math.min(1, Math.max(0, alpha));
       currentReducedMotion = reducedMotion;
       const expanded = current.plots.length > 6;
-      scenery?.setExpanded(expanded, clock(), reducedMotion);
+      scenery?.setExpanded(current.plots.length, clock(), reducedMotion);
       setGardenCameraExpanded(camera, expanded);
       for (const plot of garden.plots) {
         const unlocked = current.plots.some((entry) => entry.id === plot.plotId);

@@ -164,9 +164,10 @@ describe('plot status render resources', () => {
     expect(shadow.material).toMatchObject({ transparent: true, depthTest: false, depthWrite: false });
   });
 
-  it('keeps six plots within the five-pass draw-call budget', () => {
+  it('keeps all eight plots within the five-pass draw-call budget', () => {
     const status = create();
-    status.update(Array.from({ length: MAX_STATUS_PLOTS }, (_, index) => descriptor(String(index), index / 5)));
+    status.update(Array.from({ length: MAX_STATUS_PLOTS }, (_, index) => descriptor(String(index), index / 7)));
+    expect(meshes(status).every((mesh) => mesh.count === 8)).toBe(true);
     // Each visible InstancedMesh is one renderer pass, independent of instance count.
     const visiblePasses = meshes(status).filter((mesh) => mesh.count > 0);
     expect(visiblePasses.map((mesh) => mesh.name)).toEqual([
@@ -180,7 +181,7 @@ describe('plot status render resources', () => {
     expect(PLOT_STATUS_DRAW_CALLS).toBeLessThan(150);
   });
 
-  it('rejects more than six plot descriptors rather than growing resources', () => {
+  it('rejects more than eight plot descriptors rather than growing resources', () => {
     const status = create();
     expect(() => status.update(Array.from({ length: MAX_STATUS_PLOTS + 1 }, (_, index) => descriptor(String(index), 0.5))))
       .toThrow(RangeError);

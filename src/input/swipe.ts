@@ -17,7 +17,7 @@ export type SwipePathCollector<T extends string> = {
   finish(endpoint: SwipePoint): readonly T[];
 };
 
-export const SWIPE_MAX_PLOT_IDS = 6;
+export const SWIPE_MAX_PLOT_IDS = 8;
 export const SWIPE_MAX_SAMPLE_GAP_CSS_PX = 8;
 
 function isFinitePoint(point: SwipePoint): boolean {

@@ -7,6 +7,7 @@ export interface PageLifecycleOptions {
   readonly subscribePageHide: (listener: () => void) => () => void;
   readonly subscribePageShow: (listener: () => void) => () => void;
   readonly cancelGesture: () => void;
+  readonly beforeSuspend?: () => void;
   readonly beforeResume?: () => void;
   readonly afterResume?: () => void;
 }
@@ -23,9 +24,10 @@ export function createPageLifecycle(options: PageLifecycleOptions): PageLifecycl
   let pageHidden = false;
   let unsubscribe: (() => void)[] = [];
 
-  const suspend = () => {
+  const suspend = (prepare = true) => {
     if (suspended) return;
     suspended = true;
+    if (prepare) options.beforeSuspend?.();
     options.loop.stop();
     options.cancelGesture();
   };
@@ -66,7 +68,7 @@ export function createPageLifecycle(options: PageLifecycleOptions): PageLifecycl
       started = false;
       for (const stopListening of unsubscribe) stopListening();
       unsubscribe = [];
-      suspend();
+      suspend(false);
     },
   };
 }

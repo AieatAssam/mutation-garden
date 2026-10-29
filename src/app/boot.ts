@@ -218,7 +218,12 @@ export function boot(canvas: HTMLCanvasElement): () => void {
     // Audio may only start from a user gesture (autoplay rules).
     const unlockAudio = () => sfx.unlock();
     window.addEventListener('pointerdown', unlockAudio, { capture: true });
-    const act = (command: Command) => { if (loadSettled) loop.enqueue(command); };
+    let suspendedCommands: Command[] | null = null;
+    const act = (command: Command) => {
+      if (!loadSettled) return;
+      if (suspendedCommands) suspendedCommands.push(command);
+      else loop.enqueue(command);
+    };
     uiCommand = act;
     const loop = createFixedStepLoop({
       initialState,
@@ -346,14 +351,27 @@ export function boot(canvas: HTMLCanvasElement): () => void {
         return () => window.removeEventListener('pageshow', listener);
       },
       cancelGesture: input.cancelGesture,
+      beforeSuspend: () => {
+        suspendedCommands = [];
+        loop.catchUp();
+      },
       beforeResume: () => {
         const state = loop.getState();
         const wallNowMs = Date.now();
         clockOffsetMs = capClockOffset(clockOffsetMs, state.lastNowMs, wallNowMs);
         resumedAway = advanceOffline(state, state.lastNowMs, Math.max(0, wallNowMs - clockOffsetMs));
+        if (resumedAway) {
+          loop.restore(resumedAway.state);
+          for (const command of suspendedCommands ?? []) loop.enqueue(command);
+          loop.reportEvents?.(resumedAway.events.filter((event) =>
+            event.type === 'Mutated' || event.type === 'LevelUp' || event.type === 'OrderCompleted'));
+        }
       },
       afterResume: () => {
-        if (resumedAway) showAwaySummary(resumedAway);
+        if (resumedAway) {
+          showAwaySummary(resumedAway);
+        }
+        suspendedCommands = null;
         resumedAway = null;
       },
     });

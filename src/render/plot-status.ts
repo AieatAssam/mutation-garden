@@ -16,7 +16,7 @@ import {
 import type { ColorRepresentation } from 'three';
 import { palette } from './palette';
 
-export const MAX_STATUS_PLOTS = 6;
+export const MAX_STATUS_PLOTS = 8;
 export const PLOT_STATUS_DRAW_CALLS = 5;
 const DIAL_RADIUS = 0.2;
 const DIAL_PEG_HEIGHT = 0.12;

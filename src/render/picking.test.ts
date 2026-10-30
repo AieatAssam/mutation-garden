@@ -405,6 +405,16 @@ describe('garden picker', () => {
     expect(picker.pick(x, y)).toEqual({ kind: 'plot', plotId: 'plot-6' });
   });
 
+  it('does not pick the locked eighth plot after only the seventh is purchased', () => {
+    const { camera, garden, picker, screen } = setup();
+    setGardenCameraExpanded(camera, true);
+    garden.plots[6]!.visible = true;
+    garden.plots[6]!.userData.locked = false;
+    const locked = garden.plots[7]!;
+    const [x, y] = screen(locked.localToWorld(new Vector3()));
+    expect(picker.pick(x, y)).not.toEqual({ kind: 'plot', plotId: 'plot-7' });
+  });
+
   it('disposes its three geometries and one material exactly once without disposing borrowed resources', () => {
     const { picker, garden } = setup();
     const borrowed: (BufferGeometry | Material)[] = [];

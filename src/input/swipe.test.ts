@@ -105,7 +105,7 @@ describe('swipe path collector', () => {
     expect(collector.finish({ x: 10, y: 50 })).toEqual(['plot-start', 'plot-edge']);
   });
 
-  it('caps retained IDs at the six M1 plots', () => {
+  it('retains IDs for all eight garden plots', () => {
     let nextPlot = 0;
     const sampledPoints: { x: number; y: number }[] = [];
     const pick = vi.fn((x: number, y: number) => {
@@ -117,10 +117,10 @@ describe('swipe path collector', () => {
     collector.addPoint({ x: 100, y: 100 });
 
     const plotIds = collector.finish({ x: 100, y: 100 });
-    expect(SWIPE_MAX_PLOT_IDS).toBe(6);
+    expect(SWIPE_MAX_PLOT_IDS).toBe(8);
     expect(plotIds).toHaveLength(SWIPE_MAX_PLOT_IDS);
     expect(new Set(plotIds).size).toBe(SWIPE_MAX_PLOT_IDS);
-    expect(pick).toHaveBeenCalledTimes(5);
+    expect(pick).toHaveBeenCalledTimes(7);
     expect(sampledPoints.every(({ x, y }) => x >= bounds.left && x <= bounds.right && y >= bounds.top && y <= bounds.bottom)).toBe(true);
   });
 

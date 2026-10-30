@@ -61,4 +61,29 @@ describe('scenery', () => {
     scenery.dispose();
     library.dispose();
   });
+
+  it('shows the tagged eighth bed only after its plot is owned', () => {
+    const library = createMaterialLibrary();
+    const source = new Group();
+    const chunk = new Group(); chunk.name = 'chunk-west'; source.add(chunk);
+    const bed = authored('environment.soil.1', 'environment.soil.1');
+    bed.userData.plotId = 'plot-7';
+    const outline = authored('plot-7-outline-35', 'ink.press-ink');
+    chunk.add(bed, outline);
+    const scenery = buildScenery(source, library);
+    const plot7 = scenery.getObjectByName('plot-7')!;
+
+    scenery.setExpanded(7, 0, false);
+    scenery.update(1800, false);
+    expect(plot7.visible).toBe(false);
+    expect(plot7.children.some((child) => child.name === 'plot-7-printed')).toBe(true);
+    expect(plot7.children.some((child) => child.name === 'plot-7-outline-35')).toBe(true);
+
+    scenery.setExpanded(8, 1800, false);
+    expect(plot7.visible).toBe(true);
+    scenery.setExpanded(7, 1800, false);
+    expect(plot7.visible).toBe(false);
+    scenery.dispose();
+    library.dispose();
+  });
 });

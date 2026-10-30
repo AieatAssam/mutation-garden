@@ -622,6 +622,7 @@ def lobe_ring(bm, n, scale, z_fn):
 
 chunk = link(bpy.data.objects.new('chunk-west', None))
 chunk_parts, chunk_hull_thick, chunk_hull_thin = [], [], []
+plot7_hull_thin = []
 
 
 def keep(o, hull=None):
@@ -698,6 +699,8 @@ for k in range(3):
     keep(bpy.context.active_object)
 
 for x in (-5.25, -7.35):
+    plot_id = 'plot-7' if x == -7.35 else None
+    bed_hull = plot7_hull_thin if plot_id else chunk_hull_thin
     y = 0.0
     h = 0.26
     zc = GROUND + h / 2 - 0.04
@@ -705,12 +708,18 @@ for x in (-5.25, -7.35):
     L = BED
     for dx, dy, sx, sy in ((0, L / 2 - t / 2, L - 0.1, t), (0, -L / 2 + t / 2, L - 0.1, t),
                            (L / 2 - t / 2, 0, t, L - 0.1), (-L / 2 + t / 2, 0, t, L - 0.1)):
-        keep(rounded_box('environment.wood-crate.1', (sx, sy, h), (x + dx, y + dy, zc), 0.045), chunk_hull_thin)
+        piece = rounded_box('environment.wood-crate.1', (sx, sy, h), (x + dx, y + dy, zc), 0.045)
+        if plot_id: piece['plotId'] = plot_id
+        keep(piece, bed_hull)
     for cx in (-1, 1):
         for cy in (-1, 1):
-            keep(rounded_box('environment.wood-crate.2', (0.19, 0.19, h + 0.06),
-                             (x + cx * (L / 2 - 0.08), y + cy * (L / 2 - 0.08), zc + 0.03), 0.05), chunk_hull_thin)
-    keep(rounded_box('environment.soil.1', (L - 0.2, L - 0.2, 0.2), (x, y, SOIL_TOP - 0.1), 0.06))
+            piece = rounded_box('environment.wood-crate.2', (0.19, 0.19, h + 0.06),
+                                (x + cx * (L / 2 - 0.08), y + cy * (L / 2 - 0.08), zc + 0.03), 0.05)
+            if plot_id: piece['plotId'] = plot_id
+            keep(piece, bed_hull)
+    soil = rounded_box('environment.soil.1', (L - 0.2, L - 0.2, 0.2), (x, y, SOIL_TOP - 0.1), 0.06)
+    if plot_id: soil['plotId'] = plot_id
+    keep(soil)
     for fy in (-0.45, 0, 0.45):
         rid = prim('cylinder', 'environment.soil.0', loc=(x, y + fy, SOIL_TOP), rot=(0, math.pi / 2, 0),
                    vertices=10, radius=0.11, depth=L - 0.36)
@@ -720,6 +729,7 @@ for x in (-5.25, -7.35):
         bpy.ops.object.modifier_apply(modifier=bev.name)
         for poly in rid.data.polygons:
             poly.use_smooth = True
+        if plot_id: rid['plotId'] = plot_id
         keep(rid)
 
 # A few tufts and a rock on the new lobe so it matches the island's dressing.
@@ -739,7 +749,7 @@ for k in range(14):
         keep(tuft)
 
 
-def chunk_hull(objs, thickness):
+def chunk_hull(objs, thickness, name='chunk-west'):
     dupes = []
     for o in objs:
         d = o.copy(); d.data = o.data.copy(); link(d)
@@ -756,7 +766,7 @@ def chunk_hull(objs, thickness):
     bpy.context.view_layer.objects.active = dupes[0]
     bpy.ops.object.join()
     hull = bpy.context.active_object
-    hull.name = f'chunk-west-outline-{round(thickness * 1000)}'
+    hull.name = f'{name}-outline-{round(thickness * 1000)}'
     hull.data.materials.append(mat('ink.press-ink'))
     hull.data.shade_smooth()
     hull['keep'] = True
@@ -766,6 +776,7 @@ def chunk_hull(objs, thickness):
 
 chunk_hull(chunk_hull_thick, 0.06)
 chunk_hull(chunk_hull_thin, 0.035)
+chunk_hull(plot7_hull_thin, 0.035, 'plot-7')
 
 if os.environ.get('GARDEN_STOP_BEFORE_JOIN') == '1':
     raise SystemExit('stopped before join')
@@ -879,5 +890,5 @@ if os.environ.get('GARDEN_NO_EXPORT') != '1':
     bpy.ops.export_scene.gltf(filepath=OUT, export_format='GLB', use_selection=False, export_apply=True,
                               export_materials='EXPORT', export_normals=True, export_texcoords=False,
                               export_cameras=False, export_lights=False, export_yup=True,
-                              export_attributes=True)
+                              export_attributes=True, export_extras=True)
     print('exported', OUT, os.path.getsize(OUT))

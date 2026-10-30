@@ -41,7 +41,7 @@ export interface Scenery extends Group {
   stepBuyers(nowMs: number): void;
   /** Creature shapes by name ("wing", "leaf"), vertex coloured, for the ambient layer to instance. */
   readonly creatures: ReadonlyMap<string, BufferGeometry>;
-  setExpanded(expanded: boolean, nowMs: number, reducedMotion: boolean): void;
+  setExpanded(plotCount: number, nowMs: number, reducedMotion: boolean): void;
   /** Moves wind and clouds to presentation time (m1-liveliness.md 4). Reduced motion holds them still. */
   update(nowMs: number, reducedMotion: boolean): void;
   dispose(): void;
@@ -203,14 +203,26 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
   for (const chunkRoot of chunkRoots) {
     const chunk = new Group(); chunk.name = chunkRoot.name; chunk.position.y = -3.5;
     const geometries: BufferGeometry[] = [];
+    const plot7Geometries: BufferGeometry[] = [];
+    const plot7 = new Group(); plot7.name = 'plot-7'; plot7.userData.plotId = 'plot-7';
     chunkRoot.traverse((object) => {
       if (!(object instanceof Mesh)) return;
       // Chunk hulls are named chunk-west-outline-<thousandths> (Blender names must be unique).
       const hull = /^(?:chunk-west-)?outline-(\d+)$/.exec(object.name);
-      if (hull) { chunk.add(hullOf(object, object.matrixWorld, Number(hull[1]) / 1000)); return; }
-      geometries.push(vertexColored(object, object.matrixWorld));
+      const plot7Hull = /^plot-7-outline-(\d+)$/.exec(object.name);
+      if (hull || plot7Hull) {
+        const outline = hullOf(object, object.matrixWorld, Number((hull ?? plot7Hull)![1]) / 1000);
+        outline.name = object.name;
+        (plot7Hull ? plot7 : chunk).add(outline);
+        return;
+      }
+      const geometry = vertexColored(object, object.matrixWorld);
+      if (object.userData.plotId === 'plot-7') plot7Geometries.push(geometry);
+      else geometries.push(geometry);
     });
     if (geometries.length) { const printed = printedMesh(geometries, false); printed.name = 'chunk-west-printed'; chunk.add(printed); }
+    if (plot7Geometries.length) { const printed = printedMesh(plot7Geometries, false); printed.name = 'plot-7-printed'; plot7.add(printed); }
+    if (plot7.children.length) chunk.add(plot7);
     chunk.visible = false; chunks.push(chunk); root.add(chunk);
   }
 
@@ -278,17 +290,22 @@ export function buildScenery(source: Object3D, materials: MaterialLibrary): Scen
   let buyerStepDirection = 1;
   (root as Scenery).stepBuyers = (nowMs) => { buyerStepAt = nowMs; buyerStepDirection *= -1; };
   let expandStart = -Infinity; let expanded = false; let expandReduced = false;
-  (root as Scenery).setExpanded = (value, nowMs, reducedMotion) => {
-    if (expanded === value) return;
-    expanded = value; expandStart = nowMs; expandReduced = reducedMotion;
+  (root as Scenery).setExpanded = (plotCount, nowMs, reducedMotion) => {
+    const value = plotCount > 6;
+    const changed = expanded !== value;
+    if (changed) { expanded = value; expandStart = nowMs; expandReduced = reducedMotion; }
     for (const chunk of chunks) {
-      chunk.visible = true;
+      if (changed) chunk.visible = true;
+      const plot7 = chunk.getObjectByName('plot-7');
+      if (plot7) plot7.visible = plotCount > 7;
+      if (!changed) continue;
       if (reducedMotion) {
         const printed = chunk.getObjectByName('chunk-west-printed') as Mesh | null;
         if (printed) { const material = printed.material as MeshToonMaterial; material.transparent = true; material.opacity = value ? 0 : 1; }
         chunk.position.y = 0;
       }
     }
+    if (!changed) return;
   };
 
   // Each cloud: lit and shade layers merged into one mesh plus its hull, in the cloud's own frame.

@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { Vector3 } from 'three';
-import { createGardenCamera, resizeGardenCamera, setGardenCameraExpanded } from '../../src/render/camera';
+import { createGardenCamera, panGardenCamera, resizeGardenCamera, setGardenCameraExpanded } from '../../src/render/camera';
 import { mutationRoll, nextRandom, SHOP_PRICES, xpForLevel } from '../../src/sim';
 import { startWithSave } from './garden-save';
 
@@ -60,4 +60,94 @@ test('buy Plot 7 and water Bubble Berry twice for Giant', async ({ page }, info)
   if (mobile) await page.touchscreen.tap(10, 10); else await page.mouse.click(10, 10);
   await expect(page.getByText('New mutation: Giant!')).toHaveCount(0);
   await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('120');
+});
+
+test('Plot 8 stays locked until bought, then accepts a plant', async ({ page }, info) => {
+  const mobile = info.project.name === 'mobile-portrait';
+  const size = mobile ? { width: 390, height: 844 } : { width: 1280, height: 800 };
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  await page.setViewportSize(size);
+  await startWithSave(page, xpForLevel(4), {
+    coins: SHOP_PRICES['plot-6'] + SHOP_PRICES['plot-7'] + 8,
+    plantCount: 100,
+  });
+  await page.goto('./');
+  await expect(page.locator('body')).toHaveAttribute('data-models', 'ready');
+
+  const activate = async (x: number, y: number) => {
+    if (mobile) await page.touchscreen.tap(x, y); else await page.mouse.click(x, y);
+  };
+  const clickButton = async (button: ReturnType<typeof page.getByRole>) => {
+    if (mobile) await button.tap(); else await button.click();
+  };
+  const shopButton = page.getByRole('button', { name: 'Shop' });
+  await clickButton(shopButton);
+  const plot7 = page.locator('.garden-ui__shop-row').filter({ hasText: 'Plot 7' });
+  await expect(plot7).toBeVisible();
+  const buyPlot7 = plot7.getByRole('button', { name: `Buy · ${SHOP_PRICES['plot-6']}` });
+  if (mobile) await buyPlot7.tap(); else await buyPlot7.click();
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText(String(SHOP_PRICES['plot-7'] + 8));
+  await clickButton(page.getByRole('button', { name: 'Close' }));
+  await expect(page.locator('.garden-ui__shop-backdrop')).toBeHidden();
+
+  const seeds = page.getByRole('navigation', { name: 'Seeds' });
+  const sunny = seeds.getByRole('button', { name: 'Sunny Sprout' });
+  if (mobile) await sunny.tap(); else await sunny.click();
+  const canvas = page.locator('#stage');
+  const rect = await canvas.boundingBox();
+  expect(rect).not.toBeNull();
+  const camera = createGardenCamera();
+  resizeGardenCamera(camera, rect!.width, rect!.height);
+  setGardenCameraExpanded(camera, true);
+  camera.updateMatrixWorld(true);
+  const projected = new Vector3(-7.35, 0.65, 0).project(camera);
+  const point = {
+    x: rect!.x + (projected.x + 1) * rect!.width / 2,
+    y: rect!.y + (1 - projected.y) * rect!.height / 2,
+  };
+  await activate(point.x, point.y);
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText(String(SHOP_PRICES['plot-7'] + 8));
+
+  await clickButton(shopButton);
+  const plot8 = page.locator('.garden-ui__shop-row').filter({ hasText: 'Plot 8' });
+  const buyPlot8 = plot8.getByRole('button', { name: `Buy · ${SHOP_PRICES['plot-7']}` });
+  if (mobile) await buyPlot8.tap(); else await buyPlot8.click();
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('8');
+  await clickButton(page.getByRole('button', { name: 'Close' }));
+  await expect(page.locator('.garden-ui__shop-backdrop')).toBeHidden();
+
+  let coins = 8;
+  const plantAt = async (x: number, z: number) => {
+    const projected = new Vector3(x, 0.65, z).project(camera);
+    const screenX = rect!.x + (projected.x + 1) * rect!.width / 2;
+    const screenY = rect!.y + (1 - projected.y) * rect!.height / 2;
+    await activate(
+      screenX,
+      screenY,
+    );
+    coins -= 1;
+    await expect(page.getByRole('status', { name: 'Coins' }), `plant at ${x}, ${z}`).toHaveText(String(coins));
+  };
+  await activate(point.x, point.y);
+  coins -= 1;
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText(String(coins));
+  if (!mobile) {
+    const ground = new Vector3(0, 0.48, -3.2).project(camera);
+    const start = {
+      x: rect!.x + (ground.x + 1) * rect!.width / 2,
+      y: rect!.y + (1 - ground.y) * rect!.height / 2,
+    };
+    await page.mouse.move(start.x, start.y);
+    await page.mouse.down();
+    await page.mouse.move(start.x, start.y - 140, { steps: 6 });
+    await page.mouse.up();
+    panGardenCamera(camera, 0, -130, rect!.width, rect!.height);
+    camera.updateMatrixWorld(true);
+  }
+  for (const [x, z] of [[-1.05, 2], [1.05, 2], [-1.05, 0], [1.05, 0], [-1.05, -2], [1.05, -2], [-5.25, 0]] as const) {
+    await plantAt(x, z);
+  }
+  await expect(page.getByRole('status', { name: 'Coins' })).toHaveText('0');
+  expect(errors).toEqual([]);
 });
